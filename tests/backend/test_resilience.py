@@ -153,8 +153,9 @@ def test_database_outage_reported_by_readiness(app, settings):
     from fastapi.testclient import TestClient
     client = TestClient(app)
     assert client.get("/health/ready").status_code == 200
-    dbmod.init_engine(settings.database_url.replace(":5433/", ":1/").replace(":5432/", ":1/"),
-                      connect_args={"connect_timeout": 1})
+    from sqlalchemy.engine import make_url
+    broken = make_url(settings.database_url).set(port=1)       # имитация недоступной БД
+    dbmod.init_engine(broken.render_as_string(hide_password=False), connect_args={"connect_timeout": 1})
     r = client.get("/health/ready")
     assert r.status_code in (500, 503)
     dbmod.init_engine(settings.database_url)

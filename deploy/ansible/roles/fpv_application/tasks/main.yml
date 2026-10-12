@@ -70,6 +70,16 @@
       {{ ('--index-url ' + fpv_pip_index_url) if fpv_pip_index_url | length > 0 else '' }}
   become: true
 
+- name: Зависимости S3-совместимого хранилища (только при fpv_app_object_store = s3)
+  ansible.builtin.pip:
+    requirements: "{{ fpv_app_release_dir }}/backend/requirements-s3.lock"
+    virtualenv: "{{ fpv_app_release_dir }}/venv"
+    extra_args: >-
+      --require-hashes --no-cache-dir
+      {{ ('--no-index --find-links ' + fpv_pip_wheelhouse) if fpv_pip_wheelhouse | length > 0 else '' }}
+  become: true
+  when: fpv_app_object_store == 's3'
+
 - name: Файлы секретов (только для root и группы службы)
   ansible.builtin.copy:
     dest: "{{ fpv_config_dir }}/secrets/{{ item.name }}"

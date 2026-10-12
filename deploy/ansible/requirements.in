@@ -1,3 +1,5 @@
 # Python-зависимости управляющего окружения Ansible (venv в /tmp/ancible/venv).
-# ansible-core 2.15 — последняя ветка, поддерживающая Python 3.9 (Debian 11) на управляющем узле.
+# ansible-core 2.15 — последняя ветка с поддержкой Python 3.9 (Debian 11) на управляющем узле.
+#   uv pip compile --python-version 3.9.2 --generate-hashes requirements.in -o requirements.txt
 ansible-core==2.15.13
+cryptography>=50     # исправления безопасности (pip-audit)

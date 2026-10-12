@@ -45,7 +45,7 @@ mkdir -p "$B/app" "$B/packages" "$B/logs"
 log "упаковка приложения $VERSION"
 tar -C "$REPO" --exclude='__pycache__' --exclude='*.pyc' --exclude='.pytest_cache' \
     --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' \
-    -czf "$B/app/fpv-app-$VERSION.tar.gz" backend/fpv backend/requirements.lock database drone-agent frontend/dist
+    -czf "$B/app/fpv-app-$VERSION.tar.gz" backend/fpv backend/requirements.lock backend/requirements-s3.lock database drone-agent frontend/dist
 log "копирование Ansible"
 cp -a "$ANS/ansible.cfg" "$ANS/requirements.txt" "$ANS/requirements.yml" "$ANS/playbooks" "$ANS/roles" \
       "$ANS/inventory" "$ANS/group_vars" "$ANS/host_vars" "$ANS/filter_plugins" "$B/"

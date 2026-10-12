@@ -1,0 +1,3 @@
+# Необязательно: S3-совместимое хранилище видео (FPV_OBJECT_STORE=s3).
+-c requirements.lock
+boto3>=1.35
