@@ -1,0 +1,51 @@
+---
+- name: Пакет sudo
+  ansible.builtin.apt:
+    name: [sudo, openssh-server]
+    state: present
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Локальная учётная запись автоматизации
+  ansible.builtin.user:
+    name: "{{ fpv_deploy_user }}"
+    shell: /bin/bash
+    groups: [sudo]
+    append: true
+    password: "!"
+    update_password: on_create
+  become: true
+  when: fpv_deploy_user_manage | bool
+
+- name: Ключ SSH учётной записи автоматизации
+  ansible.posix.authorized_key:
+    user: "{{ fpv_deploy_user }}"
+    key: "{{ fpv_deploy_user_pubkey }}"
+    exclusive: true
+  become: true
+  when: fpv_deploy_user_manage | bool and fpv_deploy_user_pubkey | length > 0
+
+- name: Правила sudo по доменным группам (проверяются visudo до применения)
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/60-fpv
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+    backup: true
+  become: true
+  when: fpv_manage_packages | bool    # visudo появляется вместе с пакетом sudo
+
+- name: Политика SSH (запрет входа root, вход только разрешённым группам)
+  ansible.builtin.template:
+    src: sshd-fpv.conf.j2
+    dest: /etc/ssh/sshd_config.d/60-fpv.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+    backup: true
+  become: true
+  when: fpv_ssh_manage | bool and fpv_manage_services | bool
+  notify: Перезагрузить sshd

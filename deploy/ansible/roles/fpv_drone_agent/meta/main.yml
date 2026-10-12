@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  role_name: fpv_drone_agent
+  author: FPV Platform Team
+  description: "Сервисный модуль дрона на наземной станции (только симулятор в первой версии)"
+  min_ansible_version: "2.15"
+  platforms: [{name: Debian, versions: [bullseye]}]
+dependencies: []

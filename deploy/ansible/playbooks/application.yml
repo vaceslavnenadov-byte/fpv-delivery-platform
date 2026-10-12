@@ -1,0 +1,7 @@
+---
+- name: Серверы приложений
+  hosts: app_servers
+  gather_facts: true
+  serial: "{{ fpv_app_serial | default('50%') }}"   # поэтапное обновление без полного простоя
+  roles:
+    - fpv_application

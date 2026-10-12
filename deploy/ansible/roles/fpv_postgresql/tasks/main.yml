@@ -1,0 +1,67 @@
+---
+- name: Пакеты PostgreSQL
+  ansible.builtin.apt:
+    name: "{{ fpv_postgresql_packages }}"
+    state: present
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Параметры PostgreSQL (сеть, TLS, журналирование подключений)
+  ansible.builtin.template:
+    src: fpv.conf.j2
+    dest: "/etc/postgresql/{{ fpv_postgresql_version }}/main/conf.d/60-fpv.conf"
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  become: true
+  notify: Перезапустить postgresql
+
+- name: Правила аутентификации (только TLS + SCRAM для приложений)
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "/etc/postgresql/{{ fpv_postgresql_version }}/main/pg_hba.conf"
+    owner: postgres
+    group: postgres
+    mode: "0640"
+    backup: true
+  become: true
+  notify: Перезагрузить postgresql
+
+- name: Применение конфигурации до создания объектов
+  ansible.builtin.meta: flush_handlers
+
+- name: Служба PostgreSQL
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+  become: true
+  when: fpv_manage_services | bool
+
+- name: Роль приложения в PostgreSQL (без прав суперпользователя)
+  community.postgresql.postgresql_user:
+    name: "{{ fpv_postgresql_app_user }}"
+    password: "{{ fpv_postgresql_app_password }}"
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE
+    state: present
+  become: true
+  become_user: postgres
+  no_log: true
+  when: fpv_postgresql_primary | bool
+
+- name: База данных платформы
+  community.postgresql.postgresql_db:
+    name: "{{ fpv_postgresql_db }}"
+    owner: "{{ fpv_postgresql_app_user }}"
+    encoding: UTF8
+    lc_collate: ru_RU.UTF-8
+    lc_ctype: ru_RU.UTF-8
+    template: template0
+    state: present
+  become: true
+  become_user: postgres
+  when: fpv_postgresql_primary | bool
+
+- name: Резервное копирование
+  ansible.builtin.include_tasks: backup.yml
+  when: fpv_postgresql_primary | bool

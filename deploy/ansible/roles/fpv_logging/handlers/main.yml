@@ -1,0 +1,10 @@
+---
+- name: Перезапустить journald
+  ansible.builtin.service: {name: systemd-journald, state: restarted}
+  become: true
+  when: fpv_manage_services | bool
+
+- name: Перезапустить rsyslog
+  ansible.builtin.service: {name: rsyslog, state: restarted}
+  become: true
+  when: fpv_manage_services | bool

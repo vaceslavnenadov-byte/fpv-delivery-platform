@@ -1,0 +1,36 @@
+---
+- name: Активный релиз приложения
+  ansible.builtin.stat:
+    path: "{{ fpv_install_root }}/current/venv/bin/python"
+  register: fpv_verify_release
+
+- name: Импорт приложения в окружении релиза
+  ansible.builtin.command:
+    argv: ["{{ fpv_install_root }}/current/venv/bin/python", -c, "import fpv.main, fpv.worker; print('ok')"]
+    chdir: "{{ fpv_install_root }}/current/backend"
+  register: fpv_verify_import
+  changed_when: false
+  failed_when: false
+
+- name: Состояние API
+  ansible.builtin.uri:
+    url: "http://{{ fpv_app_listen | default('127.0.0.1:8000') }}/health/ready"
+    status_code: [200, 503]
+  register: fpv_verify_health
+  failed_when: false
+  when: fpv_manage_services | bool
+
+- name: Службы приложения
+  ansible.builtin.command: systemctl is-active fpv-api fpv-worker
+  register: fpv_verify_units
+  changed_when: false
+  failed_when: false
+  when: fpv_manage_services | bool
+
+- name: Результаты проверки приложения
+  ansible.builtin.set_fact:
+    fpv_verify_results: "{{ fpv_verify_results + [
+      {'check': 'app release active', 'ok': fpv_verify_release.stat.exists},
+      {'check': 'app import', 'ok': fpv_verify_import.rc == 0}] + ([
+      {'check': 'api /health/ready', 'ok': (fpv_verify_health.status | default(0)) == 200},
+      {'check': 'systemd fpv-api fpv-worker', 'ok': fpv_verify_units.rc == 0}] if fpv_manage_services | bool else []) }}"

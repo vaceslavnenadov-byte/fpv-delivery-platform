@@ -1,0 +1,6 @@
+---
+- name: Итоговые проверки
+  hosts: all
+  gather_facts: true
+  roles:
+    - fpv_verify

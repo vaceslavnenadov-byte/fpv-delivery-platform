@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# TYPE  DATABASE                 USER                         ADDRESS        METHOD
+local   all                      postgres                                    peer
+local   {{ fpv_postgresql_db }}  {{ fpv_postgresql_app_user }}               scram-sha-256
+host    {{ fpv_postgresql_db }}  {{ fpv_postgresql_app_user }} 127.0.0.1/32  scram-sha-256
+{% for net in fpv_postgresql_app_clients %}
+hostssl {{ fpv_postgresql_db }}  {{ fpv_postgresql_app_user }} {{ net }}  scram-sha-256
+{% endfor %}
+# Всё остальное запрещено.
+host    all                      all                          0.0.0.0/0      reject
+host    all                      all                          ::/0           reject

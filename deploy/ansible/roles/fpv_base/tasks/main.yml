@@ -1,0 +1,125 @@
+---
+- name: Проверка версии ОС (поддерживается Debian 11)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] in fpv_base_allowed_releases
+    fail_msg: >-
+      Неподдерживаемая ОС {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}.
+      Требуется Debian 11; для осознанного запуска на другой версии задайте fpv_base_allow_unsupported_os=true.
+    quiet: true
+  when: not fpv_base_allow_unsupported_os
+
+- name: Проверка свободного места в корневой ФС
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | map(attribute='size_available') | first | default(0)) > fpv_base_min_free_mb * 1048576
+    fail_msg: "Недостаточно места в / (требуется не менее {{ fpv_base_min_free_mb }} МБ)"
+    quiet: true
+  when: ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | list | length > 0
+
+- name: Источники пакетов (официальные подписанные репозитории или зеркало ЦОД)
+  ansible.builtin.template:
+    src: sources.list.j2
+    dest: /etc/apt/sources.list
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  become: true
+  when: fpv_manage_packages | bool
+  notify: Обновить кэш apt
+
+- name: Применить обновление кэша пакетов
+  ansible.builtin.meta: flush_handlers
+
+- name: Установка базовых пакетов
+  ansible.builtin.apt:
+    name: "{{ fpv_base_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Часовой пояс
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ fpv_timezone }}"
+    dest: /etc/localtime
+    state: link
+    force: true
+  become: true
+  when: fpv_manage_services | bool
+
+- name: Синхронизация времени (Kerberos требует расхождения не более 5 минут)
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: fpv_manage_packages | bool
+  notify: Перезапустить chrony
+
+- name: Параметры ядра (hardening)
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/60-fpv-hardening.conf
+    reload: true
+    state: present
+  loop: "{{ fpv_base_sysctl | dict2items }}"
+  become: true
+  when: fpv_manage_services | bool     # в контейнере параметры ядра задаёт хост
+
+- name: Системная группа службы
+  ansible.builtin.group:
+    name: "{{ fpv_service_group }}"
+    system: true
+  become: true
+
+- name: Системная учётная запись службы (без входа в систему)
+  ansible.builtin.user:
+    name: "{{ fpv_service_user }}"
+    group: "{{ fpv_service_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ fpv_data_dir }}"
+    create_home: false
+  become: true
+
+- name: Каталоги платформы (постоянные данные вне /tmp)
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default(fpv_service_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ fpv_config_dir }}", mode: "0750" }
+    - { path: "{{ fpv_config_dir }}/secrets", mode: "0750" }
+    - { path: "{{ fpv_data_dir }}", owner: "{{ fpv_service_user }}", mode: "0750" }
+    - { path: "{{ fpv_log_dir }}", owner: "{{ fpv_service_user }}", mode: "0750" }
+    - { path: "{{ fpv_install_root }}", mode: "0755", group: root }
+  become: true
+
+- name: Автоматическая установка обновлений безопасности
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Служба аудита ОС
+  ansible.builtin.service:
+    name: auditd
+    state: started
+    enabled: true
+  become: true
+  when: fpv_manage_services | bool

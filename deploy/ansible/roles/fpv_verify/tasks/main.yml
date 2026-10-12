@@ -1,0 +1,69 @@
+---
+- name: Сбор результатов
+  ansible.builtin.set_fact:
+    fpv_verify_results: []
+
+- name: Каталоги платформы
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: ["{{ fpv_config_dir }}", "{{ fpv_data_dir }}", "{{ fpv_log_dir }}"]
+  register: fpv_verify_dirs
+
+- name: Проверка каталогов и прав
+  ansible.builtin.set_fact:
+    fpv_verify_results: "{{ fpv_verify_results + [{'check': 'dir ' + item.item,
+      'ok': item.stat.exists and not (item.stat.woth | default(false))}] }}"
+  loop: "{{ fpv_verify_dirs.results }}"
+  loop_control: {label: "{{ item.item }}"}
+
+- name: Файлы секретов не доступны посторонним
+  ansible.builtin.find:
+    paths: "{{ fpv_config_dir }}/secrets"
+    file_type: file
+  register: fpv_verify_secrets
+  become: true
+
+- name: Проверка прав на секреты
+  ansible.builtin.set_fact:
+    fpv_verify_results: "{{ fpv_verify_results + [{'check': 'secret mode ' + item.path,
+      'ok': (item.mode | int(base=8)) % 8 == 0}] }}"
+  loop: "{{ fpv_verify_secrets.files }}"
+  loop_control: {label: "{{ item.path }}"}
+
+- name: Секреты отсутствуют в журнале Ansible
+  ansible.builtin.set_fact:
+    fpv_verify_results: "{{ fpv_verify_results + [{'check': 'no secrets in ansible log',
+      'ok': (lookup('ansible.builtin.file', fpv_verify_ansible_log, errors='ignore') | default('', true)) is not search(item | regex_escape)}] }}"
+  loop: "{{ [vault_fpv_app_database_password | default(''), vault_fpv_app_ldap_bind_password | default(''),
+            vault_fpv_domain_join_password | default('')] | select | list }}"
+  loop_control: {label: "секрет ***"}
+  no_log: true
+
+- name: Приложение
+  ansible.builtin.include_tasks: app.yml
+  when: "'app_servers' in group_names"
+
+- name: PostgreSQL
+  ansible.builtin.include_tasks: database.yml
+  when: "'db_servers' in group_names and fpv_manage_services | bool"
+
+- name: Домен
+  ansible.builtin.include_tasks: domain.yml
+  when: fpv_domain_join_enabled | bool
+
+- name: Сетевые папки
+  ansible.builtin.include_tasks: shares.yml
+  when: "'file_servers' in group_names"
+
+- name: Отчёт проверки
+  ansible.builtin.copy:
+    dest: "{{ fpv_verify_report_dir }}/verify-report.json"
+    content: "{{ {'host': inventory_hostname, 'groups': group_names, 'results': fpv_verify_results} | to_nice_json }}"
+    mode: "0640"
+  become: true
+
+- name: Итог проверки
+  ansible.builtin.assert:
+    that: fpv_verify_results | rejectattr('ok') | list | length == 0
+    fail_msg: "Не пройдены проверки: {{ fpv_verify_results | rejectattr('ok') | map(attribute='check') | join('; ') }}"
+    success_msg: "Все проверки пройдены ({{ fpv_verify_results | length }})"

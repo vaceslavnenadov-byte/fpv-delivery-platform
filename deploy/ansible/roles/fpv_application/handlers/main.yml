@@ -1,0 +1,21 @@
+---
+- name: Перечитать systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: fpv_manage_services | bool
+
+- name: Перезапустить приложение
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop: [fpv-api, fpv-worker]
+  become: true
+  when: fpv_manage_services | bool
+
+- name: Перезагрузить nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+  become: true
+  when: fpv_manage_services | bool

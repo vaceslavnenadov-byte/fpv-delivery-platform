@@ -1,0 +1,6 @@
+---
+- name: PostgreSQL платформы
+  hosts: db_servers
+  gather_facts: true
+  roles:
+    - fpv_postgresql

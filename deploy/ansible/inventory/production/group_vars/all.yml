@@ -1,0 +1,4 @@
+---
+# Переменные окружения inventory. Внимание: inventory group_vars/all имеют приоритет ниже
+# playbook group_vars/*, поэтому здесь задаются только переменные, не определённые в playbooks/group_vars.
+fpv_environment: production

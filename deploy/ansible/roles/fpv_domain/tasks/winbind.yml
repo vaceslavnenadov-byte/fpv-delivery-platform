@@ -1,0 +1,38 @@
+---
+- name: Проверка членства файлового сервера в домене
+  ansible.builtin.command: net ads testjoin
+  register: fpv_domain_testjoin
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Получение билета Kerberos учётной записи присоединения (пароль через stdin)
+  ansible.builtin.command:
+    argv: [kinit, "{{ fpv_domain_join_user }}@{{ fpv_domain_realm }}"]
+    stdin: "{{ fpv_domain_password }}"
+  become: true
+  no_log: true
+  changed_when: false
+  when: fpv_domain_testjoin.rc != 0
+
+- name: Присоединение (net ads join по билету Kerberos)
+  ansible.builtin.command:
+    argv: [net, ads, join, -k, "createcomputer={{ fpv_domain_ou | regex_replace('^OU=|,DC=.*$', '') | regex_replace(',OU=', '/') }}"]
+  become: true
+  when: fpv_domain_testjoin.rc != 0
+  notify: Перезапустить winbind
+
+- name: Удаление билета Kerberos
+  ansible.builtin.command: kdestroy
+  become: true
+  changed_when: false
+  when: fpv_domain_testjoin.rc != 0
+
+- name: NSS через winbind
+  ansible.builtin.lineinfile:
+    path: /etc/nsswitch.conf
+    regexp: "^{{ item }}:"
+    line: "{{ item }}: files systemd winbind"
+    backup: true
+  loop: [passwd, group]
+  become: true

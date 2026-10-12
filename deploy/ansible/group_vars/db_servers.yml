@@ -1,0 +1,10 @@
+---
+fpv_postgresql_version: 13
+fpv_postgresql_listen: "*"
+fpv_postgresql_app_clients: [10.20.0.0/24]     # подсеть серверов приложений
+fpv_postgresql_db: fpv
+fpv_postgresql_app_user: fpv_app
+fpv_postgresql_ssl: true
+fpv_backup_dir: /var/backups/fpv
+fpv_backup_keep_days: 14
+fpv_backup_restore_check: true

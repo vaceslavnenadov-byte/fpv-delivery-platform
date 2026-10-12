@@ -1,0 +1,22 @@
+---
+- name: Доступность PostgreSQL
+  ansible.builtin.command: pg_isready -q
+  register: fpv_verify_pg
+  changed_when: false
+  failed_when: false
+
+- name: Таблица аудита защищена от изменения
+  ansible.builtin.command:
+    argv: [psql, -XAtq, -d, "{{ fpv_postgresql_db | default('fpv') }}", -c,
+           "SELECT count(*) FROM pg_trigger WHERE tgname = 'audit_logs_immutable'"]
+  register: fpv_verify_trigger
+  become: true
+  become_user: postgres
+  changed_when: false
+  failed_when: false
+
+- name: Результаты проверки PostgreSQL
+  ansible.builtin.set_fact:
+    fpv_verify_results: "{{ fpv_verify_results + [
+      {'check': 'postgresql ready', 'ok': fpv_verify_pg.rc == 0},
+      {'check': 'audit trigger present', 'ok': (fpv_verify_trigger.stdout | default('')) == '1'}] }}"

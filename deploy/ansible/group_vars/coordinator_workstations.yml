@@ -1,0 +1,5 @@
+---
+# Вход на рабочую станцию разрешён только группе coordinators и администраторам Linux.
+fpv_login_groups: ["{{ fpv_domain_groups.coordinators }}", "{{ fpv_domain_groups.linux_admins }}"]
+fpv_workstation_role: coordinator
+fpv_workstation_group: "{{ fpv_domain_groups.coordinators }}"

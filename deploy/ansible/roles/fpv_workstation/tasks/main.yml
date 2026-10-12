@@ -1,0 +1,35 @@
+---
+- name: Назначение рабочей станции задано
+  ansible.builtin.assert:
+    that:
+      - fpv_workstation_role in ['operator', 'coordinator', 'technician', 'admin']
+    fail_msg: "Для рабочей станции не задана роль (группа inventory *_workstations)"
+    quiet: true
+
+- name: Пакеты рабочего места
+  ansible.builtin.apt:
+    name: "{{ fpv_workstation_packages }}"
+    state: present
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Политика браузера (домашняя страница — портал платформы, доверие доменному УЦ)
+  ansible.builtin.copy:
+    dest: /usr/lib/firefox-esr/distribution/policies.json
+    content: "{{ {'policies': {'Homepage': {'URL': fpv_workstation_browser_url, 'Locked': true},
+                 'Certificates': {'ImportEnterpriseRoots': true}, 'DisableTelemetry': true,
+                 'PasswordManagerEnabled': false}} | to_nice_json }}"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Отметка назначения рабочей станции
+  ansible.builtin.copy:
+    dest: "{{ fpv_config_dir }}/workstation-role"
+    content: "{{ fpv_workstation_role }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true

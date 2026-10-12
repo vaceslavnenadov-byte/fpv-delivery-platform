@@ -1,0 +1,29 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Резервная копия БД платформы: pg_dump (custom), SHA-256, хранение {{ fpv_backup_keep_days }} дн.,
+# проверка восстановления во временную БД. Ненулевой код завершения — сигнал мониторингу.
+set -euo pipefail
+umask 077
+DB="{{ fpv_postgresql_db }}"
+DIR="{{ fpv_backup_dir }}"
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+OUT="$DIR/${DB}-${TS}.dump"
+log() { logger -t fpv-pg-backup "$*"; echo "$*"; }
+
+pg_dump --format=custom --compress=6 --file="$OUT.part" "$DB"
+mv "$OUT.part" "$OUT"
+sha256sum "$OUT" > "$OUT.sha256"
+log "резервная копия создана: $OUT ($(stat -c %s "$OUT") байт)"
+
+{% if fpv_backup_restore_check %}
+CHECK_DB="${DB}_restore_check"
+dropdb --if-exists "$CHECK_DB"
+createdb "$CHECK_DB"
+trap 'dropdb --if-exists "$CHECK_DB" >/dev/null 2>&1 || true' EXIT
+pg_restore --exit-on-error --no-owner --dbname="$CHECK_DB" "$OUT"
+ORDERS="$(psql -XAtq -d "$CHECK_DB" -c 'SELECT count(*) FROM orders')"
+AUDIT="$(psql -XAtq -d "$CHECK_DB" -c 'SELECT count(*) FROM audit_logs')"
+log "проверка восстановления пройдена: orders=$ORDERS audit_logs=$AUDIT"
+{% endif %}
+
+find "$DIR" -name "${DB}-*.dump*" -type f -mtime +{{ fpv_backup_keep_days }} -print -delete | sed 's/^/удалена устаревшая копия: /'

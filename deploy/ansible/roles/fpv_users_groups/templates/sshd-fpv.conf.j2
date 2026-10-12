@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+PermitRootLogin no
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+GSSAPIAuthentication yes
+GSSAPICleanupCredentials yes
+X11Forwarding no
+MaxAuthTries 4
+AllowGroups {{ (fpv_login_groups + fpv_ssh_allow_local_groups) | map('lower') | map('replace', ' ', '?') | join(' ') }}

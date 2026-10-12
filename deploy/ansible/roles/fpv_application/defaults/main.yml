@@ -1,0 +1,28 @@
+---
+# Архив приложения, собранный scripts/build-bundle.sh (на управляющем узле).
+fpv_app_archive: "{{ lookup('ansible.builtin.env', 'FPV_APP_ARCHIVE') }}"
+# Каталог wheel-пакетов из fpv-delivery-packages (изолированная сеть); пусто — PyPI/зеркало.
+fpv_pip_wheelhouse: "{{ lookup('ansible.builtin.env', 'FPV_PIP_WHEELHOUSE') }}"
+fpv_pip_index_url: ""
+fpv_app_packages: [python3-venv, python3-pip, nginx, ffmpeg]
+fpv_app_python: /usr/bin/python3
+fpv_app_listen: 127.0.0.1:8000
+fpv_app_workers: 2
+fpv_app_server_name: "{{ ansible_facts['fqdn'] | default('localhost') }}"
+fpv_app_tls_cert: /etc/ssl/fpv/fpv.crt
+fpv_app_tls_key: /etc/ssl/private/fpv.key
+fpv_app_database_host: localhost
+fpv_app_database_port: 5432
+fpv_app_database_name: fpv
+fpv_app_database_user: fpv_app
+fpv_app_database_password: "{{ vault_fpv_app_database_password | default('') }}"
+fpv_app_database_sslmode: "{{ 'disable' if fpv_app_database_host in ['localhost', '127.0.0.1'] else 'verify-full' }}"
+fpv_app_ldap_bind_dn: ""
+fpv_app_ldap_bind_password: "{{ vault_fpv_app_ldap_bind_password | default('') }}"
+fpv_app_object_store: filesystem
+fpv_app_object_store_root: /srv/fpv-evidence
+fpv_app_video_spool_dir: "{{ fpv_data_dir }}/video-spool"
+fpv_app_video_retention_days: 180
+fpv_app_run_migrations: true
+fpv_app_keep_releases: 5
+fpv_nginx_enabled: true

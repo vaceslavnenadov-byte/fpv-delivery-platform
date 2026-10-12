@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  role_name: fpv_logging
+  author: FPV Platform Team
+  description: "Журналирование: journald, централизованная пересылка, ротация"
+  min_ansible_version: "2.15"
+  platforms: [{name: Debian, versions: [bullseye]}]
+dependencies: []

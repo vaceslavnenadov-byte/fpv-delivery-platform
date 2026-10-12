@@ -1,0 +1,8 @@
+---
+# server — файловый сервер ЦОД; client — рабочая станция (монтирование через pam_mount)
+fpv_shares_mode: client
+fpv_samba_workgroup: FPV
+fpv_samba_server_packages: [samba, acl, attr, smbclient]
+fpv_samba_client_packages: [cifs-utils, keyutils, libpam-mount, smbclient]
+fpv_shares_mount_base: "~/Сетевые папки"
+fpv_workstation_group: ""

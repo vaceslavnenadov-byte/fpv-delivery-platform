@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=FPV: ежедневное резервное копирование PostgreSQL
+
+[Timer]
+OnCalendar={{ fpv_backup_schedule }}
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

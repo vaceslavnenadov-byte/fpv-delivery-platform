@@ -1,0 +1,7 @@
+---
+- name: Перезагрузить samba
+  ansible.builtin.service:
+    name: smbd
+    state: reloaded
+  become: true
+  when: fpv_manage_services | bool

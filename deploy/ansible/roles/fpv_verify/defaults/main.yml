@@ -1,0 +1,4 @@
+---
+fpv_verify_domain_user: ""            # доменный пользователь для проверки разрешения имён (getent)
+fpv_verify_report_dir: "{{ fpv_log_dir }}"
+fpv_verify_ansible_log: "{{ playbook_dir }}/../logs/ansible.log"

@@ -1,0 +1,12 @@
+---
+- name: Рабочие места по назначенной роли
+  hosts: workstations
+  gather_facts: true
+  roles:
+    - fpv_workstation
+
+- name: Наземные станции (сервисный модуль дрона)
+  hosts: ground_stations
+  gather_facts: true
+  roles:
+    - fpv_drone_agent

@@ -1,0 +1,27 @@
+# {{ ansible_managed }}
+[Unit]
+Description=FPV Delivery Platform worker (outbox, связь, сроки хранения)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ fpv_service_user }}
+Group={{ fpv_service_group }}
+EnvironmentFile={{ fpv_config_dir }}/fpv.env
+WorkingDirectory={{ fpv_install_root }}/current/backend
+ExecStart={{ fpv_install_root }}/current/venv/bin/python -m fpv.worker
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths={{ fpv_app_video_spool_dir }} {{ fpv_app_object_store_root }} {{ fpv_log_dir }}
+CapabilityBoundingSet=
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

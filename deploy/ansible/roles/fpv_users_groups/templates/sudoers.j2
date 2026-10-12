@@ -1,0 +1,7 @@
+# {{ ansible_managed }}
+# Права sudo выдаются доменным группам; пароли в файле не хранятся.
+Defaults    logfile="/var/log/sudo.log"
+Defaults    log_input, log_output
+{% for rule in fpv_sudo_rules %}
+%{{ rule.group | replace(' ', '\\ ') }} ALL=(ALL:ALL) {{ rule.commands }}
+{% endfor %}

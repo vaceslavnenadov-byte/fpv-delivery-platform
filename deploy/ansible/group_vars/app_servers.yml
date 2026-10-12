@@ -1,0 +1,17 @@
+---
+fpv_login_groups: ["{{ fpv_domain_groups.linux_admins }}"]
+fpv_app_listen: 127.0.0.1:8000
+fpv_app_workers: 4
+fpv_app_server_name: fpv.dc.fpv.local
+fpv_app_tls_cert: /etc/ssl/fpv/fpv.crt
+fpv_app_tls_key: /etc/ssl/private/fpv.key
+fpv_app_database_host: db1.dc.fpv.local
+fpv_app_database_name: fpv
+fpv_app_database_user: fpv_app
+# vault_fpv_app_database_password — Vault
+fpv_app_ldap_bind_dn: "CN=svc-fpv-ldap,OU=Service,OU=FPV,DC=fpv,DC=local"
+# vault_fpv_app_ldap_bind_password — Vault
+fpv_app_object_store: filesystem
+fpv_app_object_store_root: /srv/fpv-evidence     # том хранилища ЦОД (NFS/iSCSI), см. docs/storage.md
+fpv_app_video_retention_days: 180
+fpv_nginx_enabled: true

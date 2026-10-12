@@ -1,0 +1,16 @@
+#!/bin/sh
+# Создание персонального каталога доменного пользователя на файловом сервере.
+# Вызывается Samba (root preexec) с именем пользователя; доступ только владельцу.
+set -eu
+user="${1:-}"
+case "$user" in
+  ''|*/*|*..*|-*) echo "fpv-mkhome: недопустимое имя пользователя" >&2; exit 2 ;;
+esac
+root="${FPV_HOMES_ROOT:-/srv/homes}"
+dir="$root/$user"
+if [ ! -d "$dir" ]; then
+  id "$user" >/dev/null 2>&1 || { echo "fpv-mkhome: пользователь не найден в домене" >&2; exit 3; }
+  mkdir -m 0700 "$dir"
+  chown "$user": "$dir"
+  logger -t fpv-mkhome "создан персональный каталог $dir"
+fi

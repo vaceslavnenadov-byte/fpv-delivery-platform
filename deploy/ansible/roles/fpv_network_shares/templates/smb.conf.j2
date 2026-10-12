@@ -1,0 +1,64 @@
+# {{ ansible_managed }}
+# Сформировано из утверждённой таблицы прав fpv_network_shares.
+[global]
+    workgroup = {{ fpv_samba_workgroup }}
+    realm = {{ fpv_domain_realm }}
+    security = ADS
+    kerberos method = secrets and keytab
+    winbind use default domain = yes
+    winbind refresh tickets = yes
+    idmap config * : backend = tdb
+    idmap config * : range = 3000-7999
+    idmap config {{ fpv_samba_workgroup }} : backend = rid
+    idmap config {{ fpv_samba_workgroup }} : range = 10000-999999
+    server min protocol = SMB3_00
+    smb encrypt = required
+    restrict anonymous = 2
+    map to guest = never
+    guest ok = no
+    load printers = no
+    printing = bsd
+    disable spoolss = yes
+    log file = /var/log/samba/log.%m
+    max log size = 10000
+    log level = 1 auth_audit:3
+    vfs objects = acl_xattr full_audit
+    full_audit:prefix = %u|%I|%S
+    full_audit:success = connect mkdirat renameat unlinkat
+    full_audit:failure = connect openat
+    full_audit:facility = local5
+    full_audit:priority = notice
+    map acl inherit = yes
+    inherit acls = yes
+    hide unreadable = yes
+
+{% if fpv_home_shares_enabled | default(true) %}
+[homes]
+    comment = Персональный каталог
+    path = {{ fpv_homes_root }}/%S
+    valid users = %S
+    browseable = no
+    read only = no
+    create mask = 0600
+    directory mask = 0700
+    root preexec = /usr/local/sbin/fpv-mkhome %S
+    root preexec close = yes
+{% endif %}
+
+{% for s in fpv_shares_normalized %}
+[{{ s.name }}]
+    comment = {{ s.comment }}
+    path = {{ s.path }}
+    valid users = {{ s.groups | fpv_smb_group_list(fpv_samba_workgroup) }}
+    read only = yes
+{% if s.read_write %}
+    write list = {{ s.read_write | fpv_smb_group_list(fpv_samba_workgroup) }}
+{% endif %}
+{% if s.read_only %}
+    read list = {{ s.read_only | fpv_smb_group_list(fpv_samba_workgroup) }}
+{% endif %}
+    create mask = 0660
+    directory mask = 2770
+    browseable = yes
+
+{% endfor %}

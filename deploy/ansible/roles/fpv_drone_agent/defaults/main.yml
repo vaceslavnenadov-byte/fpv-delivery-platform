@@ -1,0 +1,7 @@
+---
+fpv_agent_archive: "{{ lookup('ansible.builtin.env', 'FPV_APP_ARCHIVE') }}"
+fpv_agent_server_url: https://fpv.dc.fpv.local
+fpv_agent_scenario: normal
+fpv_agent_key: "{{ vault_fpv_agent_key | default('') }}"
+fpv_agent_dir: /opt/fpv-agent
+fpv_agent_user: fpv-agent

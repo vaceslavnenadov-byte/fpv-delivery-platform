@@ -1,0 +1,12 @@
+---
+- name: Обновить кэш apt
+  ansible.builtin.apt:
+    update_cache: true
+  become: true
+
+- name: Перезапустить chrony
+  ansible.builtin.service:
+    name: chrony
+    state: restarted
+  become: true
+  when: fpv_manage_services | bool

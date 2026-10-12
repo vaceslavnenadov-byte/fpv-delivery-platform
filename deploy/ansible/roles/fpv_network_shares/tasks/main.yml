@@ -1,0 +1,12 @@
+---
+- name: Проверка таблицы прав сетевых ресурсов
+  ansible.builtin.set_fact:
+    fpv_shares_normalized: "{{ fpv_network_shares | fpv_normalize_shares }}"
+
+- name: Файловый сервер
+  ansible.builtin.include_tasks: server.yml
+  when: fpv_shares_mode == 'server'
+
+- name: Рабочая станция
+  ansible.builtin.include_tasks: client.yml
+  when: fpv_shares_mode == 'client'

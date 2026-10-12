@@ -1,0 +1,67 @@
+---
+- name: Пакеты файлового сервера
+  ansible.builtin.apt:
+    name: "{{ fpv_samba_server_packages }}"
+    state: present
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Корневые каталоги ресурсов (ФС тома хранилища ЦОД монтируется заранее)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: ["{{ fpv_shares_root }}", "{{ fpv_homes_root }}"]
+  become: true
+
+- name: Каталоги общих ресурсов (владелец root, доступ только через ACL групп)
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "2770"
+  loop: "{{ fpv_shares_normalized }}"
+  loop_control: {label: "{{ item.name }}"}
+  become: true
+
+
+- name: Применение ACL
+  ansible.builtin.include_tasks: acl.yml
+  loop: "{{ fpv_shares_normalized }}"
+  loop_control:
+    loop_var: share
+    label: "{{ share.name }}"
+
+- name: Скрипт создания персонального каталога (только владельцу, 0700)
+  ansible.builtin.copy:
+    src: fpv-mkhome
+    dest: /usr/local/sbin/fpv-mkhome
+    owner: root
+    group: root
+    mode: "0750"
+  become: true
+
+- name: Конфигурация Samba (проверяется testparm до применения)
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: testparm -s %s
+    backup: true
+  become: true
+  when: fpv_manage_packages | bool
+  notify: Перезагрузить samba
+
+- name: Службы файлового сервера
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: [smbd, winbind]
+  become: true
+  when: fpv_manage_services | bool

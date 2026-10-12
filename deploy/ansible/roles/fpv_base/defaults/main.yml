@@ -1,0 +1,27 @@
+---
+fpv_base_allowed_releases: ["11"]
+fpv_base_allow_unsupported_os: false
+fpv_base_min_free_mb: 2048
+fpv_base_packages:
+  - ca-certificates
+  - python3
+  - python3-venv
+  - python3-apt
+  - acl
+  - chrony
+  - rsync
+  - curl
+  - gnupg
+  - auditd
+  - unattended-upgrades
+  - apt-transport-https
+  - procps
+fpv_base_sysctl:
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.tcp_syncookies: 1
+  kernel.kptr_restrict: 2
+  kernel.dmesg_restrict: 1
+  fs.protected_symlinks: 1
+  fs.protected_hardlinks: 1

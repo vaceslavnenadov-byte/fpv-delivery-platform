@@ -1,0 +1,4 @@
+---
+fpv_monitoring_packages: [prometheus-node-exporter]
+fpv_monitoring_check_units: []          # задаётся в плейбуке по группе узла
+fpv_monitoring_health_url: ""

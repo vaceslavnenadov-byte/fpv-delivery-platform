@@ -1,0 +1,10 @@
+---
+# Подключение к домену: файловые серверы — Samba/winbind, остальные — realmd/SSSD.
+- name: Доменная интеграция
+  hosts: all
+  gather_facts: true
+  roles:
+    - role: fpv_domain
+      vars:
+        fpv_domain_client: "{{ 'winbind' if 'file_servers' in group_names else 'sssd' }}"
+      when: fpv_domain_join_enabled | bool

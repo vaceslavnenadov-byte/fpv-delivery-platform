@@ -1,0 +1,7 @@
+# Ansible collections. Версии закреплены; в изолированной сети используются
+# архивы из репозитория fpv-delivery-packages (ansible/collections/*.tar.gz, проверка SHA-256).
+collections:
+  - name: ansible.posix
+    version: "1.5.4"
+  - name: community.postgresql
+    version: "2.4.3"

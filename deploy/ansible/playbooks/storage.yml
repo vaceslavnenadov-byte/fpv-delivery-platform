@@ -1,0 +1,16 @@
+---
+- name: Файловые серверы ЦОД (персональные и общие сетевые папки)
+  hosts: file_servers
+  gather_facts: true
+  roles:
+    - role: fpv_network_shares
+      vars:
+        fpv_shares_mode: server
+
+- name: Подключение сетевых папок на рабочих станциях
+  hosts: workstations
+  gather_facts: true
+  roles:
+    - role: fpv_network_shares
+      vars:
+        fpv_shares_mode: client

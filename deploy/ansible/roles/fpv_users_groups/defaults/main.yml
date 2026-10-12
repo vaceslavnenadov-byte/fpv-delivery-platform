@@ -1,0 +1,7 @@
+---
+# Локальная учётная запись автоматизации (ключ SSH), доступ по паролю отключён.
+fpv_deploy_user: ansible-deploy
+fpv_deploy_user_manage: false
+fpv_deploy_user_pubkey: ""
+fpv_ssh_manage: true
+fpv_ssh_allow_local_groups: [sudo]

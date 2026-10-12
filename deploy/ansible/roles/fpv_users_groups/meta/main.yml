@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  role_name: fpv_users_groups
+  author: FPV Platform Team
+  description: "Локальные служебные учётные записи, правила sudo по доменным группам, политика SSH"
+  min_ansible_version: "2.15"
+  platforms: [{name: Debian, versions: [bullseye]}]
+dependencies: []

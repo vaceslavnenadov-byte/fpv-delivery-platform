@@ -1,0 +1,52 @@
+---
+- name: Экспортер метрик узла
+  ansible.builtin.apt:
+    name: "{{ fpv_monitoring_packages }}"
+    state: present
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Скрипт проверки состояния узла
+  ansible.builtin.template:
+    src: fpv-healthcheck.sh.j2
+    dest: /usr/local/sbin/fpv-healthcheck
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Периодическая проверка состояния (systemd timer)
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    content: "{{ item.content }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - name: fpv-healthcheck.service
+      content: |
+        [Unit]
+        Description=FPV: проверка состояния служб, связи и свободного места
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/fpv-healthcheck
+    - name: fpv-healthcheck.timer
+      content: |
+        [Unit]
+        Description=FPV: периодическая проверка состояния
+        [Timer]
+        OnBootSec=2min
+        OnUnitActiveSec=5min
+        [Install]
+        WantedBy=timers.target
+  loop_control: {label: "{{ item.name }}"}
+  become: true
+
+- name: Таймер проверки состояния
+  ansible.builtin.systemd:
+    name: fpv-healthcheck.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: fpv_manage_services | bool

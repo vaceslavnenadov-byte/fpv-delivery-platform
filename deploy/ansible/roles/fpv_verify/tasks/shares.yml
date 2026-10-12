@@ -1,0 +1,18 @@
+---
+- name: ACL каталогов общих ресурсов
+  ansible.builtin.command: "getfacl -cp {{ item.path }}"
+  loop: "{{ fpv_network_shares | fpv_normalize_shares }}"
+  loop_control: {label: "{{ item.name }}"}
+  register: fpv_verify_acl
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Соответствие ACL утверждённой таблице прав
+  ansible.builtin.set_fact:
+    fpv_verify_results: "{{ fpv_verify_results + [{'check': 'acl ' + item.item.name,
+      'ok': item.rc == 0 and (item.item | fpv_acl_entries | map(attribute='entity')
+            | map('regex_replace', '^(.*)$', 'group:\\1:') | reject('in', item.stdout) | list | length == 0)
+            and 'other::---' in item.stdout}] }}"
+  loop: "{{ fpv_verify_acl.results }}"
+  loop_control: {label: "{{ item.item.name }}"}

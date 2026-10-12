@@ -1,0 +1,5 @@
+---
+- name: Перезапустить fpv-agent
+  ansible.builtin.systemd: {name: fpv-agent, state: restarted, daemon_reload: true}
+  become: true
+  when: fpv_manage_services | bool and fpv_agent_key | length > 0

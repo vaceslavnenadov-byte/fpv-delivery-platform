@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  role_name: fpv_domain
+  author: FPV Platform Team
+  description: "Присоединение Debian 11 к домену (realmd/SSSD или Samba winbind), Kerberos"
+  min_ansible_version: "2.15"
+  platforms: [{name: Debian, versions: [bullseye]}]
+dependencies: []

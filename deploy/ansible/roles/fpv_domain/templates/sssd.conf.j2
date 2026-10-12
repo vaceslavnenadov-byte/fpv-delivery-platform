@@ -1,0 +1,24 @@
+# {{ ansible_managed }}
+[sssd]
+domains = {{ fpv_domain_name }}
+config_file_version = 2
+services = nss, pam
+
+[domain/{{ fpv_domain_name }}]
+id_provider = ad
+auth_provider = ad
+chpass_provider = ad
+ad_domain = {{ fpv_domain_name }}
+krb5_realm = {{ fpv_domain_realm }}
+realmd_tags = manages-system joined-with-adcli
+krb5_store_password_if_offline = False
+cache_credentials = {{ 'True' if fpv_domain_cache_credentials else 'False' }}
+default_shell = /bin/bash
+fallback_homedir = /home/%u
+use_fully_qualified_names = False
+ldap_id_mapping = True
+# Отключённая в AD учётная запись теряет доступ к узлу (проверка при каждом входе).
+ad_gpo_access_control = enforcing
+# Доступ на узел — только перечисленным доменным группам (таблица прав, group_vars).
+access_provider = simple
+simple_allow_groups = {{ fpv_login_groups | join(', ') }}

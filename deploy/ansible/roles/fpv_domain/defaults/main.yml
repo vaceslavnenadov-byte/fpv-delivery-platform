@@ -1,0 +1,7 @@
+---
+# sssd — серверы приложений, БД, рабочие станции; winbind — файловые серверы Samba.
+fpv_domain_client: sssd
+fpv_domain_sssd_packages: [realmd, sssd, sssd-tools, adcli, krb5-user, libnss-sss, libpam-sss, samba-common-bin, packagekit]
+fpv_domain_winbind_packages: [samba, winbind, libnss-winbind, libpam-winbind, krb5-user, acl]
+fpv_domain_cache_credentials: false        # для рабочих станций можно включить
+fpv_domain_password: "{{ vault_fpv_domain_join_password | default('') }}"

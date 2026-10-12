@@ -1,0 +1,38 @@
+---
+- name: Каталог резервных копий (на томе ЦОД)
+  ansible.builtin.file:
+    path: "{{ fpv_backup_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0700"
+  become: true
+
+- name: Скрипт резервного копирования с проверкой восстановления
+  ansible.builtin.template:
+    src: fpv-pg-backup.sh.j2
+    dest: /usr/local/sbin/fpv-pg-backup
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Systemd-юниты резервного копирования
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [fpv-pg-backup.service, fpv-pg-backup.timer]
+  become: true
+  notify: Перечитать systemd
+
+- name: Таймер резервного копирования
+  ansible.builtin.systemd:
+    name: fpv-pg-backup.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: fpv_manage_services | bool

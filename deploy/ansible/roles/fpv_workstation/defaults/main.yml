@@ -1,0 +1,4 @@
+---
+fpv_workstation_packages: [firefox-esr, fonts-dejavu]
+fpv_workstation_role: ""
+fpv_workstation_browser_url: https://fpv.dc.fpv.local

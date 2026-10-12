@@ -1,0 +1,17 @@
+---
+# Базовая подготовка Debian 11: ОС, пользователи и sudo, журналирование, мониторинг.
+- name: Базовая подготовка узлов
+  hosts: all
+  gather_facts: true
+  roles:
+    - fpv_base
+    - fpv_users_groups
+    - fpv_logging
+    - role: fpv_monitoring
+      vars:
+        fpv_monitoring_check_units: >-
+          {{ (['fpv-api', 'fpv-worker', 'nginx'] if 'app_servers' in group_names else [])
+           + (['postgresql'] if 'db_servers' in group_names else [])
+           + (['smbd', 'winbind'] if 'file_servers' in group_names else [])
+           + (['sssd'] if fpv_domain_join_enabled and 'file_servers' not in group_names else []) }}
+        fpv_monitoring_health_url: "{{ 'http://127.0.0.1:8000/health/ready' if 'app_servers' in group_names else '' }}"

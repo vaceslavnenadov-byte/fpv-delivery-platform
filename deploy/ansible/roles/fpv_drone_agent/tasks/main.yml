@@ -1,0 +1,54 @@
+---
+- name: Учётная запись сервисного модуля
+  ansible.builtin.user:
+    name: "{{ fpv_agent_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/fpv-agent
+    create_home: true
+  become: true
+
+- name: Каталог сервисного модуля
+  ansible.builtin.file:
+    path: "{{ fpv_agent_dir }}"
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Распаковка сервисного модуля
+  ansible.builtin.unarchive:
+    src: "{{ fpv_agent_archive }}"
+    dest: "{{ fpv_agent_dir }}"
+    include: [drone-agent]
+    creates: "{{ fpv_agent_dir }}/drone-agent/fpv_agent/__init__.py"
+  become: true
+
+- name: Ключ устройства (выпускается владельцем дрона в кабинете, хранится в Vault)
+  ansible.builtin.copy:
+    dest: /etc/fpv-agent.key
+    content: "{{ fpv_agent_key }}"
+    owner: "{{ fpv_agent_user }}"
+    group: root
+    mode: "0600"
+  no_log: true
+  become: true
+  when: fpv_agent_key | length > 0
+
+- name: Служба сервисного модуля
+  ansible.builtin.template:
+    src: fpv-agent.service.j2
+    dest: /etc/systemd/system/fpv-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Перезапустить fpv-agent
+
+- name: Запуск сервисного модуля
+  ansible.builtin.systemd:
+    name: fpv-agent
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: fpv_manage_services | bool and fpv_agent_key | length > 0

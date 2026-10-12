@@ -1,0 +1,97 @@
+---
+- name: Проверка параметров доменной интеграции
+  ansible.builtin.assert:
+    that:
+      - fpv_domain_realm | length > 0
+      - fpv_domain_client in ['sssd', 'winbind']
+    quiet: true
+
+- name: Пакеты доменного клиента
+  ansible.builtin.apt:
+    name: "{{ fpv_domain_sssd_packages if fpv_domain_client == 'sssd' else fpv_domain_winbind_packages }}"
+    state: present
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Сертификат корневого УЦ домена (для LDAPS и TLS внутренних служб)
+  ansible.builtin.copy:
+    src: "{{ fpv_domain_ca_cert_src }}"
+    dest: /usr/local/share/ca-certificates/fpv-domain-ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: fpv_domain_ca_cert_src | length > 0
+  notify: Обновить доверенные сертификаты
+
+- name: Конфигурация Kerberos
+  ansible.builtin.template:
+    src: krb5.conf.j2
+    dest: /etc/krb5.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  become: true
+
+- name: Проверка членства в домене (realmd)
+  ansible.builtin.command: realm list --name-only
+  register: fpv_domain_realm_list
+  changed_when: false
+  failed_when: false
+  become: true
+  when: fpv_domain_client == 'sssd'
+
+- name: Присоединение к домену (realmd, пароль передаётся через stdin)
+  ansible.builtin.command:
+    argv: [realm, join, --verbose, "--user={{ fpv_domain_join_user }}", "--computer-ou={{ fpv_domain_ou }}",
+           --membership-software=adcli, --client-software=sssd, "{{ fpv_domain_name }}"]
+    stdin: "{{ fpv_domain_password }}"
+  become: true
+  no_log: true
+  when:
+    - fpv_domain_client == 'sssd'
+    - fpv_domain_name | lower not in (fpv_domain_realm_list.stdout | default('') | lower)
+  notify: Перезапустить sssd
+
+- name: Конфигурация SSSD (доступ на узел только разрешённым доменным группам)
+  ansible.builtin.template:
+    src: sssd.conf.j2
+    dest: /etc/sssd/sssd.conf
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  become: true
+  when: fpv_domain_client == 'sssd'
+  notify: Перезапустить sssd
+
+- name: Автоматическое создание домашних каталогов доменных пользователей
+  ansible.builtin.command: pam-auth-update --enable mkhomedir
+  args:
+    creates: /etc/pam.d/.fpv-mkhomedir-enabled
+  become: true
+  when: fpv_domain_client == 'sssd' and fpv_manage_packages | bool
+  register: fpv_domain_mkhomedir
+
+- name: Отметка о включении mkhomedir
+  ansible.builtin.file:
+    path: /etc/pam.d/.fpv-mkhomedir-enabled
+    state: touch
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+  become: true
+  when: fpv_domain_mkhomedir is changed
+
+- name: Присоединение файлового сервера Samba (winbind)
+  ansible.builtin.include_tasks: winbind.yml
+  when: fpv_domain_client == 'winbind'
+
+- name: Служба SSSD
+  ansible.builtin.service:
+    name: sssd
+    state: started
+    enabled: true
+  become: true
+  when: fpv_domain_client == 'sssd' and fpv_manage_services | bool

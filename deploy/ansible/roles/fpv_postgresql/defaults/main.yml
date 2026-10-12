@@ -1,0 +1,15 @@
+---
+fpv_postgresql_version: 13
+fpv_postgresql_packages: ["postgresql-{{ fpv_postgresql_version }}", python3-psycopg2]
+fpv_postgresql_listen: localhost
+fpv_postgresql_port: 5432
+fpv_postgresql_app_clients: []
+fpv_postgresql_db: fpv
+fpv_postgresql_app_user: fpv_app
+fpv_postgresql_app_password: "{{ vault_fpv_app_database_password | default('') }}"
+fpv_postgresql_ssl: true
+fpv_postgresql_primary: false
+fpv_backup_dir: /var/backups/fpv
+fpv_backup_keep_days: 14
+fpv_backup_restore_check: true
+fpv_backup_schedule: "*-*-* 02:15:00"

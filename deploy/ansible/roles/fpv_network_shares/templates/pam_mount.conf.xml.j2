@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- {{ ansible_managed }} -->
+<!-- Подключение сетевых папок ЦОД при входе доменного пользователя.
+     Используется билет Kerberos пользователя (sec=krb5), пароль не сохраняется. -->
+<pam_mount>
+  <debug enable="0" />
+  <mntoptions allow="nosuid,nodev,noexec,sec,cruid,vers,seal,uid,gid,file_mode,dir_mode" />
+  <mntoptions require="nosuid,nodev" />
+  <logout wait="0" hup="no" term="no" kill="no" />
+  <mkmountpoint enable="1" remove="true" />
+{% if fpv_home_shares_enabled | default(true) %}
+  <volume fstype="cifs" server="{{ fpv_fileserver_host }}" path="%(USER)" mountpoint="{{ fpv_shares_mount_base }}/Личная папка"
+          options="sec=krb5,cruid=%(USERUID),uid=%(USERUID),vers=3.1.1,seal,nosuid,nodev,noexec" />
+{% endif %}
+{% for s in fpv_client_shares %}
+  <!-- {{ s.comment }} ({{ 'чтение и запись' if s.access == 'rw' else 'только чтение' }}) -->
+  <volume fstype="cifs" server="{{ fpv_fileserver_host }}" path="{{ s.name }}" mountpoint="{{ fpv_shares_mount_base }}/{{ s.name }}"
+          sgrp="{{ fpv_workstation_group }}"
+          options="sec=krb5,cruid=%(USERUID),uid=%(USERUID),vers=3.1.1,seal,nosuid,nodev,noexec{{ ',ro' if s.access == 'ro' else '' }}" />
+{% endfor %}
+</pam_mount>

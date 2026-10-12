@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=FPV: резервное копирование PostgreSQL с проверкой восстановления
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+ExecStart=/usr/local/sbin/fpv-pg-backup
+Nice=10
+IOSchedulingClass=idle

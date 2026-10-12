@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+global(DefaultNetstreamDriver="gtls" DefaultNetstreamDriverCAFile="{{ fpv_syslog_ca_file }}")
+action(type="omfwd" target="{{ fpv_syslog_remote.split(':')[0] }}" port="{{ fpv_syslog_remote.split(':')[1] | default('6514') }}"
+       protocol="tcp" StreamDriver="gtls" StreamDriverMode="1" StreamDriverAuthMode="x509/name"
+       queue.type="LinkedList" queue.filename="fpv_fwd" queue.saveOnShutdown="on" action.resumeRetryCount="-1")

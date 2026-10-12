@@ -1,0 +1,7 @@
+---
+- name: Перезагрузить sshd
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+  become: true
+  when: fpv_manage_services | bool

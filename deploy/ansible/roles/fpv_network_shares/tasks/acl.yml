@@ -1,0 +1,14 @@
+---
+- name: "ACL ресурса {{ share.name }}"
+  ansible.posix.acl:
+    path: "{{ share.path }}"
+    etype: group
+    entity: "{{ entry.0.entity }}"
+    permissions: "{{ entry.0.permissions }}"
+    default: "{{ entry.1 }}"
+    state: present
+  loop: "{{ (share | fpv_acl_entries) | product([false, true]) | list }}"
+  loop_control:
+    loop_var: entry
+    label: "{{ entry.0.entity }} {{ entry.0.permissions }}{{ ' (default)' if entry.1 else '' }}"
+  become: true

@@ -1,0 +1,53 @@
+---
+- name: Пакеты журналирования
+  ansible.builtin.apt:
+    name: "{{ fpv_logging_packages }}"
+    state: present
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Каталог конфигурации journald существует
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Постоянное хранение журнала systemd
+  ansible.builtin.template:
+    src: journald-fpv.conf.j2
+    dest: /etc/systemd/journald.conf.d/60-fpv.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Перезапустить journald
+
+- name: Пересылка журналов в центральный журнал ЦОД (TLS)
+  ansible.builtin.template:
+    src: rsyslog-fpv.conf.j2
+    dest: /etc/rsyslog.d/60-fpv-forward.conf
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  when: fpv_syslog_remote | length > 0 and fpv_manage_packages | bool
+  notify: Перезапустить rsyslog
+
+- name: Ротация журналов платформы
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/fpv
+    content: |
+      {{ fpv_log_dir }}/*.log {
+          weekly
+          rotate 12
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0640 {{ fpv_service_user }} {{ fpv_service_group }}
+      }
+    owner: root
+    group: root
+    mode: "0644"
+  become: true

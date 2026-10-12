@@ -1,0 +1,20 @@
+---
+- name: Членство узла в домене
+  ansible.builtin.command: "{{ 'net ads testjoin' if fpv_domain_client | default('sssd') == 'winbind' else 'realm list --name-only' }}"
+  register: fpv_verify_join
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Разрешение доменного пользователя (NSS)
+  ansible.builtin.command: "getent passwd {{ fpv_verify_domain_user }}"
+  register: fpv_verify_getent
+  changed_when: false
+  failed_when: false
+  when: fpv_verify_domain_user | length > 0
+
+- name: Результаты доменной проверки
+  ansible.builtin.set_fact:
+    fpv_verify_results: "{{ fpv_verify_results + [
+      {'check': 'domain membership', 'ok': fpv_verify_join.rc == 0 and (fpv_domain_client | default('sssd') == 'winbind' or fpv_domain_name | lower in fpv_verify_join.stdout | lower)}]
+      + ([{'check': 'domain user resolvable', 'ok': fpv_verify_getent.rc == 0}] if fpv_verify_domain_user | length > 0 else []) }}"

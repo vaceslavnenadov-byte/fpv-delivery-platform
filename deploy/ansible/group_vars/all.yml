@@ -1,0 +1,95 @@
+---
+# Общие безопасные значения по умолчанию. Секреты — только через Ansible Vault
+# (group_vars/*/vault.yml) или утверждённое хранилище секретов; в репозитории их нет.
+
+# fpv_environment задаётся в inventory (production | test) и обязателен — см. site.yml.
+fpv_release: "0.1.0"
+# Тег репозитория дополнительных пакетов, с которым проверена данная версия.
+fpv_packages_ref: "v2026.10.0"
+
+# Управление пакетами и службами (в контейнерных проверках отключается).
+fpv_manage_packages: true
+fpv_manage_services: true
+# Источник пакетов: official (подписанные репозитории Debian) | mirror (внутреннее зеркало ЦОД)
+fpv_apt_source: official
+fpv_apt_mirror_url: "https://mirror.dc.fpv.local/debian"
+fpv_apt_mirror_security_url: "https://mirror.dc.fpv.local/debian-security"
+
+# Разрушительные действия выполняются только при явном подтверждении (см. scripts/rollback.sh).
+fpv_allow_destructive: false
+
+# --- Домен ---
+fpv_domain_join_enabled: true
+fpv_domain_realm: FPV.LOCAL
+fpv_domain_name: fpv.local
+fpv_domain_ou: "OU=Servers,OU=FPV,DC=fpv,DC=local"
+fpv_domain_join_user: svc-domainjoin
+# fpv_domain_join_password — только из Vault (vault_fpv_domain_join_password)
+fpv_domain_dns_servers: [10.10.0.10, 10.10.0.11]
+fpv_domain_ldap_uri: "ldaps://dc1.fpv.local"
+fpv_domain_ca_cert_src: ""          # путь к сертификату корневого УЦ домена на управляющем узле
+
+# Сопоставление доменных групп с ролями приложения и доступом к узлам.
+fpv_domain_groups:
+  customers: FPV-Customers
+  operators: FPV-Operators
+  coordinators: FPV-Coordinators
+  technicians: FPV-Technicians
+  admins: FPV-Admins
+  linux_admins: FPV-Linux-Admins
+  backup_operators: FPV-Backup-Operators
+
+# Кто может входить на узлы (SSSD simple access provider) — переопределяется в group_vars групп.
+fpv_login_groups: ["{{ fpv_domain_groups.linux_admins }}"]
+# Правила sudo по доменным группам (без паролей в репозитории).
+fpv_sudo_rules:
+  - group: "{{ fpv_domain_groups.linux_admins }}"
+    commands: ALL
+
+# --- Пути (постоянные данные — вне /tmp) ---
+fpv_install_root: /opt/fpv
+fpv_config_dir: /etc/fpv
+fpv_data_dir: /var/lib/fpv
+fpv_log_dir: /var/log/fpv
+fpv_service_user: fpv
+fpv_service_group: fpv
+
+# --- Журналирование и мониторинг ---
+fpv_syslog_remote: ""                # например, "logs.dc.fpv.local:6514" (TLS)
+fpv_journald_max_use: 2G
+fpv_disk_free_warn_pct: 15
+
+# --- Временная зона и NTP ---
+fpv_timezone: Europe/Moscow
+fpv_ntp_servers: "{{ fpv_domain_dns_servers }}"
+
+# --- Сетевые ресурсы ЦОД (общая таблица для файловых серверов и рабочих станций) ---
+fpv_fileserver_host: fs1.dc.fpv.local
+fpv_shares_root: /srv/shares
+fpv_homes_root: /srv/homes
+# Утверждённая таблица прав на сетевые ресурсы (доменные группы → уровень доступа).
+# Источник истины для smb.conf и ACL; проверяется тестами tests/ansible/test_shares_policy.py.
+fpv_network_shares:
+  - name: fpv-operations
+    path: /srv/shares/operations
+    comment: Рабочие документы операторов и координаторов
+    read_write: ["{{ fpv_domain_groups.operators }}", "{{ fpv_domain_groups.coordinators }}"]
+    read_only: ["{{ fpv_domain_groups.admins }}"]
+  - name: fpv-maintenance
+    path: /srv/shares/maintenance
+    comment: Техническая документация и акты обслуживания
+    read_write: ["{{ fpv_domain_groups.technicians }}"]
+    read_only: ["{{ fpv_domain_groups.admins }}", "{{ fpv_domain_groups.operators }}"]
+  - name: fpv-admin
+    path: /srv/shares/admin
+    comment: Административные отчёты
+    read_write: ["{{ fpv_domain_groups.admins }}"]
+    read_only: []
+  - name: fpv-common
+    path: /srv/shares/common
+    comment: Общие регламенты (только чтение для всех сотрудников)
+    read_write: ["{{ fpv_domain_groups.admins }}"]
+    read_only: ["{{ fpv_domain_groups.operators }}", "{{ fpv_domain_groups.coordinators }}", "{{ fpv_domain_groups.technicians }}"]
+# Персональные каталоги: доступ только владельцу (0700); администраторы — без доступа к содержимому.
+fpv_home_shares_enabled: true
+fpv_home_quota_note: "Квоты задаются на уровне файловой системы ЦОД (xfs project quota)"

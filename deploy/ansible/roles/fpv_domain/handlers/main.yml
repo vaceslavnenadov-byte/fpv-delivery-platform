@@ -1,0 +1,20 @@
+---
+- name: Обновить доверенные сертификаты
+  ansible.builtin.command: update-ca-certificates
+  become: true
+  changed_when: true
+
+- name: Перезапустить sssd
+  ansible.builtin.service:
+    name: sssd
+    state: restarted
+  become: true
+  when: fpv_manage_services | bool
+
+- name: Перезапустить winbind
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: restarted
+  loop: [winbind, smbd]
+  become: true
+  when: fpv_manage_services | bool

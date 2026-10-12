@@ -1,0 +1,4 @@
+---
+fpv_logging_packages: [rsyslog, rsyslog-gnutls, logrotate]
+fpv_syslog_remote: ""
+fpv_syslog_ca_file: /etc/ssl/certs/ca-certificates.crt

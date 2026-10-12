@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  role_name: fpv_workstation
+  author: FPV Platform Team
+  description: "Рабочее место по назначенной роли"
+  min_ansible_version: "2.15"
+  platforms: [{name: Debian, versions: [bullseye]}]
+dependencies: []

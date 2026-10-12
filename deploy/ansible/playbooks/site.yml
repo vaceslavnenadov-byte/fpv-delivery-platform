@@ -1,0 +1,25 @@
+---
+# Общий сценарий установки. Набор ролей узла определяется его группами в inventory.
+- name: Предварительные проверки
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Окружение задано явно в inventory
+      ansible.builtin.assert:
+        that:
+          - fpv_environment is defined
+          - fpv_environment in ['production', 'test']
+        fail_msg: "Задайте fpv_environment (production | test) в inventory"
+        quiet: true
+
+    - name: Узел входит хотя бы в одну известную группу или обслуживается только базовыми ролями
+      ansible.builtin.debug:
+        msg: "Группы узла: {{ group_names | join(', ') | default('нет (только базовые роли)', true) }}"
+
+- import_playbook: base.yml
+- import_playbook: domain.yml
+- import_playbook: database.yml
+- import_playbook: storage.yml
+- import_playbook: application.yml
+- import_playbook: workstation.yml
+- import_playbook: verify.yml

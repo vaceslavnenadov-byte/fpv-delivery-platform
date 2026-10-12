@@ -1,0 +1,4 @@
+---
+fpv_login_groups: ["{{ fpv_domain_groups.technicians }}", "{{ fpv_domain_groups.linux_admins }}"]
+fpv_agent_server_url: https://fpv.dc.fpv.local
+fpv_agent_scenario: normal         # только симулятор в первой версии

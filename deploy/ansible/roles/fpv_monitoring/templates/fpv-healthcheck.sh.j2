@@ -1,0 +1,18 @@
+#!/bin/bash
+# {{ ansible_managed }}
+# Результат пишется в журнал (тег fpv-health); ненулевой код — признак проблемы для мониторинга.
+set -uo pipefail
+rc=0
+report() { logger -t fpv-health -p "user.$1" "$2"; echo "$2"; }
+{% for unit in fpv_monitoring_check_units %}
+if systemctl is-active --quiet {{ unit }}; then report info "OK служба {{ unit }}"; else report err "СБОЙ служба {{ unit }}"; rc=1; fi
+{% endfor %}
+for mp in / {{ fpv_data_dir }} {{ fpv_install_root }}; do
+  [ -d "$mp" ] || continue
+  used=$(df --output=pcent "$mp" | tail -1 | tr -dc '0-9')
+  if [ "$used" -ge $((100 - {{ fpv_disk_free_warn_pct }})) ]; then report warning "МАЛО МЕСТА $mp: занято ${used}%"; rc=1; fi
+done
+{% if fpv_monitoring_health_url %}
+if curl -fsS --max-time 5 "{{ fpv_monitoring_health_url }}" >/dev/null; then report info "OK {{ fpv_monitoring_health_url }}"; else report err "СБОЙ {{ fpv_monitoring_health_url }}"; rc=1; fi
+{% endif %}
+exit $rc

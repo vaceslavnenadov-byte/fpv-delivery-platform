@@ -1,0 +1,20 @@
+---
+- name: Перезапустить postgresql
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted
+  become: true
+  when: fpv_manage_services | bool
+
+- name: Перезагрузить postgresql
+  ansible.builtin.service:
+    name: postgresql
+    state: reloaded
+  become: true
+  when: fpv_manage_services | bool
+
+- name: Перечитать systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+  when: fpv_manage_services | bool

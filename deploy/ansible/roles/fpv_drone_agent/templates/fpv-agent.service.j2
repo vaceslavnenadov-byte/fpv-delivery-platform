@@ -1,0 +1,19 @@
+# {{ ansible_managed }}
+[Unit]
+Description=FPV: сервисный модуль дрона (симулятор, без управления полётом)
+After=network-online.target
+
+[Service]
+User={{ fpv_agent_user }}
+Environment=FPV_DRONE_KEY_FILE=/etc/fpv-agent.key
+WorkingDirectory={{ fpv_agent_dir }}/drone-agent
+ExecStart=/usr/bin/python3 -m fpv_agent --server {{ fpv_agent_server_url }} --scenario {{ fpv_agent_scenario }} --state-dir /var/lib/fpv-agent
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fpv-agent
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

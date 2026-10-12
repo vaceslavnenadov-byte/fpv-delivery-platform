@@ -1,0 +1,22 @@
+---
+- name: Пакеты клиента сетевых папок
+  ansible.builtin.apt:
+    name: "{{ fpv_samba_client_packages }}"
+    state: present
+  become: true
+  when: fpv_manage_packages | bool
+
+- name: Ресурсы, разрешённые группе рабочей станции
+  ansible.builtin.set_fact:
+    fpv_client_shares: "{{ fpv_network_shares | fpv_shares_for_group(fpv_workstation_group) if fpv_workstation_group else [] }}"
+
+- name: Подключение сетевых папок при входе (pam_mount, Kerberos, шифрование SMB3)
+  ansible.builtin.template:
+    src: pam_mount.conf.xml.j2
+    dest: /etc/security/pam_mount.conf.xml
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  become: true
+  when: fpv_manage_packages | bool
