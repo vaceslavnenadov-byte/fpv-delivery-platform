@@ -1,0 +1,18 @@
+# fpv-agent — сервисный модуль дрона
+
+Клиент контура телеметрии платформы. Состоит из:
+
+* `adapters/base.py` — интерфейс адаптера оборудования (только чтение: телеметрия,
+  диагностика, видео; **без команд управления полётом**);
+* `adapters/simulator.py` — симулятор (сценарии `normal`, `fast`, `link-loss`, `link-blip`,
+  `critical-error`, `no-video`, `faulty`);
+* `agent.py` — цикл передачи данных с локальной очередью и переподключением.
+
+Зависимости: только стандартная библиотека Python 3.9+; для реалистичного видео — `ffmpeg`.
+
+```bash
+export FPV_DRONE_KEY_FILE=/etc/fpv-agent/key   # права 600, ключ выпускает владелец дрона в кабинете
+python -m fpv_agent --server https://fpv.dc.local --scenario normal --ca-file /etc/fpv-agent/ca.pem
+```
+
+Подключение реального оборудования — отдельный этап, см. `docs/hardware-integration-plan.md`.
