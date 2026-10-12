@@ -1,0 +1,106 @@
+"""Преобразование сущностей в ответы API с учётом прав получателя."""
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from ..models import (Drone, DroneHealthCheck, MaintenanceRecord, Order, TelemetryRecord, User,
+                      VideoEvidence)
+from ..services.identity import Principal
+from ..services.notifications import STATUS_LABELS
+
+
+def ts(value) -> Optional[str]:
+    return value.isoformat() if value is not None else None
+
+
+def user_brief(db: Session, user_id) -> Optional[Dict[str, Any]]:
+    if user_id is None:
+        return None
+    u = db.get(User, user_id)
+    return {"id": str(u.id), "display_name": u.display_name, "username": u.domain_username} if u else None
+
+
+def drone(d: Drone, *, full: bool = True) -> Dict[str, Any]:
+    data = {
+        "id": str(d.id), "serial_number": d.serial_number, "registration_number": d.registration_number,
+        "manufacturer": d.manufacturer, "model": d.model, "adapter_kind": d.adapter_kind,
+        "max_payload_g": d.max_payload_g, "max_range_m": d.max_range_m, "status": d.status,
+        "health_status": d.health_status, "link_status": d.link_status, "last_seen_at": ts(d.last_seen_at),
+        "battery_pct": d.battery_pct, "firmware_version": d.firmware_version,
+        "has_key": d.api_key_hash is not None, "key_prefix": d.api_key_prefix,
+        "key_issued_at": ts(d.api_key_issued_at), "blocked_reason": d.blocked_reason,
+        "owner_id": str(d.owner_id), "created_at": ts(d.created_at),
+    }
+    return data
+
+
+def health_check(c: DroneHealthCheck) -> Dict[str, Any]:
+    return {"id": c.id, "source": c.source, "result": c.result, "battery_pct": c.battery_pct,
+            "error_codes": c.error_codes, "details": c.details, "created_at": ts(c.created_at),
+            "created_by": str(c.created_by) if c.created_by else None}
+
+
+def maintenance(m: MaintenanceRecord) -> Dict[str, Any]:
+    return {"id": m.id, "kind": m.kind, "description": m.description, "components": m.components,
+            "health_status_set": m.health_status_set, "technician_id": str(m.technician_id),
+            "created_at": ts(m.created_at)}
+
+
+def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool = False) -> Dict[str, Any]:
+    r = o.route
+    data: Dict[str, Any] = {
+        "id": str(o.id), "number": o.number, "status": o.status, "status_label": STATUS_LABELS.get(o.status),
+        "version": o.version, "cargo_type": o.cargo_type, "cargo_description": o.cargo_description,
+        "cargo_weight_g": o.cargo_weight_g,
+        "cargo_dims_mm": [o.cargo_length_mm, o.cargo_width_mm, o.cargo_height_mm],
+        "window_start": ts(o.window_start), "window_end": ts(o.window_end),
+        "quote_amount": str(o.quote_amount) if o.quote_amount is not None else None,
+        "quote_currency": o.quote_currency,
+        "drone_id": str(o.drone_id), "customer_id": str(o.customer_id),
+        "operator_id": str(o.operator_id) if o.operator_id else None,
+        "coordinator_id": str(o.coordinator_id) if o.coordinator_id else None,
+        "created_at": ts(o.created_at), "updated_at": ts(o.updated_at), "submitted_at": ts(o.submitted_at),
+        "accepted_at": ts(o.accepted_at), "started_at": ts(o.started_at), "delivered_at": ts(o.delivered_at),
+        "completed_at": ts(o.completed_at), "closed_reason": o.closed_reason, "receipt_overdue": o.receipt_overdue,
+        "route": {
+            "origin": {"lat": r.origin_lat, "lon": r.origin_lon, "address": r.origin_address},
+            "destination": {"lat": r.dest_lat, "lon": r.dest_lon, "address": r.dest_address},
+            "distance_m": r.distance_m, "max_altitude_m": r.max_altitude_m, "checkpoints": r.checkpoints,
+            "approval_status": r.approval_status, "approval_notes": r.approval_notes,
+        } if r else None,
+    }
+    if brief:
+        return data
+    data["validation_result"] = o.validation_result
+    data["recipient_name"] = o.recipient_name
+    data["recipient_phone"] = o.recipient_phone
+    data["customer"] = user_brief(db, o.customer_id)
+    data["operator"] = user_brief(db, o.operator_id)
+    data["coordinator"] = user_brief(db, o.coordinator_id)
+    d = db.get(Drone, o.drone_id)
+    data["drone"] = drone(d) if d else None
+    ev = db.execute(select(VideoEvidence).where(VideoEvidence.order_id == o.id)).scalar_one_or_none()
+    data["video"] = video(ev, p) if ev else None
+    return data
+
+
+def video(ev: VideoEvidence, p: Optional[Principal] = None) -> Dict[str, Any]:
+    data = {"id": str(ev.id), "status": ev.status, "missing_reason": ev.missing_reason,
+            "completion_event_at": ts(ev.completion_event_at), "clip_start_at": ts(ev.clip_start_at),
+            "clip_end_at": ts(ev.clip_end_at), "segment_count": ev.segment_count,
+            "review_status": ev.review_status, "reviewed_at": ts(ev.reviewed_at),
+            "review_comment": ev.review_comment, "integrity_ok": ev.integrity_ok,
+            "integrity_checked_at": ts(ev.integrity_checked_at), "retention_until": ts(ev.retention_until)}
+    if p is not None and p.has("video.read"):
+        data.update({"sha256": ev.sha256, "size_bytes": ev.size_bytes, "has_preview": bool(ev.preview_object_key),
+                     "object_key": ev.object_key})
+    return data
+
+
+def telemetry(t: TelemetryRecord) -> Dict[str, Any]:
+    return {"seq": t.seq, "recorded_at": ts(t.recorded_at), "lat": t.lat, "lon": t.lon, "alt_m": t.alt_m,
+            "ground_speed_mps": t.ground_speed_mps, "heading_deg": t.heading_deg, "battery_pct": t.battery_pct,
+            "link_quality": t.link_quality, "gnss_fix": t.gnss_fix, "flight_phase": t.flight_phase}
