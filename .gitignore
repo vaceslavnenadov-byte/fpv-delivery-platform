@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+*.log
+.env
+*.retry
+build/
+deploy/ansible/collections/
+deploy/ansible/logs/
+deploy/ansible/venv/
+deploy/ansible/vault-password*
