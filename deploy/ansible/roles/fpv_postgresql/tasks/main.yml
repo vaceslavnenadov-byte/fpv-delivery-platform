@@ -54,8 +54,8 @@
     name: "{{ fpv_postgresql_db }}"
     owner: "{{ fpv_postgresql_app_user }}"
     encoding: UTF8
-    lc_collate: ru_RU.UTF-8
-    lc_ctype: ru_RU.UTF-8
+    lc_collate: C.UTF-8          # локаль есть в Debian по умолчанию; сортировка по-русски — ICU при необходимости
+    lc_ctype: C.UTF-8
     template: template0
     state: present
   become: true

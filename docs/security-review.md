@@ -25,27 +25,24 @@
 
 ## 2. Анализ зависимостей (pip-audit, npm audit)
 
-Исправлено в ходе проверки:
+Результат на 13.10.2026 после перехода на Debian 13 (Python 3.13):
 
-* React Router 6.28.0 → **6.30.6** (GHSA-2w69-qvjg-hvjx, GHSA-2j2x-hqr9-3h42 — open redirect/XSS);
-* FastAPI 0.115.6 / Starlette 0.41.3 → **0.128.8 / 0.49.3** (часть уязвимостей Starlette);
-* cryptography 47.0.0 → **50.0.2** (Ansible-окружение);
-* boto3 вынесен в необязательные зависимости (`requirements-s3.lock`): на Python 3.9 он требует
-  urllib3 1.26 с известными уязвимостями; при `FPV_OBJECT_STORE=filesystem` не устанавливается.
+| Набор | Ключевые версии | Результат |
+|---|---|---|
+| `backend/requirements.lock` | FastAPI 0.143.0, Starlette 1.7.0, anyio 4.15.1, pydantic 2.14.1, SQLAlchemy 2.0.54, psycopg 3.2.13, uvicorn 0.54.0 | известных уязвимостей нет |
+| `backend/requirements-s3.lock` | boto3 1.43, urllib3 2.8.0 | известных уязвимостей нет |
+| `deploy/ansible/requirements.txt` | ansible-core 2.21.5, cryptography 50.0.2, jinja2 3.1.6 | известных уязвимостей нет |
+| `frontend` (production) | React 18.3.1, React Router 7.18.4 | известных уязвимостей нет |
 
-**Не устраняются на Python 3.9** (исправленные версии требуют Python ≥ 3.10, см. `debian11-lifecycle.md`):
+История: на Debian 11 (Python 3.9) оставались неустранимые записи по anyio, Starlette и
+ansible-core 2.15 — исправленные версии требуют Python ≥ 3.10. Переход на Debian 13 их устранил.
+React Router обновлён 6.28.0 → 6.30.6 → **7.18.4** (open redirect/XSS, в т.ч. GHSA-wrjc-x8rr-h8h6 —
+обход исправления CVE-2025-68470, для ветки 6.x исправления нет); используется декларативный режим.
 
-| Пакет | Идентификатор | Суть | Применимость | Мера |
-|---|---|---|---|---|
-| anyio 4.12.1 | CVE-2026-63374 | TLS с IDN-именами в `connect_tcp`/`TLSStream` | не применяется: приложение не открывает TLS через anyio (БД — psycopg, LDAP — ldap3) | — |
-| anyio 4.12.1 | CVE-2026-64847 | не вычитывается stderr процессов-воркеров | не применяется: пул процессов anyio не используется | — |
-| starlette 0.49.3 | CVE-2026-48710, CVE-2026-54282 | `request.url` строится из непроверенного Host/пути | приложение не использует `request.url` для перенаправлений и проверок | nginx `default_server` отбрасывает неизвестные Host |
-| starlette 0.49.3 | CVE-2026-54283 | лимиты `request.form()` для urlencoded | не применяется: форм нет, только JSON | — |
-| starlette 0.49.3 | CVE-2026-48818 | SSRF в `StaticFiles` на Windows | не применяется (Linux, `StaticFiles` не используется) | — |
-| starlette 0.49.3 | CVE-2026-48817 | выбор метода в `HTTPEndpoint` через getattr | не применяется (`HTTPEndpoint` не используется) | — |
-| ansible-core 2.15.13 | CVE-2024-8775 | секреты из Vault при `include_vars` без `no_log` | `include_vars` не используется; задачи с секретами — `no_log` (тест) | — |
-| ansible-core 2.15.13 | CVE-2024-11079 | обход защиты unsafe через `hostvars` | данные с узлов не подставляются в шаблоны | управляющий узел — только доверенные администраторы |
-| ansible-core 2.15.13 | CVE-2026-11332 | инъекция параметров git в `ansible-galaxy role install` | роли из Galaxy не устанавливаются; коллекции — закреплённые/офлайн | — |
+Замечание по сопровождению: `ldap3` 2.9.1 (последний выпуск — 2021 г.) использует устаревший API
+`pyasn1` (предупреждения `DeprecationWarning`). Уязвимостей нет, но при следующем обновлении
+`pyasn1` возможна несовместимость — рассмотреть переход на `python-ldap` (пакет `python3-ldap`
+в Debian 13) за интерфейсом `LdapDirectoryProvider`.
 
 Повтор проверки: `uvx pip-audit -r backend/requirements.lock --require-hashes`,
 `uvx pip-audit -r deploy/ansible/requirements.txt --require-hashes`, `npm audit --omit=dev`.
@@ -57,11 +54,12 @@
   Исправлено: окружение — в `inventory/<env>/group_vars/all.yml`, флаги CI — на уровне узла;
   `site.yml` требует явного `fpv_environment`; добавлен тест `test_inventory_overrides_take_effect`.
 * Счётчик дубликатов телеметрии при пакетной вставке (rowcount = −1) — переход на `RETURNING`.
-* `cryptography` ≥ 44 не устанавливается на Python 3.9.0/3.9.1: загрузка wheels явно для 3.9.2 (Debian 11).
+* ansible-core ≥ 2.19 требует библиотеку `packaging` на целевом узле для модуля `pip`: добавлен
+  пакет `python3-packaging` на серверах приложений (выявлено контейнерным тестом на Debian 13).
 
 ## 4. Остаточные риски и рекомендации
 
-1. Обновление ОС/СУБД/Python — главный риск (см. `debian11-lifecycle.md`).
+1. Регулярное обновление ОС и зависимостей (см. `os-lifecycle.md`); `ldap3` — кандидат на замену.
 2. Ограничение частоты в приложении работает в пределах процесса; основной барьер — nginx.
 3. Открытый WebSocket продлевает сессию (проверка раз в 60 с) — допустимо для рабочих мест в ЦОД;
    при необходимости уменьшить `FPV_SESSION_TTL_S`.

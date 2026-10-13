@@ -2,9 +2,9 @@
 galaxy_info:
   role_name: fpv_base
   author: FPV Platform Team
-  description: "Базовая подготовка Debian 11"
+  description: "Базовая подготовка Debian 13"
   min_ansible_version: "2.15"
   platforms:
     - name: Debian
-      versions: [bullseye]
+      versions: [trixie]
 dependencies: []

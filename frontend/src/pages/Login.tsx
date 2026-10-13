@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate } from "react-router";
 import { errorText } from "../api";
 import { useAuth } from "../auth";
 import { Alert } from "../components/ui";

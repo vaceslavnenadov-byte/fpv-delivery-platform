@@ -10,7 +10,7 @@
 | Служба каталогов | Active Directory или Samba AD DC, домен `fpv.local`, Kerberos realm `FPV.LOCAL` | FreeIPA: `FPV_LDAP_ATTR_OBJECT_ID=ipaUniqueID`, `FPV_LDAP_ATTR_DISABLED=nsAccountLock`, `FPV_LDAP_NESTED_GROUPS=false`, клиенты — `ipa-client-install` вместо realmd |
 | Linux-узлы | realmd + adcli + SSSD + Kerberos (`fpv_domain`) | — |
 | Файловые серверы | Samba (`security = ADS`) + winbind, SMB 3, шифрование обязательно | NFSv4 + Kerberos (`sec=krb5p`) |
-| Рабочие станции | Debian 11 в домене, сетевые папки через pam_mount (`sec=krb5`) | Windows-станции — те же ресурсы по SMB, GPO |
+| Рабочие станции | Debian 13 в домене, сетевые папки через pam_mount (`sec=krb5`) | Windows-станции — те же ресурсы по SMB, GPO |
 | Вход в приложение | LDAPS simple bind (пароль проверяется каталогом и не сохраняется) | Kerberos SSO (SPNEGO на nginx) — следующий этап |
 
 ## 2. Учётные записи и группы

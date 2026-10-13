@@ -38,9 +38,9 @@ log "проверка ОС"
 if [[ -r /etc/os-release ]]; then
   # shellcheck disable=SC1091
   . /etc/os-release
-  if [[ "${ID:-}" == "debian" && "${VERSION_ID:-}" == "11" ]]; then ok "Debian 11 (${PRETTY_NAME:-})"
-  elif [[ "$MODE" == "central" ]]; then warn "управляющий узел: ${PRETTY_NAME:-неизвестно} (рекомендуется Debian 11)"
-  else fail "требуется Debian 11, обнаружено: ${PRETTY_NAME:-неизвестно}"; fi
+  if [[ "${ID:-}" == "debian" && "${VERSION_ID:-}" == "13" ]]; then ok "Debian 13 (${PRETTY_NAME:-})"
+  elif [[ "$MODE" == "central" ]]; then warn "управляющий узел: ${PRETTY_NAME:-неизвестно} (рекомендуется Debian 13)"
+  else fail "требуется Debian 13, обнаружено: ${PRETTY_NAME:-неизвестно}"; fi
 else
   fail "не удалось определить ОС (/etc/os-release)"
 fi
@@ -62,8 +62,8 @@ for path in "$ROOT" /opt /var; do
 done
 
 if command -v python3 >/dev/null; then
-  if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)'; then ok "python3 $(python3 -c 'import platform; print(platform.python_version())')"
-  else fail "требуется python3 >= 3.9"; fi
+  if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)'; then ok "python3 $(python3 -c 'import platform; print(platform.python_version())')"
+  else fail "требуется python3 >= 3.12 (ansible-core 2.21 на управляющем узле)"; fi
   if python3 -c 'import venv, ensurepip' 2>/dev/null; then ok "модуль venv/ensurepip"; else fail "нет модуля venv/ensurepip (пакет python3-venv)"; fi
 else
   fail "python3 не установлен"

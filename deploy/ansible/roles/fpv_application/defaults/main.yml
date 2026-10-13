@@ -4,7 +4,7 @@ fpv_app_archive: "{{ lookup('ansible.builtin.env', 'FPV_APP_ARCHIVE') }}"
 # Каталог wheel-пакетов из fpv-delivery-packages (изолированная сеть); пусто — PyPI/зеркало.
 fpv_pip_wheelhouse: "{{ lookup('ansible.builtin.env', 'FPV_PIP_WHEELHOUSE') }}"
 fpv_pip_index_url: ""
-fpv_app_packages: [python3-venv, python3-pip, nginx, ffmpeg]
+fpv_app_packages: [python3-venv, python3-pip, python3-packaging, nginx, ffmpeg]   # python3-packaging нужен модулю pip
 fpv_app_python: /usr/bin/python3
 fpv_app_listen: 127.0.0.1:8000
 fpv_app_workers: 2

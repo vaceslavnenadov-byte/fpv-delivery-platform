@@ -23,7 +23,7 @@ flowchart LR
       API[FastAPI: REST + WebSocket]
       WK[Воркер: outbox, связь,<br/>тайм-ауты, хранение]
     end
-    PG[(PostgreSQL 13<br/>данные, outbox,<br/>LISTEN/NOTIFY)]
+    PG[(PostgreSQL 17<br/>данные, outbox,<br/>LISTEN/NOTIFY)]
     VS[(Хранилище видео<br/>ФС тома ЦОД / S3)]
     FS[(Файловый сервер Samba<br/>личные и общие папки)]
     MON[Мониторинг<br/>node exporter, healthcheck,<br/>журналы]
@@ -47,7 +47,7 @@ flowchart LR
 
 ## 2. Модули backend и сервисы ТЗ
 
-Backend — модульный монолит на FastAPI (Python 3.9, совместим с Debian 11). Сервисы ТЗ
+Backend — модульный монолит на FastAPI (Python 3.13 — системный в Debian 13). Сервисы ТЗ
 реализованы как отдельные модули с явными границами; их можно вынести в отдельные процессы
 без изменения API, когда это потребуется по нагрузке.
 
@@ -138,15 +138,15 @@ sequenceDiagram
 
 | Компонент | Выбор | Обоснование |
 |---|---|---|
-| ОС | Debian 11 | обязательное требование ТЗ (см. `debian11-lifecycle.md` — риски) |
-| СУБД | PostgreSQL 13 (пакет Debian 11) | обязательное требование; триггеры неизменяемости, advisory-блокировки, `SKIP LOCKED`, `LISTEN/NOTIFY` |
-| Backend | Python 3.9 + FastAPI | Python 3.9 — системный в Debian 11; FastAPI 0.115 поддерживает 3.9 |
+| ОС | Debian 13 «trixie» | по решению заказчика вместо Debian 11 из ТЗ (см. `os-lifecycle.md`) |
+| СУБД | PostgreSQL 17 (пакет Debian 13) | обязательное требование; триггеры неизменяемости, advisory-блокировки, `SKIP LOCKED`, `LISTEN/NOTIFY` |
+| Backend | Python 3.13 + FastAPI | Python 3.13 — системный в Debian 13; актуальные FastAPI/Starlette без известных уязвимостей |
 | Очередь сообщений | транзакционный outbox в PostgreSQL | отдельный брокер (RabbitMQ/Kafka) не нужен для первой версии: объём событий мал, PostgreSQL уже обязателен, атомарность «изменение + событие» без двухфазной фиксации |
 | Реальное время | WebSocket + `LISTEN/NOTIFY` | работает с несколькими процессами без Redis; NOTIFY доставляется только после COMMIT |
 | Кэш | не используется | Redis не нужен в v1 (ТЗ: «при необходимости») |
 | Хранилище видео | каталог на томе ЦОД или S3-совместимое (MinIO) | ФС — минимальная инфраструктура; S3 с Object Lock — для WORM-хранения; интерфейс единый |
 | Frontend | React 18 + TypeScript + Vite | требование ТЗ; карта — встроенная SVG-схема (работает без внешних картографических сервисов в изолированной сети) |
-| Развёртывание | Ansible + systemd, без Docker в production | Docker на Debian 11 возможен, но не нужен: службы изолируются средствами systemd; Docker используется только в тестах |
+| Развёртывание | Ansible + systemd, без Docker в production | Docker на Debian 13 возможен, но не нужен: службы изолируются средствами systemd; Docker используется только в тестах |
 | Домен | Active Directory / Samba AD DC, LDAPS, Kerberos | Linux-интеграция через realmd/SSSD, файловые серверы — Samba winbind |
 
 ## 6. Масштабирование и отказоустойчивость

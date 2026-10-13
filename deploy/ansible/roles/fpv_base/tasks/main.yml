@@ -1,12 +1,12 @@
 ---
-- name: Проверка версии ОС (поддерживается Debian 11)
+- name: Проверка версии ОС (поддерживается Debian 13)
   ansible.builtin.assert:
     that:
       - ansible_facts['distribution'] == 'Debian'
       - ansible_facts['distribution_major_version'] in fpv_base_allowed_releases
     fail_msg: >-
       Неподдерживаемая ОС {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}.
-      Требуется Debian 11; для осознанного запуска на другой версии задайте fpv_base_allow_unsupported_os=true.
+      Требуется Debian 13; для осознанного запуска на другой версии задайте fpv_base_allow_unsupported_os=true.
     quiet: true
   when: not fpv_base_allow_unsupported_os
 
@@ -20,8 +20,20 @@
 
 - name: Источники пакетов (официальные подписанные репозитории или зеркало ЦОД)
   ansible.builtin.template:
-    src: sources.list.j2
+    src: debian.sources.j2
+    dest: /etc/apt/sources.list.d/debian.sources
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  become: true
+  when: fpv_manage_packages | bool
+  notify: Обновить кэш apt
+
+- name: Устаревший файл sources.list не используется (источники — в формате deb822)
+  ansible.builtin.copy:
     dest: /etc/apt/sources.list
+    content: "# {{ ansible_managed }}: источники пакетов — /etc/apt/sources.list.d/debian.sources\n"
     owner: root
     group: root
     mode: "0644"

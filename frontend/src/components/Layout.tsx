@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ROLE_LABELS, fmtDate } from "../labels";

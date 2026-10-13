@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../../api";
 import { RouteMap } from "../../components/RouteMap";
 import { Alert, Card, Pending } from "../../components/ui";

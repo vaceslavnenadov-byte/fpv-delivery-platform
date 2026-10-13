@@ -3,14 +3,14 @@
 ## Запуск
 
 ```bash
-# backend + сервисный модуль дрона: реальный PostgreSQL 13+ (роль с CREATEDB)
+# backend + сервисный модуль дрона: реальный PostgreSQL 17 (13+; роль с CREATEDB)
 cd fpv-delivery-platform
-python3.9 -m venv .venv && .venv/bin/pip install --require-hashes -r backend/requirements.lock -r backend/requirements-dev.lock
+python3 -m venv .venv          # Debian 13: Python 3.13 && .venv/bin/pip install --require-hashes -r backend/requirements.lock -r backend/requirements-dev.lock
 FPV_TEST_PG=postgresql+psycopg://fpv:fpv@127.0.0.1:5432 \
 FPV_TEST_PG_SUPERUSER=postgresql+psycopg://postgres:***@127.0.0.1:5432 \   # необязательно: тест подмены аудита
   .venv/bin/python -m pytest tests/backend
 
-# Ansible: venv с ansible-core 2.15.13 и pytest; FPV_TEST_DOCKER=1 — офлайн-установка в контейнере Debian 11
+# Ansible: venv с ansible-core 2.21.5 и pytest; FPV_TEST_DOCKER=1 — офлайн-установка в контейнере Debian 13
 FPV_ANSIBLE_VENV=/path/to/venv FPV_PACKAGES_DIR=../fpv-delivery-packages FPV_TEST_DOCKER=1 \
   /path/to/venv/bin/python -m pytest tests/ansible
 
@@ -22,12 +22,12 @@ cd frontend && npm ci && npm run build
 
 | Набор | Окружение | Результат |
 |---|---|---|
-| `tests/backend` (107 тестов) | Python 3.9 + PostgreSQL 13.21 | все пройдены |
-| `tests/backend` | Python 3.9 + PostgreSQL 16 | все пройдены |
-| `tests/backend` | Python 3.13 + PostgreSQL 13.21 | все пройдены (проверка плана обновления) |
-| `tests/ansible` (40 тестов) | ansible-core 2.15.13, shellcheck, Docker `python:3.9-slim-bullseye`, `--network none` | все пройдены |
+| `tests/backend` (107 тестов) | Python 3.13 + PostgreSQL 17 (Debian 13) | все пройдены |
+| `tests/ansible` (40 тестов) | ansible-core 2.21.5, shellcheck, Docker `python:3.13-slim-trixie`, `--network none` | все пройдены; повторный запуск — `changed=0` |
 | frontend | TypeScript strict, Vite build | без ошибок |
-| сквозной UI-сценарий | Chromium (Playwright), все роли, симулятор с реальным MPEG-TS | пройден, ошибок в консоли нет |
+| сквозной UI-сценарий | Chromium (Playwright), все роли, симулятор с реальным MPEG-TS, Python 3.13 + PostgreSQL 17 | пройден, ошибок в консоли нет |
+
+До перехода на Debian 13 те же наборы проходили на Python 3.9 + PostgreSQL 13/16 и ansible-core 2.15.
 
 ## Соответствие разделу 17 ТЗ
 
@@ -62,8 +62,8 @@ cd frontend && npm ci && npm run build
 
 * Вход через реальный AD/Samba AD DC и присоединение узлов к домену (роль `fpv_domain`) — в среде
   разработки не было контроллера домена; LDAP-провайдер проверен на эмуляторе ldap3.
-* Роли с установкой пакетов и службами (`fpv_postgresql`, Samba, nginx, SSSD) на реальном Debian 11 —
+* Роли с установкой пакетов и службами (`fpv_postgresql`, Samba, nginx, SSSD) на реальном Debian 13 —
   в среде не было доступа к зеркалу Debian; проверены синтаксис, шаблоны и `--check`-совместимость,
   полный прогон — в контейнере без пакетов/systemd (`inventory/ci`).
-* Совместимость манифеста пакетов с зеркалом (`fpv-delivery-packages/scripts/check-debian11.sh`).
+* Совместимость манифеста пакетов с зеркалом (`fpv-delivery-packages/scripts/check-debian13.sh`).
 * S3-хранилище (`S3ObjectStore`) — нет S3-совместимой службы в среде; по умолчанию используется ФС.

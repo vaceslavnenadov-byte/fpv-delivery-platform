@@ -1,11 +1,10 @@
-# Развёртывание на Debian 11 с помощью Ansible
+# Развёртывание на Debian 13 с помощью Ansible
 
 Комплект установки копируется в `/tmp/ancible` и запускает Ansible из собственного Python venv.
 `/tmp/ancible` — только staging-каталог: роли размещают постоянные файлы в `/opt/fpv`,
 `/etc/fpv`, `/var/lib/fpv`, `/var/log/fpv`, данные — в ЦОД. Долговременные секреты в `/tmp` не хранятся.
 
-> Перед вводом в эксплуатацию прочитайте `debian11-lifecycle.md`: стандартная поддержка
-> Debian 11, PostgreSQL 13 и Python 3.9 на дату выпуска уже завершена.
+> Целевая ОС — Debian 13 «trixie», PostgreSQL 17, Python 3.13 (см. `os-lifecycle.md`).
 
 ## 1. Состав комплекта
 
@@ -17,7 +16,7 @@
 ├── postflight.sh         итоговая проверка (verify.yml) и сводка
 ├── rollback.sh           откат поддерживаемых изменений (приложение, конфигурация)
 ├── lib.sh                общие функции
-├── ansible.cfg  requirements.txt (ansible-core 2.15.13 + хеши)  requirements.yml
+├── ansible.cfg  requirements.txt (ansible-core 2.21.5 + хеши)  requirements.yml
 ├── playbooks/            site base domain database storage application workstation verify
 ├── roles/                11 ролей (defaults/ tasks/ handlers/ templates/ files/ meta/)
 ├── inventory/            local | staging | production | ci (+ group_vars окружений)
@@ -31,7 +30,7 @@
 ## 2. Подготовка комплекта (на рабочей станции сборки)
 
 ```bash
-cd fpv-delivery-packages && git checkout v2026.10.0 && scripts/verify.sh
+cd fpv-delivery-packages && git checkout v2026.10.1 && scripts/verify.sh
 scripts/fetch-wheels.sh                       # для изолированной сети: python/wheels/
 cd ../fpv-delivery-platform
 deploy/ansible/scripts/build-bundle.sh --packages-dir ../fpv-delivery-packages --build-frontend
@@ -87,12 +86,12 @@ cd /tmp/ancible
 | Этап | Действие | Ошибка → код |
 |---|---|---|
 | 1 | `sha256sum -c SHA256SUMS` комплекта | 4 |
-| 2 | `preflight.sh`: Debian 11, x86_64/aarch64, права/sudo, место, python3 ≥ 3.9, venv, DNS, репозитории | 3 |
+| 2 | `preflight.sh`: Debian 13, x86_64/aarch64, права/sudo, место, python3 ≥ 3.12, venv, DNS, репозитории | 3 |
 | 3 | python3-venv; системные пакеты — только с `--install-system-deps` | 5 |
 | 4 | `python3 -m venv /tmp/ancible/venv` (повторно используется) | 5 |
 | 5 | `pip install --require-hashes -r requirements.txt` | 5 |
 | 6 | коллекции: Galaxy по `requirements.yml` или офлайн-архивы | 4/5 |
-| 7 | проверка Python, ansible-core 2.15.x, коллекций | 5 |
+| 7 | проверка Python, ansible-core 2.21.x, коллекций | 5 |
 | 8 | `run-playbook.sh` → `venv/bin/ansible-playbook` | 6 |
 
 Весь вывод — в `logs/install-<время>.log` (права 600) и, при запуске от root, копия в

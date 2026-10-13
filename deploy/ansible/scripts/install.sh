@@ -126,8 +126,8 @@ log "этап 7/8: проверка версий"
 import sys
 import ansible
 from ansible.release import __version__
-assert sys.version_info >= (3, 9), "Python >= 3.9"
-assert __version__.startswith("2.15."), "ожидается ansible-core 2.15.x, найдено " + __version__
+assert sys.version_info >= (3, 12), "Python >= 3.12"
+assert __version__.startswith("2.21."), "ожидается ansible-core 2.21.x, найдено " + __version__
 print("python", sys.version.split()[0], "ansible-core", __version__)
 PY
 ANSIBLE_COLLECTIONS_PATH="$ROOT/collections" "$VENV/bin/ansible-galaxy" collection list ansible.posix -p "$ROOT/collections" >/dev/null \

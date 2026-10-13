@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { Alert, Pending } from "./components/ui";

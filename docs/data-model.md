@@ -1,6 +1,6 @@
 # Модель данных
 
-Схема — SQL-миграции `database/migrations/` (PostgreSQL 13+), применяются `python -m fpv.migrate`
+Схема — SQL-миграции `database/migrations/` (PostgreSQL 13–17; целевая версия — 17), применяются `python -m fpv.migrate`
 с контролем контрольных сумм (изменённая применённая миграция блокирует запуск).
 
 ## Основные связи

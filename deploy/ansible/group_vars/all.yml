@@ -5,7 +5,7 @@
 # fpv_environment задаётся в inventory (production | test) и обязателен — см. site.yml.
 fpv_release: "0.1.0"
 # Тег репозитория дополнительных пакетов, с которым проверена данная версия.
-fpv_packages_ref: "v2026.10.0"
+fpv_packages_ref: "v2026.10.1"
 
 # Управление пакетами и службами (в контейнерных проверках отключается).
 fpv_manage_packages: true

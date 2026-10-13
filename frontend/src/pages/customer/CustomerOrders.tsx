@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { api } from "../../api";
 import { Badge, Card, Empty, Pending, Stat } from "../../components/ui";
 import { CARGO_TYPES, fmtDate, fmtDistance } from "../../labels";

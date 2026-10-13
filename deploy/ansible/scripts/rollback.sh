@@ -9,7 +9,7 @@ trap 'on_error $LINENO' ERR
 
 INSTALL_ROOT="${FPV_INSTALL_ROOT:-/opt/fpv}"
 CONFIG_FILES=(/etc/sudoers.d/60-fpv /etc/ssh/sshd_config.d/60-fpv.conf /etc/samba/smb.conf /etc/sssd/sssd.conf
-              /etc/krb5.conf /etc/security/pam_mount.conf.xml /etc/apt/sources.list)
+              /etc/krb5.conf /etc/security/pam_mount.conf.xml /etc/apt/sources.list.d/debian.sources)
 
 usage() {
   cat <<USAGE

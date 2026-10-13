@@ -21,7 +21,8 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name {{ fpv_app_server_name }};
     ssl_certificate {{ fpv_app_tls_cert }};
     ssl_certificate_key {{ fpv_app_tls_key }};

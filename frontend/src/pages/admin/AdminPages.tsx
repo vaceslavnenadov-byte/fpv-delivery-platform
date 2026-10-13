@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { api, errorText } from "../../api";
 import { Alert, Badge, Card, Empty, KV, Pending, Stat, Tone } from "../../components/ui";
 import { ORDER_STATUS, ROLE_LABELS, fmtDate } from "../../labels";

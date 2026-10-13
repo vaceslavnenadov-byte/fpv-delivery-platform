@@ -2,7 +2,7 @@
 galaxy_info:
   role_name: fpv_postgresql
   author: FPV Platform Team
-  description: "PostgreSQL 13 (Debian 11) для платформы, резервное копирование и проверка восстановления"
+  description: "PostgreSQL 13 (Debian 13) для платформы, резервное копирование и проверка восстановления"
   min_ansible_version: "2.15"
-  platforms: [{name: Debian, versions: [bullseye]}]
+  platforms: [{name: Debian, versions: [trixie]}]
 dependencies: []

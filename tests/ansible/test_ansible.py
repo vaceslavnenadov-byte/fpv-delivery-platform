@@ -1,6 +1,6 @@
 """Автоматические проверки Ansible-комплекта.
 
-Требуется venv с ansible-core 2.15 (переменная FPV_ANSIBLE_VENV, по умолчанию
+Требуется venv с ansible-core 2.21 (переменная FPV_ANSIBLE_VENV, по умолчанию
 deploy/ansible/venv) и коллекции в deploy/ansible/collections (или FPV_PACKAGES_DIR
 с архивами — будут распакованы во временный каталог).
 Контейнерный тест установки включается FPV_TEST_DOCKER=1.
@@ -51,7 +51,7 @@ def collections_path(tmp_path_factory) -> str:
         dest = out / "ansible_collections" / ns / name
         dest.mkdir(parents=True)
         with tarfile.open(tarball) as tf:
-            tf.extractall(dest)
+            tf.extractall(dest, filter="data")
     return str(out)
 
 
@@ -124,7 +124,7 @@ def test_become_only_where_needed():
 def test_dependencies_pinned():
     req = (ANS / "requirements.txt").read_text(encoding="utf-8")
     pkgs = re.findall(r"^([A-Za-z0-9_.-]+)==([^\s]+)", req, re.M)
-    assert ("ansible-core", "2.15.13") in pkgs
+    assert ("ansible-core", "2.21.5") in pkgs
     assert req.count("--hash=sha256:") >= len(pkgs)
     coll = yaml.safe_load((ANS / "requirements.yml").read_text(encoding="utf-8"))["collections"]
     assert all(re.match(r"^\d+\.\d+\.\d+$", c["version"]) for c in coll)
@@ -343,11 +343,11 @@ def test_install_rejects_tampered_bundle(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Полная установка в контейнере Debian 11 (без сети)
+# Полная установка в контейнере Debian 13 (без сети)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.skipif(os.environ.get("FPV_TEST_DOCKER") != "1", reason="FPV_TEST_DOCKER=1 для контейнерного теста")
-def test_offline_install_in_debian11_container_is_idempotent(tmp_path):
+def test_offline_install_in_debian13_container_is_idempotent(tmp_path):
     out = tmp_path / "bundle"
     r = subprocess.run(["bash", str(SCRIPTS / "build-bundle.sh"), "--packages-dir", str(PACKAGES), "--out", str(out)],
                        capture_output=True, text=True)
@@ -362,7 +362,7 @@ def test_offline_install_in_debian11_container_is_idempotent(tmp_path):
     for f in out.iterdir():
         f.chmod(0o644)
     r = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{out}:/b:ro", "-v", f"{script}:/t.sh:ro",
-                        "python:3.9-slim-bullseye", "bash", "/t.sh"], capture_output=True, text=True, timeout=900)
+                        os.environ.get("FPV_TEST_IMAGE", "mirror.gcr.io/library/python:3.13-slim-trixie"), "bash", "/t.sh"], capture_output=True, text=True, timeout=900)
     assert "RC1=0" in r.stdout and "RC2=0" in r.stdout, r.stdout + r.stderr
     recap2 = r.stdout.split("RC2=0", 1)[1]
     assert re.search(r"changed=0\s", recap2), r.stdout

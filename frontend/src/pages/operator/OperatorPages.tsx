@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../../api";
 import { Alert, Badge, Card, Empty, Pending, Stat } from "../../components/ui";
 import { CARGO_TYPES, fmtDate, fmtDistance } from "../../labels";

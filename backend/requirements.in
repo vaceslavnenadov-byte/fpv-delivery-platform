@@ -1,12 +1,10 @@
-# Прямые зависимости backend (целевая платформа: Python 3.9.2, Debian 11).
+# Прямые зависимости backend (целевая платформа: Debian 13 «trixie», Python 3.13.5).
 # Закреплённые версии с хешами — requirements.lock:
-#   uv pip compile --python-version 3.9.2 --generate-hashes requirements.in -o requirements.lock
-# Минимальные версии выбраны с учётом исправлений безопасности (pip-audit).
-fastapi>=0.128,<0.129     # последняя ветка с поддержкой Python 3.9
-starlette>=0.49.1
-anyio>=4.12
-uvicorn>=0.34
-websockets>=14.1
-SQLAlchemy>=2.0.36,<2.1
-psycopg[binary]>=3.2.3,<3.3
+#   uv pip compile --python-version 3.13.5 --generate-hashes requirements.in -o requirements.lock
+fastapi==0.143.0
+starlette==1.7.0
+uvicorn==0.54.0
+websockets==17.2
+SQLAlchemy==2.0.54
+psycopg[binary]==3.2.13
 ldap3==2.9.1

@@ -1,5 +1,5 @@
 ---
-fpv_base_allowed_releases: ["11"]
+fpv_base_allowed_releases: ["13"]
 fpv_base_allow_unsupported_os: false
 fpv_base_min_free_mb: 2048
 fpv_base_packages:
@@ -14,7 +14,6 @@ fpv_base_packages:
   - gnupg
   - auditd
   - unattended-upgrades
-  - apt-transport-https
   - procps
 fpv_base_sysctl:
   net.ipv4.conf.all.accept_redirects: 0
@@ -25,3 +24,5 @@ fpv_base_sysctl:
   kernel.dmesg_restrict: 1
   fs.protected_symlinks: 1
   fs.protected_hardlinks: 1
+# Ключ подписи репозитория (для зеркала, переподписанного ключом организации, — путь к ключу организации).
+fpv_apt_signed_by: /usr/share/keyrings/debian-archive-keyring.gpg

@@ -4,5 +4,5 @@ galaxy_info:
   author: FPV Platform Team
   description: "Backend (FastAPI), воркер, frontend и nginx платформы"
   min_ansible_version: "2.15"
-  platforms: [{name: Debian, versions: [bullseye]}]
+  platforms: [{name: Debian, versions: [trixie]}]
 dependencies: []

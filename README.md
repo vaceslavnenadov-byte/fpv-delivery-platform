@@ -3,16 +3,16 @@
 Платформа гражданских перевозок и доставки с использованием FPV-дронов невоенного назначения:
 кабинеты заказчика, оператора, наводчика (координатора), техника и администратора; сервисный
 модуль дрона с симулятором; доменная аутентификация; видеоподтверждение последних 15 секунд;
-баллы за качество; неизменяемый аудит; развёртывание на Debian 11 + PostgreSQL через Ansible.
+баллы за качество; неизменяемый аудит; развёртывание на Debian 13 + PostgreSQL 17 через Ansible.
 
-> **Важно:** на дату выпуска закончилась стандартная поддержка Debian 11, PostgreSQL 13 и Python 3.9.
-> Риски и план обновления — [docs/debian11-lifecycle.md](docs/debian11-lifecycle.md).
+> Целевая ОС — **Debian 13 «trixie»** (по решению заказчика от 13.10.2026 вместо Debian 11 из ТЗ,
+> у которого закончилась поддержка). Подробности — [docs/os-lifecycle.md](docs/os-lifecycle.md).
 
 ## Структура
 
 ```text
 fpv-delivery-platform/
-├── backend/          FastAPI (Python 3.9): fpv/{api,services,security}, миграции, воркер, CLI
+├── backend/          FastAPI (Python 3.13): fpv/{api,services,security}, миграции, воркер, CLI
 ├── frontend/         React 18 + TypeScript (Vite): кабинеты всех ролей
 ├── drone-agent/      сервисный модуль дрона: адаптер оборудования (только чтение) + симулятор
 ├── database/
@@ -26,7 +26,7 @@ fpv-delivery-platform/
 ```
 
 Дополнительные пакеты и зависимости — отдельный репозиторий
-[`fpv-delivery-packages`](../fpv-delivery-packages) (тег `v2026.10.0`, указан в `fpv_packages_ref`).
+[`fpv-delivery-packages`](../fpv-delivery-packages) (тег `v2026.10.1`, указан в `fpv_packages_ref`).
 
 ## Документация
 
@@ -40,7 +40,7 @@ fpv-delivery-platform/
 | [domain-and-storage.md](docs/domain-and-storage.md) | домен, учётные записи, процедуры, хранение в ЦОД, резервные копии |
 | [deployment.md](docs/deployment.md) | Ansible: комплект, /tmp/ancible, venv, режимы, секреты, откат; запуск для разработки |
 | [security-review.md](docs/security-review.md) | проверка безопасности, анализ зависимостей, остаточные риски |
-| [debian11-lifecycle.md](docs/debian11-lifecycle.md) | сроки поддержки, риски, план обновления |
+| [os-lifecycle.md](docs/os-lifecycle.md) | целевая ОС Debian 13, сроки поддержки, перенос с Debian 11 |
 | [hardware-integration-plan.md](docs/hardware-integration-plan.md) | интеграция с реальным оборудованием |
 | [testing.md](docs/testing.md) | запуск тестов, соответствие разделу 17 ТЗ, что не проверено |
 
@@ -70,7 +70,7 @@ PostgreSQL → миграции → эмулятор каталога (`python -
 | 14 | Подтверждение или отклонение | да | тесты, UI-сценарий |
 | 15 | Баллы начисляются один раз | да | `test_points_awarded_once` |
 | 16 | История заказа и события | да | хронология, аудит |
-| 17 | Запуск в изолированном окружении Debian 11 + PostgreSQL | backend — на PostgreSQL 13.21 (Debian 11); комплект — в контейнере Debian 11 без сети | частично: полный стек на чистом Debian 11 с пакетами из зеркала не прогонялся |
+| 17 | Запуск в изолированном окружении Debian 13 + PostgreSQL | backend — на Python 3.13 + PostgreSQL 17; комплект — в контейнере Debian 13 без сети | частично: полный стек на чистом Debian 11 с пакетами из зеркала не прогонялся |
 | 18 | Основной и пакетный репозитории с версиями и целостностью | да | `scripts/verify.sh`, `build-bundle.sh` |
 | 19 | /tmp/ancible, venv, установка Ansible | да | контейнерный тест (`--network none`) |
 | 20 | playbook, роли и .sh согласованы, ошибки обрабатываются | да | `test_ansible.py`, shellcheck |

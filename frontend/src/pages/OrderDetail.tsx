@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
 import { useAuth } from "../auth";
 import { RouteMap } from "../components/RouteMap";

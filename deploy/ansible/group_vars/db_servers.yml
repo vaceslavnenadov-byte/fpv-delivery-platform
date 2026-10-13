@@ -1,5 +1,5 @@
 ---
-fpv_postgresql_version: 13
+fpv_postgresql_version: 17
 fpv_postgresql_listen: "*"
 fpv_postgresql_app_clients: [10.20.0.0/24]     # подсеть серверов приложений
 fpv_postgresql_db: fpv

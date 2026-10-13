@@ -4,5 +4,5 @@ galaxy_info:
   author: FPV Platform Team
   description: "Сервисный модуль дрона на наземной станции (только симулятор в первой версии)"
   min_ansible_version: "2.15"
-  platforms: [{name: Debian, versions: [bullseye]}]
+  platforms: [{name: Debian, versions: [trixie]}]
 dependencies: []
