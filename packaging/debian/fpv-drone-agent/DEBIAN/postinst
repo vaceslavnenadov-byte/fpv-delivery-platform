@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+case "$1" in
+configure)
+    getent group fpv-agent >/dev/null || groupadd --system fpv-agent
+    getent passwd fpv-agent >/dev/null || useradd --system --gid fpv-agent --home-dir /var/lib/fpv-agent \
+        --no-create-home --shell /usr/sbin/nologin --comment "FPV drone service module" fpv-agent
+    [ -d /var/lib/fpv-agent ] || install -d -o fpv-agent -g fpv-agent -m 0750 /var/lib/fpv-agent
+    install -d -o root -g fpv-agent -m 0750 /etc/fpv-agent
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null || true
+        systemctl enable fpv-agent.service >/dev/null
+        if [ -s /etc/fpv-agent/key ]; then
+            systemctl restart fpv-agent.service
+        else
+            echo "fpv-drone-agent: запишите ключ устройства в /etc/fpv-agent/key (владелец fpv-agent, права 0600)"
+            echo "  и адрес сервера в /etc/default/fpv-agent, затем: systemctl start fpv-agent"
+        fi
+    fi
+    ;;
+esac
+exit 0

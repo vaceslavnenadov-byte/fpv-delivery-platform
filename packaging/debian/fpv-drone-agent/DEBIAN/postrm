@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+case "$1" in
+remove|purge)
+    if [ -d /run/systemd/system ]; then
+        systemctl disable fpv-agent.service >/dev/null 2>&1 || true
+        systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+exit 0

@@ -1,0 +1,16 @@
+Package: fpv-platform
+Version: @VERSION@
+Architecture: amd64
+Maintainer: FPV Platform Team <fpv-platform@fpv.local>
+Section: web
+Priority: optional
+Depends: python3 (>= 3.13), python3 (<< 3.14), python3-venv, passwd, ca-certificates
+Recommends: nginx, ffmpeg, postgresql-client
+Suggests: postgresql-17
+Installed-Size: @SIZE@
+Homepage: https://github.com/vaceslavnenadov-byte/fpv-delivery-platform
+Description: платформа гражданской доставки с использованием FPV-дронов
+ Сервер приложений (FastAPI), фоновый воркер, веб-интерфейс, SQL-миграции
+ PostgreSQL. Python-зависимости поставляются в пакете в виде wheel-файлов
+ с закреплёнными хешами; виртуальное окружение создаётся при установке
+ без доступа к сети.

@@ -1,0 +1,73 @@
+#!/bin/sh
+# postinst fpv-platform: учётная запись службы, каталоги, venv из вложенных wheels,
+# миграции БД (если настроено подключение), включение служб systemd.
+set -e
+
+APP=/usr/lib/fpv-platform
+VENV=$APP/venv
+WHEELS=/usr/share/fpv-platform/wheels
+
+[ -r /etc/default/fpv-platform ] && . /etc/default/fpv-platform
+FPV_AUTO_MIGRATE=${FPV_AUTO_MIGRATE:-yes}
+
+configured() {
+    # Подключение к БД задано (непустой файл секрета или переменная в fpv.env).
+    [ -s /etc/fpv/secrets/database_url ] || grep -q '^FPV_DATABASE_URL=' /etc/fpv/fpv.env 2>/dev/null
+}
+
+case "$1" in
+configure)
+    getent group fpv >/dev/null || groupadd --system fpv
+    getent passwd fpv >/dev/null || useradd --system --gid fpv --home-dir /var/lib/fpv \
+        --no-create-home --shell /usr/sbin/nologin --comment "FPV platform service" fpv
+
+    install -d -o root -g fpv -m 0750 /etc/fpv /etc/fpv/secrets
+    chown root:fpv /etc/fpv/fpv.env && chmod 0640 /etc/fpv/fpv.env
+    # Заготовки файлов секретов (пустые): конфигурация читается, пока секреты не заданы,
+    # а пустой пароль LDAP даёт явный отказ входа «служебная учётная запись не настроена».
+    for f in database_url ldap_bind_password; do
+        [ -e "/etc/fpv/secrets/$f" ] || install -o root -g fpv -m 0640 /dev/null "/etc/fpv/secrets/$f"
+    done
+    for d in /var/lib/fpv /var/lib/fpv/video-spool /var/log/fpv /srv/fpv-evidence; do
+        [ -d "$d" ] || install -d -o fpv -g fpv -m 0750 "$d"
+    done
+
+    echo "fpv-platform: создание виртуального окружения из вложенных пакетов…"
+    rm -rf "$VENV"
+    python3 -m venv "$VENV"
+    "$VENV/bin/python" -m pip install --quiet --no-index --no-cache-dir --disable-pip-version-check \
+        --find-links "$WHEELS" --require-hashes -r "$APP/backend/requirements.lock"
+    if grep -q '^FPV_OBJECT_STORE=s3' /etc/fpv/fpv.env 2>/dev/null; then
+        "$VENV/bin/python" -m pip install --quiet --no-index --no-cache-dir --disable-pip-version-check \
+            --find-links "$WHEELS" --require-hashes -r "$APP/backend/requirements-s3.lock"
+    fi
+    # Код приложения — в /usr/lib/fpv-platform/backend, подключается через .pth
+    SITE=$("$VENV/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+    echo "$APP/backend" > "$SITE/fpv-platform.pth"
+    "$VENV/bin/python" -c 'import fpv.main, fpv.worker' >/dev/null
+
+    if configured; then
+        if [ "$FPV_AUTO_MIGRATE" = "yes" ]; then
+            echo "fpv-platform: применение миграций БД…"
+            if ! /usr/bin/fpv-migrate; then
+                echo "fpv-platform: ОШИБКА миграции. Проверьте подключение к БД и выполните: dpkg --configure -a" >&2
+                exit 1
+            fi
+        fi
+    else
+        echo "fpv-platform: подключение к БД не настроено — миграции и запуск служб пропущены."
+        echo "  1) укажите строку подключения: /etc/fpv/secrets/database_url (root:fpv, 0640)"
+        echo "  2) проверьте параметры домена в /etc/fpv/fpv.env и пароль LDAP в /etc/fpv/secrets/ldap_bind_password"
+        echo "  3) выполните: dpkg-reconfigure fpv-platform  (или fpv-migrate && systemctl start fpv-api fpv-worker)"
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload >/dev/null || true
+        systemctl enable fpv-api.service fpv-worker.service >/dev/null
+        if configured; then
+            systemctl restart fpv-api.service fpv-worker.service
+        fi
+    fi
+    ;;
+esac
+exit 0

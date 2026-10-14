@@ -1,0 +1,15 @@
+#!/bin/sh
+# Служебные команды платформы (python -m fpv.cli …) с конфигурацией /etc/fpv/fpv.env.
+#   fpv-cli sync-directory | verify-audit | verify-videos | outbox-stats
+#   fpv-cli --migrate [--check]
+set -e
+VENV=/usr/lib/fpv-platform/venv
+[ -x "$VENV/bin/python" ] || { echo "fpv-cli: виртуальное окружение не создано, выполните dpkg --configure -a" >&2; exit 1; }
+MODULE=fpv.cli
+if [ "${1:-}" = "--migrate" ]; then MODULE=fpv.migrate; shift; fi
+set -a; . /etc/fpv/fpv.env; set +a
+export FPV_MIGRATIONS_DIR=/usr/lib/fpv-platform/database/migrations
+if [ "$(id -u)" -eq 0 ]; then
+    exec runuser -u fpv --preserve-environment -- "$VENV/bin/python" -m "$MODULE" "$@"
+fi
+exec "$VENV/bin/python" -m "$MODULE" "$@"

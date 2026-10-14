@@ -1,0 +1,14 @@
+Package: fpv-drone-agent
+Version: @VERSION@
+Architecture: all
+Maintainer: FPV Platform Team <fpv-platform@fpv.local>
+Section: misc
+Priority: optional
+Depends: python3 (>= 3.11), passwd
+Recommends: ffmpeg
+Installed-Size: @SIZE@
+Homepage: https://github.com/vaceslavnenadov-byte/fpv-delivery-platform
+Description: сервисный модуль дрона для платформы FPV-доставки
+ Передаёт телеметрию, результаты самодиагностики и видео (сегменты MPEG-TS)
+ в контур /drone-link платформы. В первой версии работает с симулятором.
+ Команд управления полётом модуль не принимает и не передаёт.

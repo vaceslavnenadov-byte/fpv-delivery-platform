@@ -1,0 +1,26 @@
+[Unit]
+Description=FPV Delivery Platform worker (outbox, связь, сроки хранения)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fpv
+Group=fpv
+EnvironmentFile=/etc/default/fpv-platform
+EnvironmentFile=/etc/fpv/fpv.env
+ExecStart=/usr/lib/fpv-platform/venv/bin/python -m fpv.worker
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/fpv /srv/fpv-evidence /var/log/fpv
+CapabilityBoundingSet=
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+# Параметры пакета fpv-platform.
+# Применять миграции БД автоматически при установке и обновлении пакета (yes|no).
+FPV_AUTO_MIGRATE=yes
+# Адрес и число процессов API (за nginx).
+FPV_API_HOST=127.0.0.1
+FPV_API_PORT=8000
+FPV_API_WORKERS=4

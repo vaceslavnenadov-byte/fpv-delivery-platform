@@ -1,0 +1,26 @@
+[Unit]
+Description=FPV Delivery Platform API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fpv
+Group=fpv
+EnvironmentFile=/etc/default/fpv-platform
+EnvironmentFile=/etc/fpv/fpv.env
+ExecStart=/usr/lib/fpv-platform/venv/bin/uvicorn --factory fpv.main:app_from_env --host ${FPV_API_HOST} --port ${FPV_API_PORT} --workers ${FPV_API_WORKERS} --proxy-headers --forwarded-allow-ips 127.0.0.1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/fpv /srv/fpv-evidence /var/log/fpv
+CapabilityBoundingSet=
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

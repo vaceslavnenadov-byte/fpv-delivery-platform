@@ -1,0 +1,6 @@
+# /etc/apt/sources.list.d/fpv-local.sources — локальный репозиторий пакетов FPV
+# Ключ: скопируйте <репозиторий>/fpv-local.gpg в /usr/share/keyrings/fpv-local.gpg
+Types: deb
+URIs: file:/srv/packages
+Suites: ./
+Signed-By: /usr/share/keyrings/fpv-local.gpg

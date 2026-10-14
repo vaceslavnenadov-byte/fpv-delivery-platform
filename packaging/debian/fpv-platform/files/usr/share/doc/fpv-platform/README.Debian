@@ -1,0 +1,36 @@
+fpv-platform для Debian 13
+==========================
+
+Установка из локального репозитория (/etc/apt/sources.list.d/fpv-local.sources):
+
+    apt install fpv-platform
+
+Первичная настройка:
+
+ 1. Подключение к PostgreSQL 17 (секрет, не в fpv.env):
+      (файл-заготовка создаётся при установке пакета)
+      echo 'postgresql+psycopg://fpv_app:ПАРОЛЬ@db1.dc.fpv.local:5432/fpv?sslmode=verify-full' \
+          > /etc/fpv/secrets/database_url
+ 2. Служебная учётная запись LDAP:
+      записать пароль в /etc/fpv/secrets/ldap_bind_password (заготовка уже создана) и проверить FPV_LDAP_* в /etc/fpv/fpv.env
+ 3. Применить настройки: dpkg-reconfigure fpv-platform
+    (миграции БД + перезапуск fpv-api и fpv-worker)
+ 4. nginx: ln -s /etc/nginx/sites-available/fpv-platform.conf /etc/nginx/sites-enabled/
+    указать имя сервера и сертификат, затем nginx -t && systemctl reload nginx
+
+Пути:
+  /usr/lib/fpv-platform/backend          код backend
+  /usr/lib/fpv-platform/database         SQL-миграции и демонстрационные данные
+  /usr/lib/fpv-platform/venv             виртуальное окружение (создаётся при установке)
+  /usr/share/fpv-platform/frontend       веб-интерфейс (корень сайта nginx)
+  /usr/share/fpv-platform/wheels         Python-зависимости с проверкой хешей
+  /etc/fpv/fpv.env, /etc/fpv/secrets     конфигурация и секреты
+  /var/lib/fpv, /srv/fpv-evidence        буфер и хранилище видеоподтверждений
+  /var/log/fpv                           журналы
+
+Команды: fpv-migrate [--check], fpv-cli sync-directory|verify-audit|verify-videos|outbox-stats
+
+Обновление: apt install --only-upgrade fpv-platform — venv пересоздаётся, миграции
+применяются автоматически (FPV_AUTO_MIGRATE в /etc/default/fpv-platform).
+
+Удаление пакета не затрагивает данные, секреты и учётную запись fpv (в т.ч. при purge).

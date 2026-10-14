@@ -18,6 +18,7 @@ fpv-delivery-platform/
 ├── database/
 │   ├── migrations/   SQL-миграции PostgreSQL (схема, таблица прав, правила баллов)
 │   └── seeds/        демонстрационные устройства и политики доступа
+├── packaging/debian/ пакеты fpv-platform и fpv-drone-agent, скрипт apt-репозитория
 ├── deploy/ansible/   комплект /tmp/ancible: ansible.cfg, requirements, inventory, group_vars,
 │                     host_vars, playbooks, roles (11), scripts (install/run/preflight/postflight/rollback/build)
 ├── tests/            backend (107), ansible (40)
@@ -40,6 +41,7 @@ fpv-delivery-platform/
 | [domain-and-storage.md](docs/domain-and-storage.md) | домен, учётные записи, процедуры, хранение в ЦОД, резервные копии |
 | [deployment.md](docs/deployment.md) | Ansible: комплект, /tmp/ancible, venv, режимы, секреты, откат; запуск для разработки |
 | [security-review.md](docs/security-review.md) | проверка безопасности, анализ зависимостей, остаточные риски |
+| [debian-packages.md](docs/debian-packages.md) | пакеты .deb, локальный apt-репозиторий /srv/packages |
 | [os-lifecycle.md](docs/os-lifecycle.md) | целевая ОС Debian 13, сроки поддержки, перенос с Debian 11 |
 | [hardware-integration-plan.md](docs/hardware-integration-plan.md) | интеграция с реальным оборудованием |
 | [testing.md](docs/testing.md) | запуск тестов, соответствие разделу 17 ТЗ, что не проверено |

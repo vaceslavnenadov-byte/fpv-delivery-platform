@@ -1,0 +1,4 @@
+#!/bin/sh
+# Применение миграций PostgreSQL платформы от имени учётной записи службы.
+set -e
+exec /usr/bin/fpv-cli --migrate "$@"

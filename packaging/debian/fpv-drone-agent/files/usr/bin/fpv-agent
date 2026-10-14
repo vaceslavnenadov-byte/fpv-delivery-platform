@@ -1,0 +1,7 @@
+#!/bin/sh
+# Запуск сервисного модуля дрона с параметрами /etc/default/fpv-agent.
+set -e
+set -a; . /etc/default/fpv-agent; set +a
+export PYTHONPATH=/usr/lib/fpv-drone-agent${PYTHONPATH:+:$PYTHONPATH}
+exec python3 -m fpv_agent --server "$FPV_AGENT_SERVER" --scenario "$FPV_AGENT_SCENARIO" \
+    --state-dir /var/lib/fpv-agent ${FPV_AGENT_CA_FILE:+--ca-file "$FPV_AGENT_CA_FILE"} "$@"

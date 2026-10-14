@@ -1,0 +1,20 @@
+[Unit]
+Description=FPV: сервисный модуль дрона (без управления полётом)
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/fpv-agent/key
+
+[Service]
+User=fpv-agent
+Group=fpv-agent
+ExecStart=/usr/bin/fpv-agent
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fpv-agent
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: fpv-delivery-platform
+Source: https://github.com/vaceslavnenadov-byte/fpv-delivery-platform
+
+Files: *
+Copyright: 2026 владелец проекта fpv-delivery-platform
+License: proprietary
+ Условия использования определяются владельцем проекта.
+

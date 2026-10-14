@@ -1,0 +1,7 @@
+# Параметры сервисного модуля дрона.
+FPV_AGENT_SERVER=https://fpv.dc.fpv.local
+# Сценарий симулятора: normal | fast | link-loss | link-blip | critical-error | no-video | faulty
+FPV_AGENT_SCENARIO=normal
+FPV_DRONE_KEY_FILE=/etc/fpv-agent/key
+# Сертификат УЦ для проверки сервера (пусто — системное хранилище)
+FPV_AGENT_CA_FILE=/etc/ssl/certs/ca-certificates.crt
