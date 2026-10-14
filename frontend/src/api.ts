@@ -60,7 +60,15 @@ async function request<T>(method: string, url: string, body?: unknown, opts: Req
     }
     if (resp.status === 401 && unauthorizedHandler && !url.endsWith("/auth/login")) unauthorizedHandler();
     const text = await resp.text();
-    const data = text ? JSON.parse(text) : {};
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // Ответ не от API (например, страница ошибки nginx 502, когда служба fpv-api остановлена).
+      throw new ApiError(resp.status, "bad_gateway", resp.status >= 500
+        ? `Сервер приложения недоступен (HTTP ${resp.status}). Обратитесь к администратору.`
+        : `Неожиданный ответ сервера (HTTP ${resp.status}).`);
+    }
     if (!resp.ok) {
       const err = data.error ?? {};
       throw new ApiError(resp.status, err.code ?? "error", err.message ?? `Ошибка ${resp.status}`, err.details ?? {});
