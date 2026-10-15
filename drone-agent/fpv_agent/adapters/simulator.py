@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from .base import DroneAdapter, MissionInfo
 
 HOME = {"lat": 55.7500, "lon": 37.6000}
+GROUND_MSL_M = 145.0          # высота поверхности над уровнем моря в районе имитации
 
 
 @dataclass
@@ -70,6 +71,10 @@ class SimulatedDrone(DroneAdapter):
         self._error_sent = False
         self._ffmpeg = shutil.which("ffmpeg")
         self._video_seq = 0
+        self.heading = 0.0
+        self.cruise_alt = 80.0
+        self._wp_index = 0
+        self._vspeed = 0.0
 
     # --- подключение ---
     def connect(self) -> None:
@@ -95,6 +100,8 @@ class SimulatedDrone(DroneAdapter):
             self.mission_started = self.clock()
             if mission.origin:
                 self.position = {"lat": mission.origin["lat"], "lon": mission.origin["lon"]}
+            self.cruise_alt = float(min(80.0, mission.max_altitude_m or 80.0))
+            self._wp_index = 0
             self.phase = "takeoff"
         elif mission.active and mission.status == "ready":
             self.phase = "preflight"
@@ -103,29 +110,57 @@ class SimulatedDrone(DroneAdapter):
             self.phase = "landed"
             self.alt = 0.0
 
+    def _waypoints(self) -> List[Dict[str, float]]:
+        m = self.mission
+        if not m or not m.destination:
+            return []
+        cps = [{"lat": c["lat"], "lon": c["lon"]} for c in (m.checkpoints or []) if "lat" in c and "lon" in c]
+        return cps + [{"lat": m.destination["lat"], "lon": m.destination["lon"]}]
+
+    @staticmethod
+    def _bearing(a: Dict[str, float], b: Dict[str, float]) -> float:
+        dlon = math.radians(b["lon"] - a["lon"])
+        la, lb = math.radians(a["lat"]), math.radians(b["lat"])
+        y = math.sin(dlon) * math.cos(lb)
+        x = math.cos(la) * math.sin(lb) - math.sin(la) * math.cos(lb) * math.cos(dlon)
+        return (math.degrees(math.atan2(y, x)) + 360) % 360
+
     def _advance(self) -> None:
         now = self.clock()
         dt = now - self._last_tick
         self._last_tick = now
+        self._vspeed = 0.0
         if self.mission_started is None or not self.mission or not self.mission.destination:
             return
         self.battery = max(0.0, self.battery - self.scenario.battery_drain_per_s * dt)
-        dest = self.mission.destination
-        dlat = dest["lat"] - self.position["lat"]
-        dlon = dest["lon"] - self.position["lon"]
-        dist_m = math.hypot(dlat * 111_320, dlon * 111_320 * math.cos(math.radians(self.position["lat"])))
+        wps = self._waypoints()
         step = self.scenario.cruise_speed_mps * dt
-        if dist_m <= max(step, 1.0):
-            self.position = {"lat": dest["lat"], "lon": dest["lon"]}
+        alt_before = self.alt
+        # Перемещение по контрольным точкам маршрута к точке Б (модель для отображения, не управление).
+        while self._wp_index < len(wps) and step > 0:
+            target = wps[self._wp_index]
+            dlat = target["lat"] - self.position["lat"]
+            dlon = target["lon"] - self.position["lon"]
+            dist_m = math.hypot(dlat * 111_320, dlon * 111_320 * math.cos(math.radians(self.position["lat"])))
+            if dist_m > 0.5:
+                self.heading = self._bearing(self.position, target)
+            if dist_m <= max(step, 1.0):
+                self.position = {"lat": target["lat"], "lon": target["lon"]}
+                step -= dist_m
+                self._wp_index += 1
+            else:
+                frac = step / dist_m
+                self.position["lat"] += dlat * frac
+                self.position["lon"] += dlon * frac
+                step = 0
+        if self._wp_index >= len(wps):
             if self.phase != "delivery":
                 self.phase = "delivery"
             self.alt = max(0.0, self.alt - 5 * dt)
         else:
-            frac = step / dist_m
-            self.position["lat"] += dlat * frac
-            self.position["lon"] += dlon * frac
-            self.alt = min(80.0, self.alt + 4 * dt)
+            self.alt = min(self.cruise_alt, self.alt + 4 * dt)
             self.phase = "cruise" if self.alt >= 30 else "takeoff"
+        self._vspeed = (self.alt - alt_before) / dt if dt > 0 else 0.0
         s = self.scenario
         if s.critical_error_at is not None and not self._error_sent and self._elapsed() >= s.critical_error_at:
             self._error_sent = True
@@ -135,11 +170,24 @@ class SimulatedDrone(DroneAdapter):
     def read_telemetry(self) -> Dict[str, Any]:
         self._advance()
         link = self.rng.randint(80, 100) if self.link_available() else 0
+        cruising = self.phase == "cruise"
+        speed = self.scenario.cruise_speed_mps * (1 + self.rng.uniform(-0.04, 0.04)) if cruising else 0.0
+        total = len(self._waypoints())
         return {"lat": round(self.position["lat"], 6), "lon": round(self.position["lon"], 6),
-                "alt_m": round(self.alt, 1),
-                "ground_speed_mps": self.scenario.cruise_speed_mps if self.phase == "cruise" else 0.0,
-                "heading_deg": 45.0, "battery_pct": int(self.battery), "link_quality": link, "gnss_fix": True,
-                "flight_phase": self.phase}
+                "alt_m": round(self.alt, 1), "ground_speed_mps": round(speed, 1),
+                "heading_deg": round(self.heading, 1), "battery_pct": int(self.battery), "link_quality": link,
+                "gnss_fix": True, "flight_phase": self.phase,
+                "extra": {"satellites": self.rng.randint(14, 18),
+                          "voltage_v": round(21.0 + 4.2 * self.battery / 100, 2),
+                          "alt_msl_m": round(self.alt + GROUND_MSL_M, 1),
+                          "vspeed_mps": round(self._vspeed, 1),
+                          "wind_mps": round(3.5 + self.rng.uniform(-0.8, 0.8), 1), "wind_dir_deg": 225,
+                          "pitch_deg": round(-6.0 + self.rng.uniform(-1.5, 1.5), 1) if cruising else 0.0,
+                          "roll_deg": round(self.rng.uniform(-3, 3), 1) if cruising else 0.0,
+                          "flight_mode": "auto" if self.mission_started else "manual",
+                          "waypoint_index": min(self._wp_index + 1, total) if total else 0,
+                          "waypoint_total": total,
+                          "video_resolution": "320x240", "video_fps": 10}}
 
     def self_check(self) -> Dict[str, Any]:
         if self.scenario.self_check_fail:

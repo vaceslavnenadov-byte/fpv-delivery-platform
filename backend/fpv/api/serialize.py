@@ -103,4 +103,11 @@ def video(ev: VideoEvidence, p: Optional[Principal] = None) -> Dict[str, Any]:
 def telemetry(t: TelemetryRecord) -> Dict[str, Any]:
     return {"seq": t.seq, "recorded_at": ts(t.recorded_at), "lat": t.lat, "lon": t.lon, "alt_m": t.alt_m,
             "ground_speed_mps": t.ground_speed_mps, "heading_deg": t.heading_deg, "battery_pct": t.battery_pct,
-            "link_quality": t.link_quality, "gnss_fix": t.gnss_fix, "flight_phase": t.flight_phase}
+            "link_quality": t.link_quality, "gnss_fix": t.gnss_fix, "flight_phase": t.flight_phase,
+            "extra": {k: v for k, v in (t.extra or {}).items() if k in TELEMETRY_EXTRA}}
+
+
+# Дополнительные показатели сервисного модуля, которые показываются в мониторе полёта.
+TELEMETRY_EXTRA = ("satellites", "voltage_v", "alt_msl_m", "vspeed_mps", "wind_mps", "wind_dir_deg",
+                   "pitch_deg", "roll_deg", "flight_mode", "waypoint_index", "waypoint_total",
+                   "video_resolution", "video_fps")

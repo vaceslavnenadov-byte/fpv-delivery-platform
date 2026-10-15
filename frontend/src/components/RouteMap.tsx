@@ -36,13 +36,15 @@ interface Props {
   track?: Telemetry[];          // передаётся только при наличии прав на телеметрию
   status?: string;
   height?: number;
+  compact?: boolean;            // без текстовой подписи (монитор полёта)
+  passed?: number;              // число пройденных контрольных точек
 }
 
 /** Карта маршрута (SVG). Подложка — карта, загруженная администратором платформы
  *  (внешние картографические сервисы не используются — работает в изолированной сети ЦОД);
  *  без подходящей карты показывается схема с сеткой. Позиция дрона показывается только при
  *  наличии достоверных данных (GNSS fix) и соответствующих прав. */
-export function RouteMap({ route, track = [], status, height = 280 }: Props) {
+export function RouteMap({ route, track = [], status, height = 280, compact = false, passed = 0 }: Props) {
   const layers = useBasemaps();
   const [showBase, setShowBase] = useState(readPref);
   const toggleBase = (on: boolean) => {
@@ -92,7 +94,7 @@ export function RouteMap({ route, track = [], status, height = 280 }: Props) {
               className={`map-route ${route.approval_status === "approved" ? "approved" : ""}`} />
         {route.checkpoints.map((c) => (
           <g key={c.name}>
-            <circle cx={x(c.lon)} cy={y(c.lat)} r={4} className="map-cp" />
+            <circle cx={x(c.lon)} cy={y(c.lat)} r={4} className={`map-cp ${route.checkpoints.indexOf(c) < passed ? "passed" : ""}`} />
             <text x={x(c.lon) + 6} y={y(c.lat) - 6} className="map-label small">{c.name}</text>
           </g>
         ))}
@@ -109,7 +111,10 @@ export function RouteMap({ route, track = [], status, height = 280 }: Props) {
         </g>
         {last && (
           <g>
-            <circle cx={x(last.lon!)} cy={y(last.lat!)} r={7} className={`map-drone ${fresh ? "" : "stale"}`} />
+            {last.heading_deg != null ? (
+              <polygon points="0,-11 8,8 0,3 -8,8" className={`map-drone ${fresh ? "" : "stale"}`}
+                       transform={`translate(${x(last.lon!)} ${y(last.lat!)}) rotate(${last.heading_deg})`} />
+            ) : <circle cx={x(last.lon!)} cy={y(last.lat!)} r={7} className={`map-drone ${fresh ? "" : "stale"}`} />}
             <text x={x(last.lon!) + 10} y={y(last.lat!) + 4} className="map-label">
               Дрон {fresh ? "" : "(данные устарели)"}
             </text>
@@ -117,8 +122,8 @@ export function RouteMap({ route, track = [], status, height = 280 }: Props) {
         )}
       </svg>
       <figcaption>
-        Маршрут {(route.distance_m / 1000).toFixed(2)} км, высота до {route.max_altitude_m} м.
-        {status && <> Статус: {status}.</>} {track.length === 0 && "Позиция дрона не отображается (нет данных или прав доступа)."}
+        {!compact && <>Маршрут {(route.distance_m / 1000).toFixed(2)} км, высота до {route.max_altitude_m} м.
+        {status && <> Статус: {status}.</>} {track.length === 0 && "Позиция дрона не отображается (нет данных или прав доступа)."}</>}
         {basemap && (
           <label className="map-toggle">
             <input type="checkbox" checked={showBase} onChange={(e) => toggleBase(e.target.checked)} /> Карта: {basemap.name}

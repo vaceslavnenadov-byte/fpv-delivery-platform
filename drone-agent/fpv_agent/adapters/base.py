@@ -26,6 +26,7 @@ class MissionInfo:
     origin: Optional[Dict[str, float]] = None
     destination: Optional[Dict[str, float]] = None
     checkpoints: List[Dict[str, Any]] = field(default_factory=list)
+    max_altitude_m: Optional[float] = None
 
     @classmethod
     def from_api(cls, data: Dict[str, Any]) -> "MissionInfo":
@@ -34,7 +35,7 @@ class MissionInfo:
         route = data.get("route") or {}
         return cls(active=True, order_id=data.get("order_id"), status=data.get("status"),
                    origin=route.get("origin"), destination=route.get("destination"),
-                   checkpoints=route.get("checkpoints") or [])
+                   checkpoints=route.get("checkpoints") or [], max_altitude_m=route.get("max_altitude_m"))
 
 
 class DroneAdapter(abc.ABC):

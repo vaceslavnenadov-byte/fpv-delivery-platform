@@ -145,6 +145,11 @@ class NoteIn(StrictModel):
     body: str = Field(min_length=1, max_length=4000)
 
 
+class ChatIn(StrictModel):
+    body: str = Field(min_length=1, max_length=2000)
+    attach_frame: bool = False
+
+
 class AssignCoordinatorIn(StrictModel):
     coordinator_id: uuid.UUID
 
@@ -218,6 +223,15 @@ class TelemetryPointIn(StrictModel):
     flight_phase: Optional[Literal["idle", "preflight", "takeoff", "cruise", "approach", "delivery",
                                    "return", "landed"]] = None
     extra: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("extra")
+    @classmethod
+    def _extra_small(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+        # Дополнительные показатели — плоский набор скалярных значений ограниченного размера.
+        if len(v) > 32 or any(len(k) > 40 or not (v[k] is None or isinstance(v[k], (int, float, str, bool)))
+                              or (isinstance(v[k], str) and len(v[k]) > 64) for k in v):
+            raise ValueError("extra: не более 32 скалярных полей")
+        return v
 
     @field_validator("recorded_at")
     @classmethod

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type Hls from "hls.js";
 import { api, errorText } from "../api";
 import { Alert } from "./ui";
@@ -19,7 +19,14 @@ function h264Supported(): boolean {
  *  «Видео» — HLS (hls.js; в Safari — встроенный плеер), задержка несколько секунд.
  *  «Кадры» — последний кадр раз в секунду: для браузеров без H.264 и медленных каналов.
  *  Открытие трансляции фиксируется сервером в журнале аудита. */
-export function LiveVideo({ orderId }: { orderId: string }) {
+interface Props {
+  orderId: string;
+  variant?: "card" | "hud";     // hud — видео на всю панель с наложением (монитор полёта)
+  autoStart?: boolean;
+  children?: ReactNode;         // наложение поверх видео (только для hud)
+}
+
+export function LiveVideo({ orderId, variant = "card", autoStart = false, children }: Props) {
   const canVideo = useRef(h264Supported()).current;
   const video = useRef<HTMLVideoElement>(null);
   const hls = useRef<Hls | null>(null);
@@ -48,7 +55,11 @@ export function LiveVideo({ orderId }: { orderId: string }) {
     setState("idle");
   };
 
-  useEffect(() => teardown, []);   // остановка при уходе со страницы или завершении заказа
+  useEffect(() => {
+    if (autoStart) start();
+    return teardown;   // остановка при уходе со страницы или завершении заказа
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function playVideo(playlist: string) {
     const v = video.current!;
@@ -106,28 +117,47 @@ export function LiveVideo({ orderId }: { orderId: string }) {
   }
 
   const active = state !== "idle" && state !== "error";
+  const badge = <>
+    {state === "playing" && <span className="live-badge">● В ЭФИРЕ</span>}
+    {(state === "waiting" || state === "starting") && <span className="live-badge waiting">Ожидание видеопотока…</span>}
+  </>;
+  const modeSelect = (
+    <select value={mode} onChange={(e) => switchMode(e.target.value as Mode)} aria-label="Режим трансляции">
+      <option value="video" disabled={!canVideo}>Видео{canVideo ? "" : " (браузер не поддерживает H.264)"}</option>
+      <option value="frames">Кадры (1 в секунду)</option>
+    </select>
+  );
+  const button = active ? <button className="btn" onClick={stop}>Остановить</button>
+    : <button className="btn primary" onClick={() => start()}>Смотреть трансляцию</button>;
+  const media = <>
+    <video ref={video} muted playsInline controls={variant === "card"} hidden={!active || mode !== "video"} aria-label="Трансляция с дрона" />
+    {active && mode === "frames" && frameUrl && (
+      <img className="live-frame" src={frameUrl} alt="Кадр трансляции с дрона"
+           onLoad={() => setState("playing")} onError={() => setState("waiting")} />
+    )}
+  </>;
+
+  if (variant === "hud") {
+    return (
+      <div className="live-hud">
+        {media}
+        {!active && <div className="live-hud-idle">{error || "Трансляция остановлена"}</div>}
+        {children}
+        <div className="live-hud-ctl">{badge}{modeSelect}{button}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="live">
       <div className="row between">
         <div className="row">
-          {state === "playing" && <span className="live-badge">● В ЭФИРЕ</span>}
-          {(state === "waiting" || state === "starting") && <span className="live-badge waiting">Ожидание видеопотока…</span>}
+          {badge}
           {!active && <span className="muted small">Видео с камеры дрона в реальном времени.</span>}
         </div>
-        <div className="row">
-          <select value={mode} onChange={(e) => switchMode(e.target.value as Mode)} aria-label="Режим трансляции">
-            <option value="video" disabled={!canVideo}>Видео{canVideo ? "" : " (браузер не поддерживает H.264)"}</option>
-            <option value="frames">Кадры (1 в секунду)</option>
-          </select>
-          {active ? <button className="btn" onClick={stop}>Остановить</button>
-            : <button className="btn primary" onClick={() => start()}>Смотреть трансляцию</button>}
-        </div>
+        <div className="row">{modeSelect}{button}</div>
       </div>
-      <video ref={video} muted playsInline controls hidden={!active || mode !== "video"} aria-label="Трансляция с дрона" />
-      {active && mode === "frames" && frameUrl && (
-        <img className="live-frame" src={frameUrl} alt="Кадр трансляции с дрона"
-             onLoad={() => setState("playing")} onError={() => setState("waiting")} />
-      )}
+      {media}
       {!canVideo && <p className="muted small">Браузер не воспроизводит H.264 — трансляция показывается кадрами.</p>}
       <Alert tone="danger">{error}</Alert>
     </div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
+import { openFlightMonitor } from "../OrderDetail";
 import { api, errorText, newIdempotencyKey } from "../../api";
 import { Alert, Badge, Card, Empty, Pending, Stat } from "../../components/ui";
 import { CARGO_TYPES, fmtDate, fmtDistance } from "../../labels";
@@ -82,7 +83,14 @@ export function OperatorMinePage() {
   return (
     <div className="stack">
       <h1>Мои задания</h1>
-      {active.length > 0 && <Alert tone="info">Активное задание: <Link to={`/orders/${active[0].id}`}>№{active[0].number}</Link> — откройте карточку для проверки готовности, начала и завершения.</Alert>}
+      {active.length > 0 && (
+        <Alert tone="info">
+          <div className="row between">
+            <span>Активное задание: <Link to={`/orders/${active[0].id}`}>№{active[0].number}</Link> — откройте карточку для проверки готовности, начала и завершения.</span>
+            <button className="btn primary small" onClick={() => openFlightMonitor(active[0].id)}>🛰 Монитор полёта</button>
+          </div>
+        </Alert>
+      )}
       <Card title="Активные"><OrderTable orders={active} /></Card>
       <Card title="Завершённые и на проверке"><OrderTable orders={mine.filter((o) => !active.includes(o))} /></Card>
     </div>

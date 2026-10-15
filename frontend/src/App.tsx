@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router";
 import { useAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { Alert, Pending } from "./components/ui";
 import { LoginPage } from "./pages/Login";
+import { FlightMonitorPage } from "./pages/FlightMonitor";
 import { OrderDetailPage } from "./pages/OrderDetail";
+import { realtime } from "./realtime";
 import { ProfilePage } from "./pages/Profile";
 import { AdminAuditPage, AdminComplaintsPage, AdminDronesPage, AdminMonitoringPage, AdminOrdersPage, AdminOverviewPage,
   AdminMapsPage, AdminReviewsPage, AdminScoringPage, AdminUsersPage } from "./pages/admin/AdminPages";
@@ -43,6 +45,24 @@ export function App() {
       </Routes>
     );
   }
+  return (
+    <Routes>
+      <Route path="/orders/:orderId/monitor" element={<MonitorShell />} />
+      <Route path="*" element={<MainRoutes />} />
+    </Routes>
+  );
+}
+
+/** Монитор полёта открывается в отдельном окне — без бокового меню и шапки. */
+function MonitorShell() {
+  useEffect(() => {
+    realtime.start();
+    return () => realtime.stop();
+  }, []);
+  return <FlightMonitorPage />;
+}
+
+function MainRoutes() {
   return (
     <Layout>
       <Routes>

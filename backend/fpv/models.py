@@ -280,6 +280,9 @@ class OrderNote(Base):
     kind: Mapped[str] = mapped_column(Text)
     severity: Mapped[str] = mapped_column(Text, default="info")
     body: Mapped[str] = mapped_column(Text)
+    attachment_key: Mapped[Optional[str]] = mapped_column(Text)
+    attachment_type: Mapped[Optional[str]] = mapped_column(Text)
+    attachment_sha256: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 

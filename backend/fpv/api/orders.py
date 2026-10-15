@@ -5,6 +5,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,7 +14,7 @@ from ..errors import NotFound
 from ..models import DeliveryConfirmation, Order, OrderNote, Route, TelemetryRecord, User
 from ..services import complaints as complaint_svc
 from ..services import orders as svc
-from ..services import scoring, video
+from ..services import chat, scoring, video
 from ..services.identity import Principal
 from . import schemas, serialize
 from .deps import current_principal, get_db, idempotent
@@ -96,8 +97,26 @@ def order_notes(order_id: uuid.UUID, p: Principal = Depends(current_principal), 
         raise NotFound("Нет данных")
     rows = db.execute(select(OrderNote).where(OrderNote.order_id == order.id).order_by(OrderNote.id)).scalars()
     return {"items": [{"id": n.id, "kind": n.kind, "severity": n.severity, "body": n.body,
-                       "author": serialize.user_brief(db, n.author_id), "created_at": serialize.ts(n.created_at)}
+                       "author": serialize.user_brief(db, n.author_id), "created_at": serialize.ts(n.created_at),
+                       "attachment_url": f"/api/v1/orders/{order.id}/notes/{n.id}/attachment"
+                       if n.attachment_key else None}
                       for n in rows]}
+
+
+@router.post("/{order_id}/chat", status_code=201)
+def post_chat(order_id: uuid.UUID, body: schemas.ChatIn, p: Principal = Depends(current_principal),
+              db: Session = Depends(get_db)):
+    note = chat.post(db, p, order_id, body.body, attach_frame=body.attach_frame)
+    db.commit()
+    return {"id": note.id, "has_attachment": note.attachment_key is not None}
+
+
+@router.get("/{order_id}/notes/{note_id}/attachment")
+def note_attachment(order_id: uuid.UUID, note_id: int, p: Principal = Depends(current_principal),
+                    db: Session = Depends(get_db)):
+    content, media_type = chat.attachment(db, p, order_id, note_id)
+    return StreamingResponse(content, media_type=media_type,
+                             headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"})
 
 
 @router.get("/{order_id}/confirmations")

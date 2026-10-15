@@ -134,6 +134,7 @@ export interface Order {
   customer_id: string;
   operator_id: string | null;
   coordinator_id: string | null;
+  started_at?: string | null;
   created_at: string;
   delivered_at: string | null;
   completed_at: string | null;
@@ -160,6 +161,36 @@ export interface Telemetry {
   battery_pct: number | null;
   link_quality: number | null;
   flight_phase: string | null;
+  heading_deg?: number | null;
+  gnss_fix?: boolean | null;
+  extra?: TelemetryExtra;
+}
+
+/** Дополнительные показатели сервисного модуля (только отображение). */
+export interface TelemetryExtra {
+  satellites?: number;
+  voltage_v?: number;
+  alt_msl_m?: number;
+  vspeed_mps?: number;
+  wind_mps?: number;
+  wind_dir_deg?: number;
+  pitch_deg?: number;
+  roll_deg?: number;
+  flight_mode?: string;
+  waypoint_index?: number;
+  waypoint_total?: number;
+  video_resolution?: string;
+  video_fps?: number;
+}
+
+export interface Note {
+  id: number;
+  kind: string;
+  severity: string;
+  body: string;
+  author: UserBrief | null;
+  created_at: string;
+  attachment_url?: string | null;
 }
 
 export interface Score {

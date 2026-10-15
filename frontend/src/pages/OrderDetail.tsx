@@ -9,14 +9,24 @@ import { Timeline } from "../components/Timeline";
 import { Alert, Badge, Card, KV, Pending, Tone } from "../components/ui";
 import { CARGO_TYPES, fmtDate, fmtDistance } from "../labels";
 import { useLive } from "../realtime";
-import type { HistoryItem, Order, Score, Telemetry, UserBrief } from "../types";
+import type { HistoryItem, Note, Order, Score, Telemetry, UserBrief } from "../types";
 
-interface Note { id: number; kind: string; severity: string; body: string; author: UserBrief | null; created_at: string }
 interface Confirmation { kind: string; decision: string; comment: string; report: Record<string, string>; actor: UserBrief | null; created_at: string }
 
 const NOTE_KIND: Record<string, string> = {
   remark: "Замечание", message_to_operator: "Сообщение оператору", incident: "Инцидент", deviation: "Отклонение",
+  chat: "Переписка",
 };
+
+/** Статусы, в которых оператор работает с заданием и нужен монитор полёта. */
+const MONITOR_STATUSES = ["accepted", "awaiting_readiness", "ready", "in_progress", "awaiting_delivery_confirmation"];
+
+export function openFlightMonitor(orderId: string) {
+  // Отдельное окно на каждый заказ: повторное нажатие переводит фокус на уже открытое окно.
+  const w = window.open(`/orders/${orderId}/monitor`, `fpv-monitor-${orderId}`,
+    "popup,width=1440,height=900,left=40,top=40");
+  w?.focus();
+}
 const CONF_KIND: Record<string, string> = {
   operator_report: "Отчёт оператора", recipient_receipt: "Подтверждение получения", admin_review: "Решение администратора",
 };
@@ -89,6 +99,9 @@ export function OrderDetailPage() {
           <h1>Заказ №{o.number} <Badge kind="order" value={o.status} /></h1>
           <div className="muted small">Создан {fmtDate(o.created_at)} · версия {o.version}{o.receipt_overdue && " · получение не подтверждено в срок"}</div>
         </div>
+        {canTelemetry && MONITOR_STATUSES.includes(o.status) && (
+          <button className="btn primary" onClick={() => openFlightMonitor(o.id)}>🛰 Открыть монитор полёта</button>
+        )}
       </div>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
 
