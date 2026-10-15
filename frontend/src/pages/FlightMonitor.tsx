@@ -82,7 +82,8 @@ export function FlightMonitorPage() {
   const track = telemetry.data?.items ?? [];
   const last = track[track.length - 1];
   const x: TelemetryExtra = last?.extra ?? {};
-  const age = last ? now - new Date(last.recorded_at).getTime() : Infinity;
+  // Небольшое расхождение часов дрона и рабочего места не должно давать отрицательный возраст данных.
+  const age = last ? Math.max(0, now - new Date(last.recorded_at).getTime()) : Infinity;
   const stale = age > STALE_MS;
   const flying = o.status === "in_progress";
   // До начала задания телеметрия к заказу не привязана — показывается состояние связи самого дрона.
@@ -90,7 +91,9 @@ export function FlightMonitorPage() {
     : o.drone?.link_status === "online" ? ["На связи", "ok"]
     : o.drone?.link_status === "degraded" ? ["Слабая", "warn"] : ["Нет связи", "bad"];
   const battery = last?.battery_pct ?? o.drone?.battery_pct ?? null;
-  const flightMs = o.started_at ? now - new Date(o.started_at).getTime() : 0;
+  // После завершения доставки время полёта фиксируется на моменте завершения.
+  const flightEnd = flying ? now : o.delivered_at ? new Date(o.delivered_at).getTime() : now;
+  const flightMs = o.started_at ? flightEnd - new Date(o.started_at).getTime() : 0;
   const route = o.route;
   const wpTotal = x.waypoint_total ?? (route ? route.checkpoints.length + 1 : 0);
   const wpIndex = x.waypoint_index ?? 0;
@@ -98,7 +101,7 @@ export function FlightMonitorPage() {
     ? remainingDistance({ lat: last.lat, lon: last.lon }, route.checkpoints, route.destination, wpIndex)
     : null;
   const eta = remaining != null && last?.ground_speed_mps ? remaining / last.ground_speed_mps * 1000 : null;
-  const mode = last?.flight_phase === "return" ? "return" : x.flight_mode ?? (flying ? "auto" : "manual");
+  const mode = !flying ? "" : last?.flight_phase === "return" ? "return" : x.flight_mode ?? "auto";
   const warnings: string[] = [];
   if (flying && stale) warnings.push(last ? `Нет телеметрии ${Math.round(age / 1000)} с` : "Телеметрия не поступает");
   if (battery != null && battery < 30) warnings.push(`Низкий заряд батареи: ${battery}%`);
@@ -118,7 +121,7 @@ export function FlightMonitorPage() {
         <div className="mon-stat">
           <span className={`dot ${flying && !stale ? "ok" : flying ? "bad" : "idle"}`} />
           <div><b>{flying ? PHASES[last?.flight_phase ?? ""] ?? "Выполняется" : ORDER_STATUS[o.status]?.label ?? o.status_label}</b>
-            <small>{mode === "auto" ? "Автономный режим" : mode === "return" ? "Возврат" : "Ручной режим"}</small></div>
+            <small>{!flying ? "задание не выполняется" : mode === "auto" ? "Автономный режим" : mode === "return" ? "Возврат" : "Ручной режим"}</small></div>
         </div>
         <div className="mon-stat">
           <span className="mon-ico">📶</span>
@@ -132,6 +135,9 @@ export function FlightMonitorPage() {
           <span className="mon-ico">🔗</span>
           <div><b>Связь</b><small className={`mon-tone-${linkTone}`}>{linkText}{flying && last?.link_quality != null && !stale ? ` (${last.link_quality})` : ""}</small></div>
         </div>
+        {flying && o.operator_id === me?.id && can("order.execute") && (
+          <FinishButton order={o} onDone={() => order.reload()} />
+        )}
         <div className="mon-actions">
           <button className="mon-btn" title="Во весь экран" onClick={() =>
             document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()}>⛶</button>
@@ -150,7 +156,11 @@ export function FlightMonitorPage() {
               ? o.operator_id === me?.id && can("order.execute")
                 ? <TaskPanel order={o} onChanged={() => order.reload()} />
                 : "Видео и телеметрия появятся после начала выполнения задания"
-              : `Заказ: ${ORDER_STATUS[o.status]?.label ?? o.status}. Трансляция не ведётся.`}
+              : o.status === "awaiting_delivery_confirmation"
+                ? <div className="mon-task"><div className="mon-task-title mon-tone-ok">✓ Доставка зафиксирована</div>
+                    <div>Видеоподтверждение (последние 15 секунд) сохраняется. Ожидается подтверждение получения
+                      заказчиком; отчёт о выполнении формируется в карточке заказа.</div></div>
+                : `Заказ: ${ORDER_STATUS[o.status]?.label ?? o.status}. Трансляция не ведётся.`}
           </div></div>
         )}
         {warnings.length > 0 && <div className="mon-warn">{warnings.map((w) => <div key={w}>⚠ {w}</div>)}</div>}
@@ -424,6 +434,32 @@ function TaskPanel({ order, onChanged }: { order: Order; onChanged: () => void }
       </div>
       {error && <div className="mon-tone-bad">{error}</div>}
       <small>Видео и телеметрия появятся после начала выполнения задания.</small>
+    </div>
+  );
+}
+
+/** Фиксация завершения доставки (оператор). То же действие, что в карточке заказа:
+ *  сохраняются последние 15 секунд видео, заказ переходит к подтверждению получения. */
+function FinishButton({ order, onDone }: { order: Order; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function finish() {
+    if (!confirm("Зафиксировать завершение доставки? Будут сохранены последние 15 секунд видео.")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api.post(`/api/v1/orders/${order.id}/complete`, {}, { idempotencyKey: newIdempotencyKey() });
+      onDone();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mon-finish">
+      <button className="mon-btn finish" disabled={busy} onClick={finish}>{busy ? "Фиксация…" : "✓ Завершить доставку"}</button>
+      {error && <small className="mon-tone-bad">{error}</small>}
     </div>
   );
 }

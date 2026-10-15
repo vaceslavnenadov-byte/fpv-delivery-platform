@@ -255,7 +255,12 @@ label.check { flex-direction: row; align-items: center; }
 .mon-batt { width: 18px; height: 30px; border: 2px solid var(--m-ok); border-radius: 3px; position: relative; display: flex; align-items: flex-end; }
 .mon-batt i { display: block; width: 100%; background: var(--m-ok); }
 .mon-batt.low { border-color: var(--m-bad); } .mon-batt.low i { background: var(--m-bad); }
-.mon-actions { margin-left: auto; border-right: 0 !important; gap: 8px !important; }
+.mon-actions { border-right: 0 !important; gap: 8px !important; }
+.mon-finish { margin-left: auto; border-right: 0 !important; flex-direction: column; justify-content: center; gap: 2px !important; }
+.mon-finish small { max-width: 260px; }
+.mon-btn.finish { background: #16a34a; border-color: #16a34a; font-size: 0.95rem; font-weight: 600; padding: 0 18px; }
+.mon-btn.finish:hover { background: #15803d; }
+.mon-top > .mon-actions:nth-child(2), .mon-top > .mon-stat + .mon-actions { margin-left: auto; }
 .mon-btn { background: var(--m-panel2); color: var(--m-text); border: 1px solid var(--m-line); border-radius: 8px;
   min-width: 40px; height: 40px; padding: 0 12px; font-size: 18px; cursor: pointer; text-decoration: none;
   display: inline-flex; align-items: center; justify-content: center; }
@@ -329,14 +334,16 @@ label.check { flex-direction: row; align-items: center; }
 .mon-chat-form { display: flex; gap: 8px; margin-top: 8px; }
 .mon-chat-form input { flex: 1; background: var(--m-bg); color: var(--m-text); border: 1px solid var(--m-line); border-radius: 8px; padding: 0 12px; height: 40px; }
 
-.mon-bottom { grid-area: bottom; display: grid; grid-template-columns: 1.1fr 1.3fr 1.1fr 0.6fr; gap: 10px; }
+.mon-bottom { grid-area: bottom; display: grid; grid-template-columns: 1.05fr 1.3fr 1.4fr 0.55fr; gap: 10px; }
 .mon-modes { display: flex; gap: 8px; margin-bottom: 6px; }
 .mon-mode { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 8px;
   background: var(--m-panel2); border: 1px solid var(--m-line); color: var(--m-muted); font-size: 0.8rem; }
 .mon-mode span { font-size: 18px; }
 .mon-mode.active { border-color: var(--m-accent); color: var(--m-text); background: #1b2d4d; box-shadow: inset 0 0 0 1px var(--m-accent); }
 .mon-kv { display: flex; gap: 16px; } .mon-kv > div { flex: 1; } .mon-kv small { display: block; font-size: 0.75rem; }
-.mon-kv b { font-size: 1rem; }
+.mon-kv > div { min-width: 0; }
+.mon-kv b { font-size: 0.95rem; white-space: nowrap; }
+.mon-kv > div:last-child b { white-space: normal; overflow-wrap: anywhere; }
 .mon-drone-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
 .mon-drone-big { font-size: 40px; }
 
