@@ -41,6 +41,7 @@ fpv-delivery-platform/
 | [domain-and-storage.md](docs/domain-and-storage.md) | домен, учётные записи, процедуры, хранение в ЦОД, резервные копии |
 | [deployment.md](docs/deployment.md) | Ansible: комплект, /tmp/ancible, venv, режимы, секреты, откат; запуск для разработки |
 | [security-review.md](docs/security-review.md) | проверка безопасности, анализ зависимостей, остаточные риски |
+| [install-from-scratch.md](docs/install-from-scratch.md) | **установка на Debian 13 с нуля на одной машине: пошагово, с решениями известных проблем** |
 | [debian-packages.md](docs/debian-packages.md) | пакеты .deb, локальный apt-репозиторий /srv/packages |
 | [os-lifecycle.md](docs/os-lifecycle.md) | целевая ОС Debian 13, сроки поддержки, перенос с Debian 11 |
 | [hardware-integration-plan.md](docs/hardware-integration-plan.md) | интеграция с реальным оборудованием |
