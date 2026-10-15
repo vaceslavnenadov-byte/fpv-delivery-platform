@@ -59,6 +59,8 @@ Backend — модульный монолит на FastAPI (Python 3.13 — си
 | Drone Registry Service | `services/drones.py` | `/api/v1/drones/*` |
 | Telemetry Ingestion Service | `services/telemetry.py` | `/drone-link/v1/*` (отдельный контур) |
 | Video Evidence Service | `services/video.py`, `services/storage.py` | `/drone-link/v1/video/segments`, `/api/v1/videos/*` |
+| Map Service (карты-подложки) | `services/maps.py` | `/api/v1/maps`, `/api/v1/admin/maps` |
+| Live Video (трансляция) | `services/live.py` | `/api/v1/orders/{id}/live` (HLS, кадры) |
 | Scoring Service | `services/scoring.py`, `services/complaints.py` | `/api/v1/orders/{id}/score`, `/scores/me`, `/admin/complaints` |
 | Notification Service | `services/notifications.py` | `/api/v1/me/notifications`, WebSocket |
 | Audit Service | `services/audit.py` | `/api/v1/admin/audit`, `/audit/verify` |
@@ -154,7 +156,8 @@ sequenceDiagram
 * API без состояния (сессии в БД) — горизонтально за nginx; `serial: 50%` в плейбуке для обновления без полного простоя.
 * Воркеры — несколько экземпляров (`SKIP LOCKED`, advisory-блокировки плановых задач).
 * Кольцевой буфер видео — на диске узла, принимающего поток; при нескольких узлах — привязка
-  дрона к узлу на балансировщике (sticky по ключу устройства) или общий том spool.
+  дрона к узлу на балансировщике (sticky по ключу устройства) или общий том spool. Прямая трансляция
+  читает тот же буфер, поэтому при нескольких узлах требует того же (общий том или привязка).
 * PostgreSQL — резервные копии с проверкой восстановления (ежедневно); потоковая реплика —
   следующий этап (не реализовано в v1).
 * Ограничение частоты запросов — в процессе и на nginx (`limit_req`).

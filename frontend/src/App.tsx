@@ -7,7 +7,7 @@ import { LoginPage } from "./pages/Login";
 import { OrderDetailPage } from "./pages/OrderDetail";
 import { ProfilePage } from "./pages/Profile";
 import { AdminAuditPage, AdminComplaintsPage, AdminDronesPage, AdminMonitoringPage, AdminOrdersPage, AdminOverviewPage,
-  AdminReviewsPage, AdminScoringPage, AdminUsersPage } from "./pages/admin/AdminPages";
+  AdminMapsPage, AdminReviewsPage, AdminScoringPage, AdminUsersPage } from "./pages/admin/AdminPages";
 import { CoordinatorPage } from "./pages/coordinator/CoordinatorPage";
 import { CustomerDronesPage } from "./pages/customer/CustomerDrones";
 import { CustomerOrdersPage } from "./pages/customer/CustomerOrders";
@@ -65,6 +65,7 @@ export function App() {
         <Route path="/admin/complaints" element={<Guard perm="complaint.resolve"><AdminComplaintsPage /></Guard>} />
         <Route path="/admin/users" element={<Guard perm="user.manage"><AdminUsersPage /></Guard>} />
         <Route path="/admin/scoring" element={<Guard perm="scoring.manage"><AdminScoringPage /></Guard>} />
+        <Route path="/admin/maps" element={<Guard perm="map.manage"><AdminMapsPage /></Guard>} />
         <Route path="/admin/audit" element={<Guard perm="audit.read"><AdminAuditPage /></Guard>} />
         <Route path="/admin/monitoring" element={<Guard perm="system.monitor"><AdminMonitoringPage /></Guard>} />
         <Route path="*" element={<Alert tone="warn">Страница не найдена</Alert>} />

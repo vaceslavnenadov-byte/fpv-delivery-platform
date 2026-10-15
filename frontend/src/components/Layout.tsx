@@ -37,6 +37,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     { to: "/admin/complaints", label: "Жалобы и споры", perm: "complaint.resolve" },
     { to: "/admin/users", label: "Пользователи и роли", perm: "user.manage" },
     { to: "/admin/scoring", label: "Правила баллов", perm: "scoring.manage" },
+    { to: "/admin/maps", label: "Карты", perm: "map.manage" },
     { to: "/admin/audit", label: "Журнал аудита", perm: "audit.read" },
     { to: "/admin/monitoring", label: "Мониторинг", perm: "system.monitor" },
   ] },

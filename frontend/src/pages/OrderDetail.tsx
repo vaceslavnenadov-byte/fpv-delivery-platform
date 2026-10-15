@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
 import { useAuth } from "../auth";
+import { LiveVideo } from "../components/LiveVideo";
 import { RouteMap } from "../components/RouteMap";
 import { ScoreCard } from "../components/ScoreCard";
 import { Timeline } from "../components/Timeline";
@@ -212,6 +213,12 @@ export function OrderDetailPage() {
           {o.drone && ["lost", "degraded"].includes(o.drone.link_status) && (
             <Alert tone="danger">Нарушена связь с дроном. При потере связи дольше установленного порога задание будет прервано автоматически, дрон — переведён в «Требует проверки».</Alert>
           )}
+        </Card>
+      )}
+
+      {o.status === "in_progress" && can("video.live") && (
+        <Card title="Прямая трансляция">
+          <LiveVideo key={o.id} orderId={o.id} />
         </Card>
       )}
 

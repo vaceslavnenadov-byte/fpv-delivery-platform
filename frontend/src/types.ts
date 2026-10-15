@@ -27,6 +27,27 @@ export interface RouteInfo {
   approval_notes: { code: string; ok: boolean; message: string }[];
 }
 
+export interface MapBounds {
+  north: number;
+  south: number;
+  west: number;
+  east: number;
+}
+
+export interface MapLayer {
+  id: string;
+  name: string;
+  description: string;
+  content_type: string;
+  size_bytes: number;
+  width_px: number | null;
+  height_px: number | null;
+  bounds: MapBounds;
+  active: boolean;
+  created_at: string;
+  image_url: string;
+}
+
 export interface Drone {
   id: string;
   serial_number: string;

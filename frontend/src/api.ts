@@ -36,7 +36,8 @@ interface RequestOptions {
 async function request<T>(method: string, url: string, body?: unknown, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (method !== "GET") headers["X-CSRF-Token"] = readCookie("fpv_csrf");
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const raw = typeof Blob !== "undefined" && body instanceof Blob;   // файл передаётся телом запроса как есть
+  if (body !== undefined) headers["Content-Type"] = raw ? "application/octet-stream" : "application/json";
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
   let attempt = 0;
   const retries = opts.retries ?? (method === "GET" || opts.idempotencyKey ? 2 : 0);
@@ -47,7 +48,7 @@ async function request<T>(method: string, url: string, body?: unknown, opts: Req
         method,
         headers,
         credentials: "same-origin",
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        body: raw ? (body as Blob) : body !== undefined ? JSON.stringify(body) : undefined,
       });
     } catch (e) {
       // Сетевой сбой: безопасно повторяем только чтение и операции с ключом идемпотентности.
@@ -81,6 +82,8 @@ export const api = {
   get: <T>(url: string) => request<T>("GET", url),
   post: <T>(url: string, body?: unknown, opts?: RequestOptions) => request<T>("POST", url, body ?? {}, opts),
   put: <T>(url: string, body?: unknown) => request<T>("PUT", url, body ?? {}),
+  patch: <T>(url: string, body?: unknown) => request<T>("PATCH", url, body ?? {}),
+  upload: <T>(url: string, file: Blob) => request<T>("POST", url, file),
   del: <T>(url: string) => request<T>("DELETE", url),
 };
 

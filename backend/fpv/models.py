@@ -444,3 +444,25 @@ class IdempotencyKey(Base):
     response_status: Mapped[Optional[int]] = mapped_column(Integer)
     response_body: Mapped[Any] = mapped_column(JSONB)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class MapLayer(Base):
+    """Карта-подложка: изображение с географической привязкой по границам (WGS 84)."""
+    __tablename__ = "map_layers"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text, default="")
+    object_key: Mapped[str] = mapped_column(Text, unique=True)
+    content_type: Mapped[str] = mapped_column(Text)
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[str] = mapped_column(Text)
+    width_px: Mapped[Optional[int]] = mapped_column(Integer)
+    height_px: Mapped[Optional[int]] = mapped_column(Integer)
+    north: Mapped[float] = mapped_column(Float)
+    south: Mapped[float] = mapped_column(Float)
+    west: Mapped[float] = mapped_column(Float)
+    east: Mapped[float] = mapped_column(Float)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")

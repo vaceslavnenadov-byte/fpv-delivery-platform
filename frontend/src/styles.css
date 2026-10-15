@@ -209,3 +209,18 @@ label.check { flex-direction: row; align-items: center; }
   .who { text-align: left; }
   .bar-row { grid-template-columns: 1fr 1fr 32px; }
 }
+
+/* Подложка карты и видеотрансляция */
+.map-base { opacity: 0.95; }
+.with-base .map-route { stroke-width: 4; filter: drop-shadow(0 0 2px #fff); }
+.with-base .map-track { stroke-width: 3; filter: drop-shadow(0 0 2px #fff); }
+.with-base .map-label { paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+.map figcaption .map-toggle { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; margin: 0 0 0 8px; font-size: inherit; cursor: pointer; }
+.map figcaption .map-toggle input { width: auto; margin: 0; }
+.live { display: flex; flex-direction: column; gap: 8px; }
+.live video, .live-frame { width: 100%; max-height: 360px; object-fit: contain; background: #0b1220; border-radius: 8px; }
+.live-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #d92d20; color: #fff;
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; }
+.live-badge.waiting { background: #98a2b3; }
+.map-preview { position: relative; max-width: 260px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.map-preview img { display: block; width: 100%; height: auto; }

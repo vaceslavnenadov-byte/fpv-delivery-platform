@@ -4,7 +4,8 @@ import { api, errorText } from "../../api";
 import { Alert, Badge, Card, Empty, KV, Pending, Stat, Tone } from "../../components/ui";
 import { ORDER_STATUS, ROLE_LABELS, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
-import type { Drone, Order, Video } from "../../types";
+import { invalidateMaps } from "../../maps";
+import type { Drone, MapLayer, Order, Video } from "../../types";
 import { OrderTable } from "../customer/CustomerOrders";
 import { DroneService } from "../technician/TechnicianPage";
 
@@ -476,6 +477,155 @@ export function AdminMonitoringPage() {
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+// --- Карты-подложки ---------------------------------------------------------
+
+const EMPTY_BOUNDS = { north: "", south: "", west: "", east: "" };
+type BoundsForm = typeof EMPTY_BOUNDS;
+
+function boundsValid(b: BoundsForm): string {
+  const [n, s, w, e] = [b.north, b.south, b.west, b.east].map(Number);
+  if ([b.north, b.south, b.west, b.east].some((v) => v.trim() === "") || [n, s, w, e].some(Number.isNaN))
+    return "Укажите все четыре границы числами (градусы, разделитель — точка)";
+  if (!(s < n)) return "Северная граница должна быть больше южной";
+  if (!(w < e)) return "Восточная граница должна быть больше западной";
+  return "";
+}
+
+function BoundsInputs({ value, onChange }: { value: BoundsForm; onChange: (b: BoundsForm) => void }) {
+  const set = (k: keyof BoundsForm) => (e: { target: { value: string } }) =>
+    onChange({ ...value, [k]: e.target.value.replace(",", ".") });
+  return (
+    <div className="form grid4">
+      <label>Север (широта)<input inputMode="decimal" value={value.north} onChange={set("north")} placeholder="55.80" required /></label>
+      <label>Юг (широта)<input inputMode="decimal" value={value.south} onChange={set("south")} placeholder="55.70" required /></label>
+      <label>Запад (долгота)<input inputMode="decimal" value={value.west} onChange={set("west")} placeholder="37.50" required /></label>
+      <label>Восток (долгота)<input inputMode="decimal" value={value.east} onChange={set("east")} placeholder="37.70" required /></label>
+    </div>
+  );
+}
+
+export function AdminMapsPage() {
+  const list = useLive(() => api.get<{ items: MapLayer[] }>("/api/v1/maps?all=true"), []);
+  const [msg, setMsg] = useState<Msg>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [bounds, setBounds] = useState<BoundsForm>(EMPTY_BOUNDS);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editBounds, setEditBounds] = useState<BoundsForm>(EMPTY_BOUNDS);
+  const [editName, setEditName] = useState("");
+
+  const changed = () => {
+    invalidateMaps();
+    list.reload();
+  };
+
+  function pick(f: File | null) {
+    if (preview) URL.revokeObjectURL(preview);
+    setFile(f);
+    setPreview(f ? URL.createObjectURL(f) : "");
+    if (f && !name) setName(f.name.replace(/\.[^.]+$/, ""));
+  }
+
+  async function uploadMap(e: FormEvent) {
+    e.preventDefault();
+    const bad = boundsValid(bounds);
+    if (!file) return setMsg({ tone: "danger", text: "Выберите файл карты" });
+    if (bad) return setMsg({ tone: "danger", text: bad });
+    setBusy(true);
+    const q = new URLSearchParams({ name, description, ...bounds });
+    await run(setMsg, () => api.upload(`/api/v1/admin/maps?${q}`, file), "Карта загружена", () => {
+      pick(null);
+      setName("");
+      setDescription("");
+      setBounds(EMPTY_BOUNDS);
+      changed();
+    });
+    setBusy(false);
+  }
+
+  async function saveEdit(m: MapLayer) {
+    const bad = boundsValid(editBounds);
+    if (bad) return setMsg({ tone: "danger", text: bad });
+    const b = Object.fromEntries(Object.entries(editBounds).map(([k, v]) => [k, Number(v)]));
+    await run(setMsg, () => api.patch(`/api/v1/admin/maps/${m.id}`, { name: editName, ...b }), "Карта обновлена", () => {
+      setEditing(null);
+      changed();
+    });
+  }
+
+  const startEdit = (m: MapLayer) => {
+    setEditing(m.id);
+    setEditName(m.name);
+    setEditBounds(Object.fromEntries(Object.entries(m.bounds).map(([k, v]) => [k, String(v)])) as BoundsForm);
+  };
+
+  return (
+    <div className="stack">
+      <h1>Карты-подложки</h1>
+      <Alert tone={msg?.tone ?? "ok"}>{msg?.text}</Alert>
+      <Card title="Загрузить карту">
+        <p className="muted small">
+          Изображение района работ (PNG, JPEG или WebP, до 50 МБ) — например, экспорт из ГИС или скан карты,
+          ориентированный на север. Укажите географические координаты краёв изображения: широту верхнего (север)
+          и нижнего (юг) края, долготу левого (запад) и правого (восток). Карта автоматически подкладывается под
+          маршруты, точки которых попадают в её границы. Интернет не требуется.
+        </p>
+        <form className="stack" onSubmit={uploadMap}>
+          <div className="form grid2">
+            <label>Файл<input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => pick(e.target.files?.[0] ?? null)} required /></label>
+            <label>Название<input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} /></label>
+            <label className="span2">Описание<input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} placeholder="Источник, дата, масштаб" /></label>
+          </div>
+          <BoundsInputs value={bounds} onChange={setBounds} />
+          {preview && <div className="map-preview"><img src={preview} alt="Предпросмотр карты" /></div>}
+          <div><button className="btn primary" disabled={busy}>{busy ? "Загрузка…" : "Загрузить"}</button></div>
+        </form>
+      </Card>
+      <Card title="Загруженные карты">
+        {!list.data ? <Pending /> : list.data.items.length === 0 ? <Empty>Карты не загружены — маршруты показываются схемой.</Empty> : (
+          <table className="table">
+            <thead><tr><th>Карта</th><th>Границы (С / Ю / З / В)</th><th>Размер</th><th>Статус</th><th /></tr></thead>
+            <tbody>
+              {list.data.items.map((m) => (
+                <tr key={m.id}>
+                  <td>
+                    {editing === m.id ? <input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                      : <><strong>{m.name}</strong>{m.description && <><br /><span className="muted small">{m.description}</span></>}</>}
+                    <div className="map-preview"><img src={m.image_url} alt={m.name} loading="lazy" /></div>
+                  </td>
+                  <td>{editing === m.id ? <BoundsInputs value={editBounds} onChange={setEditBounds} />
+                    : <span className="small">{m.bounds.north} / {m.bounds.south} / {m.bounds.west} / {m.bounds.east}</span>}</td>
+                  <td className="small">{m.width_px && m.height_px ? `${m.width_px}×${m.height_px} px, ` : ""}{m.size_bytes < 1024 * 1024 ? `${Math.ceil(m.size_bytes / 1024)} КБ` : `${(m.size_bytes / 1024 / 1024).toFixed(1)} МБ`}</td>
+                  <td><Tone tone={m.active ? "ok" : "warn"}>{m.active ? "используется" : "отключена"}</Tone></td>
+                  <td className="row">
+                    {editing === m.id ? (
+                      <>
+                        <button className="btn small primary" onClick={() => saveEdit(m)}>Сохранить</button>
+                        <button className="btn small ghost" onClick={() => setEditing(null)}>Отмена</button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="btn small" onClick={() => startEdit(m)}>Изменить</button>
+                        <button className="btn small" onClick={() => run(setMsg, () => api.patch(`/api/v1/admin/maps/${m.id}`, { active: !m.active }),
+                          m.active ? "Карта отключена" : "Карта включена", changed)}>{m.active ? "Отключить" : "Включить"}</button>
+                        <button className="btn small danger" onClick={() => confirm(`Удалить карту «${m.name}»?`) &&
+                          run(setMsg, () => api.del(`/api/v1/admin/maps/${m.id}`), "Карта удалена", changed)}>Удалить</button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
     </div>
   );
 }

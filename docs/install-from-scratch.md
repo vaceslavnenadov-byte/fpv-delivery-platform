@@ -40,7 +40,7 @@ cat /etc/debian_version                 # 13.x — нужен Debian 13 «trixie
 timedatectl set-ntp true                # точное время: иначе ошибки TLS и подписи apt
 apt update
 apt install -y git curl ca-certificates gnupg openssl dpkg-dev apt-utils \
-               postgresql nginx
+               postgresql nginx ffmpeg
 systemctl enable --now postgresql nginx
 pg_lsclusters                           # 17  main  5432  online
 ```
@@ -63,7 +63,7 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-drone-agent_0.1.0-2_all.deb  fpv-platform_0.1.0-2_amd64.deb  SHA256SUMS
+# fpv-drone-agent_0.1.0-3_all.deb  fpv-platform_0.1.0-3_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # оба: OK
 ```
 
@@ -103,7 +103,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform            # Кандидат: 0.1.0-2, источник file:/srv/packages
+apt policy fpv-platform            # Кандидат: 0.1.0-3, источник file:/srv/packages
 ```
 
 ---
@@ -325,6 +325,8 @@ source ~/.bashrc
 4. **operator** → «Профиль» → заполнить профиль и отправить **заявку на допуск оператора**
    (номер свидетельства). **admin** → «Операторы» → **«Допустить»**. До допуска оператор
    не видит очередь заказов. То же — для `operator2`.
+5. **admin** → «Карты» → загрузить карту района (изображение и координаты краёв) — она появится
+   под маршрутами. Подробно — `docs/maps-and-live.md`. Без карты маршрут показывается схемой.
 
 ---
 
@@ -362,7 +364,10 @@ journalctl -u fpv-agent -n 20 --no-pager # без 401 и ошибок SSL
 2. Заказ проходит проверку готовности (дрон на связи, исправен) и попадает к операторам.
 3. **operator** берёт заказ, **coordinator** сопровождает маршрут, **technician** отвечает за
    исправность дрона; ход полёта — по телеметрии симулятора, видео — в карточке заказа.
-4. После завершения начисляются баллы (временное окно — 30, результат — 70, один раз).
+4. Пока заказ выполняется, в его карточке доступна **«Прямая трансляция»** с камеры дрона
+   (заказчику, назначенным оператору и координатору, администратору). Режим «Кадры» — для
+   браузеров без H.264 и медленных каналов.
+5. После завершения начисляются баллы (временное окно — 30, результат — 70, один раз).
 
 ---
 
@@ -400,6 +405,11 @@ fpv-migrate --check                     # все миграции примене
 | `/health/ready`: `directory_unavailable` | домен недоступен (вариант А не настроен) | вариант А или Б в шаге 6 |
 | Вход: «Неверное имя пользователя или пароль» | нет такого пользователя в каталоге / неверный пароль | вариант Б: пароль из шага 6; вариант А: `samba-tool user list` |
 | Вход проходит, но нет нужных разделов | пользователь не в группе роли | `samba-tool group addmembers FPV-… <имя>`, войти заново |
+| Карта не появляется под маршрутом | карта отключена или точки маршрута вне её границ | «Карты»: проверить границы (север > юг, восток > запад) и статус |
+| Загрузка карты: «413 Request Entity Too Large» | старый файл сайта nginx | шаг 7.4 после обновления пакета; `nginx -t && systemctl reload nginx` |
+| Трансляция: «Ожидание видеопотока…» | сегменты не поступают (нет связи, сценарий `no-video`) | `journalctl -u fpv-agent`; сценарий `normal` |
+| Трансляция: «Трансляция недоступна: не установлен ffmpeg» | нет ffmpeg на сервере | `apt install ffmpeg` |
+| Видео не воспроизводится, кадры работают | браузер без H.264 (Firefox без `libavcodec`, Chromium без кодеков) | `apt install ffmpeg` на рабочем месте или режим «Кадры» |
 | Оператор не видит очередь заказов | оператор не допущен администратором | шаг 9.4 |
 | Кнопки «Выпустить ключ» нет | дрон не подтверждён администратором | шаг 9.2 |
 | Заказ: «Нет связи с сервисным модулем дрона (offline)» | не запущен симулятор или неверный ключ | шаг 10; `journalctl -u fpv-agent` |

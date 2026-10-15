@@ -41,6 +41,16 @@ class DroneIn(StrictModel):
     max_range_m: int = Field(ge=500, le=100000)
 
 
+class MapUpdateIn(StrictModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    active: Optional[bool] = None
+    north: Optional[float] = Field(default=None, ge=-85, le=85)
+    south: Optional[float] = Field(default=None, ge=-85, le=85)
+    west: Optional[float] = Field(default=None, ge=-180, le=180)
+    east: Optional[float] = Field(default=None, ge=-180, le=180)
+
+
 class DroneDecisionIn(StrictModel):
     action: Literal["approve", "block", "unblock", "retire"]
     reason: str = Field(default="", max_length=500)

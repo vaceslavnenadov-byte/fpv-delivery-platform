@@ -29,7 +29,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
     add_header Strict-Transport-Security "max-age=31536000" always;
-    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self' wss:; style-src 'self' 'unsafe-inline'" always;
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' wss:; style-src 'self' 'unsafe-inline'" always;
     add_header X-Content-Type-Options nosniff always;
     add_header X-Frame-Options DENY always;
     server_tokens off;
@@ -42,6 +42,14 @@ server {
         limit_req zone=fpv_login burst=5 nodelay;
         proxy_pass http://{{ fpv_app_listen }};
         include /etc/nginx/proxy_params;
+    }
+    # Загрузка карт-подложек: изображения крупнее общего ограничения тела запроса.
+    location = /api/v1/admin/maps {
+        limit_req zone=fpv_api burst=10 nodelay;
+        client_max_body_size 60m;
+        proxy_pass http://{{ fpv_app_listen }};
+        include /etc/nginx/proxy_params;
+        proxy_request_buffering off;
     }
     location /api/v1/ws {
         proxy_pass http://{{ fpv_app_listen }};

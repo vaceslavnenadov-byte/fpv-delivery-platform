@@ -137,6 +137,8 @@ class Settings:
     video_retention_days: int = 180
     video_max_segment_bytes: int = 8 * 1024 * 1024
     ffmpeg_path: str = "ffmpeg"
+    live_window_segments: int = 4                # сегментов в списке воспроизведения трансляции
+    map_max_bytes: int = 50 * 1024 * 1024        # предельный размер изображения карты
 
     # --- хранилище объектов ---
     object_store: str = "filesystem"            # filesystem | s3
@@ -169,6 +171,8 @@ class Settings:
                 raise ConfigError("В production соединение с каталогом должно быть защищено (ldaps:// или StartTLS)")
         if self.object_store not in ("filesystem", "s3"):
             raise ConfigError("FPV_OBJECT_STORE: допустимы filesystem, s3")
+        if not 2 <= self.live_window_segments <= 10:
+            raise ConfigError("FPV_LIVE_WINDOW_SEGMENTS: допустимо от 2 до 10")
         if self.video_buffer_seconds <= 0:
             raise ConfigError("FPV_VIDEO_BUFFER_SECONDS должно быть положительным")
 
@@ -240,6 +244,8 @@ def load_settings() -> Settings:
         video_retention_days=_int("VIDEO_RETENTION_DAYS", d.video_retention_days),
         video_max_segment_bytes=_int("VIDEO_MAX_SEGMENT_BYTES", d.video_max_segment_bytes),
         ffmpeg_path=_str("FFMPEG_PATH", d.ffmpeg_path),
+        live_window_segments=_int("LIVE_WINDOW_SEGMENTS", d.live_window_segments),
+        map_max_bytes=_int("MAP_MAX_BYTES", d.map_max_bytes),
         object_store=_str("OBJECT_STORE", d.object_store),
         object_store_root=_str("OBJECT_STORE_ROOT", d.object_store_root),
         s3_endpoint=_str("S3_ENDPOINT", d.s3_endpoint),
