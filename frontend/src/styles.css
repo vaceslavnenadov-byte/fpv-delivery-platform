@@ -336,7 +336,7 @@ label.check { flex-direction: row; align-items: center; }
 .mon-mode span { font-size: 18px; }
 .mon-mode.active { border-color: var(--m-accent); color: var(--m-text); background: #1b2d4d; box-shadow: inset 0 0 0 1px var(--m-accent); }
 .mon-kv { display: flex; gap: 16px; } .mon-kv > div { flex: 1; } .mon-kv small { display: block; font-size: 0.75rem; }
-.mon-kv b { font-size: 1rem; white-space: nowrap; }
+.mon-kv b { font-size: 1rem; }
 .mon-drone-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
 .mon-drone-big { font-size: 40px; }
 
@@ -348,3 +348,15 @@ label.check { flex-direction: row; align-items: center; }
   .mon-bottom { grid-template-columns: 1fr 1fr; }
   .hud-cell:nth-child(2), .hud-cell:nth-child(4) { display: none; }
 }
+
+.mon-task { background: rgba(18, 27, 42, 0.95); border: 1px solid var(--m-line); border-radius: 12px; padding: 20px 24px;
+  max-width: 520px; width: 100%; text-align: left; color: var(--m-text); display: flex; flex-direction: column; gap: 12px; }
+.mon-task-title { font-size: 1.1rem; font-weight: 700; }
+.mon-task-steps { margin: 0; padding-left: 20px; color: var(--m-muted); line-height: 1.8; }
+.mon-task-steps li.current { color: var(--m-text); font-weight: 600; }
+.mon-task-steps li.done { color: var(--m-ok); }
+.mon-task-reasons { margin: 0; padding: 10px 12px; list-style: none; background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.5); border-radius: 8px; color: #fecaca; line-height: 1.6; }
+.mon-task-ok { color: var(--m-ok); font-weight: 600; }
+.mon-task-actions { display: flex; gap: 10px; }
+.mon-task-actions .mon-btn { font-size: 0.95rem; height: 42px; padding: 0 18px; }

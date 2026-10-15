@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams } from "react-router";
-import { api, errorText } from "../api";
+import { api, errorText, newIdempotencyKey } from "../api";
 import { useAuth } from "../auth";
 import { LiveVideo } from "../components/LiveVideo";
 import { RouteMap } from "../components/RouteMap";
@@ -23,6 +23,7 @@ const MODES: { key: string; label: string; icon: string }[] = [
   { key: "return", label: "Возврат", icon: "🏠" },
 ];
 const STALE_MS = 5000;
+const PREFLIGHT = ["accepted", "awaiting_readiness", "ready"];
 
 const fmt = (v: number | null | undefined, digits = 0, unit = "") =>
   v == null || Number.isNaN(v) ? "—" : `${v.toFixed(digits)}${unit}`;
@@ -84,7 +85,10 @@ export function FlightMonitorPage() {
   const age = last ? now - new Date(last.recorded_at).getTime() : Infinity;
   const stale = age > STALE_MS;
   const flying = o.status === "in_progress";
-  const [linkText, linkTone] = linkLabel(last?.link_quality, stale && flying);
+  // До начала задания телеметрия к заказу не привязана — показывается состояние связи самого дрона.
+  const [linkText, linkTone] = flying ? linkLabel(last?.link_quality, stale)
+    : o.drone?.link_status === "online" ? ["На связи", "ok"]
+    : o.drone?.link_status === "degraded" ? ["Слабая", "warn"] : ["Нет связи", "bad"];
   const battery = last?.battery_pct ?? o.drone?.battery_pct ?? null;
   const flightMs = o.started_at ? now - new Date(o.started_at).getTime() : 0;
   const route = o.route;
@@ -126,7 +130,7 @@ export function FlightMonitorPage() {
         </div>
         <div className="mon-stat">
           <span className="mon-ico">🔗</span>
-          <div><b>Связь</b><small className={`mon-tone-${linkTone}`}>{linkText}{last?.link_quality != null && !stale ? ` (${last.link_quality})` : ""}</small></div>
+          <div><b>Связь</b><small className={`mon-tone-${linkTone}`}>{linkText}{flying && last?.link_quality != null && !stale ? ` (${last.link_quality})` : ""}</small></div>
         </div>
         <div className="mon-actions">
           <button className="mon-btn" title="Во весь экран" onClick={() =>
@@ -142,8 +146,10 @@ export function FlightMonitorPage() {
           </LiveVideo>
         ) : (
           <div className="live-hud"><div className="live-hud-idle">
-            {["accepted", "awaiting_readiness", "ready"].includes(o.status)
-              ? "Видео и телеметрия появятся после начала выполнения задания"
+            {PREFLIGHT.includes(o.status)
+              ? o.operator_id === me?.id && can("order.execute")
+                ? <TaskPanel order={o} onChanged={() => order.reload()} />
+                : "Видео и телеметрия появятся после начала выполнения задания"
               : `Заказ: ${ORDER_STATUS[o.status]?.label ?? o.status}. Трансляция не ведётся.`}
           </div></div>
         )}
@@ -368,5 +374,56 @@ function Chat({ order, canWrite, flying }: { order: Order; canWrite: boolean; fl
       ) : <small className="mon-muted">Переписка доступна назначенным оператору и координатору.</small>}
       {error && <small className="mon-tone-bad">{error}</small>}
     </section>
+  );
+}
+
+/** Подготовка к выполнению задания (оператор): проверка готовности и начало задания.
+ *  Те же действия, что в карточке заказа; сервер повторно проверяет права и допустимость перехода. */
+function TaskPanel({ order, onChanged }: { order: Order; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ready: boolean; reasons: string[] } | null>(null);
+  const [error, setError] = useState("");
+
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+      onChanged();
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const check = () => run(async () => {
+    const r = await api.post<{ ready: boolean; reasons: string[] }>(`/api/v1/orders/${order.id}/readiness-check`);
+    setResult({ ready: r.ready, reasons: r.reasons });
+  });
+  const start = () => run(async () => {
+    await api.post(`/api/v1/orders/${order.id}/start`, { expected_version: order.version },
+      { idempotencyKey: newIdempotencyKey() });
+  });
+
+  const ready = order.status === "ready";
+  return (
+    <div className="mon-task">
+      <div className="mon-task-title">Задание №{order.number}: {ORDER_STATUS[order.status]?.label ?? order.status}</div>
+      <ol className="mon-task-steps">
+        <li className={ready ? "done" : "current"}>Проверка готовности дрона и маршрута</li>
+        <li className={ready ? "current" : ""}>Начало выполнения задания</li>
+      </ol>
+      {result && !result.ready && (
+        <ul className="mon-task-reasons">{result.reasons.map((r) => <li key={r}>✕ {r}</li>)}</ul>
+      )}
+      {ready && <div className="mon-task-ok">✓ Проверка готовности пройдена</div>}
+      <div className="mon-task-actions">
+        <button className="mon-btn" disabled={busy} onClick={check}>{busy ? "…" : "Проверить готовность"}</button>
+        {ready && <button className="mon-btn primary" disabled={busy} onClick={start}>▶ Начать задание</button>}
+      </div>
+      {error && <div className="mon-tone-bad">{error}</div>}
+      <small>Видео и телеметрия появятся после начала выполнения задания.</small>
+    </div>
   );
 }
