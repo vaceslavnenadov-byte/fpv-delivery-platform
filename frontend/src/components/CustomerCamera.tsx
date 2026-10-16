@@ -94,11 +94,18 @@ export function CustomerCameraPublisher({ orderId }: { orderId: string }) {
     setError("");
     setStatus("starting");
     try {
-      const s = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 15 } }
-          : { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 15 } },
-      });
+      const quality = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 15 } };
+      let s: MediaStream;
+      try {
+        s = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: deviceId ? { deviceId: { exact: deviceId }, ...quality } : { facingMode: { ideal: "environment" }, ...quality },
+        });
+      } catch (err) {
+        // выбранная ранее камера отключена — пробуем любую доступную
+        if (!deviceId || !(err instanceof DOMException) || !["NotFoundError", "OverconstrainedError"].includes(err.name)) throw err;
+        s = await navigator.mediaDevices.getUserMedia({ audio: false, video: quality });
+      }
       stream.current = s;
       if (preview.current) {
         preview.current.srcObject = s;
@@ -114,9 +121,7 @@ export function CustomerCameraPublisher({ orderId }: { orderId: string }) {
     } catch (err) {
       stopLocal();
       setStatus("error");
-      setError(err instanceof DOMException && err.name === "NotAllowedError"
-        ? "Доступ к камере запрещён. Разрешите его в настройках браузера для этого сайта."
-        : errorText(err));
+      setError(cameraErrorText(err));
     }
   }
 
@@ -188,4 +193,23 @@ export function CustomerCameraViewer({ orderId, variant = "card" }: { orderId: s
   if (st.error) return <p className="muted">{errorText(st.error)}</p>;
   if (!st.data?.active) return <p className={variant === "hud" ? "mon-muted" : "muted"}>Заказчик сейчас не транслирует камеру.</p>;
   return <LiveVideo key={`${orderId}-customer`} orderId={orderId} source="customer" variant="card" autoStart={variant === "hud"} />;
+}
+
+/** Понятное сообщение вместо системного текста браузера (он бывает на английском). */
+function cameraErrorText(err: unknown): string {
+  if (err instanceof DOMException) {
+    switch (err.name) {
+      case "NotAllowedError":
+      case "SecurityError":
+        return "Доступ к камере запрещён. Разрешите его в настройках браузера для этого сайта (значок слева от адреса).";
+      case "NotFoundError":
+      case "OverconstrainedError":
+        return "Камера не найдена. Подключите камеру; в виртуальной машине пробросьте камеру хоста "
+          + "(VirtualBox: «Устройства» → «Веб-камеры»). Затем обновите страницу.";
+      case "NotReadableError":
+      case "AbortError":
+        return "Камера занята другой программой или недоступна системе. Закройте другие программы, использующие камеру, и повторите.";
+    }
+  }
+  return errorText(err);
 }

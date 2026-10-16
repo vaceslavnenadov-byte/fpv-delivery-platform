@@ -63,8 +63,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-10_all.deb  fpv-drone-agent_0.1.0-10_all.deb
-# fpv-platform_0.1.0-10_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-11_all.deb  fpv-drone-agent_0.1.0-11_all.deb
+# fpv-platform_0.1.0-11_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -112,7 +112,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-10, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-11, источник file:/srv/packages
 ```
 
 ---
@@ -450,6 +450,10 @@ fpv-migrate --check                     # все миграции примене
 | Загрузка карты: «413 Request Entity Too Large» | старый файл сайта nginx | шаг 7.4 после обновления пакета; `nginx -t && systemctl reload nginx` |
 | Трансляция: «Ожидание видеопотока…» | сегменты не поступают (нет связи, сценарий `no-video`) | `journalctl -u fpv-agent`; сценарий `normal` |
 | Трансляция: «Трансляция недоступна: не установлен ffmpeg» | нет ffmpeg на сервере | `apt install ffmpeg` |
+| «Камера не найдена» (раньше — `The object can not be found here.`) при «Включить камеру» | браузер не видит ни одной камеры; в ВМ камера хоста не проброшена | VirtualBox: «Устройства» → «Веб-камеры» → камера хоста (нужен Extension Pack); проверить `ls /dev/video*` в гостевой системе; обновить страницу. Или включать камеру с телефона/ноутбука заказчика |
+| «Доступ к камере запрещён» | браузер запретил камеру для сайта | значок слева от адреса → разрешить камеру → обновить страницу |
+| «Камера занята другой программой» | камеру держит другое приложение | закрыть его и повторить |
+| Вверху долго «Переподключение…» | нет соединения реального времени (WebSocket) | `systemctl is-active fpv-api`; `journalctl -u fpv-api -n 40`; в nginx — блок `location /api/v1/ws` (шаг 7.4); обновить страницу |
 | Видео не воспроизводится, кадры работают | браузер без H.264 (Firefox без `libavcodec`, Chromium без кодеков) | `apt install ffmpeg` на рабочем месте или режим «Кадры» |
 | «Этот раздел … не доступен для вашей роли» | открыт клиент чужой роли (ярлык или закладка) | «Перейти в свой раздел» или общий вход `/` |
 | Старая закладка `/orders/…` открывает общий вход, а не заказ | адреса прежнего единого интерфейса | адреса клиентов — шаг 8 |
