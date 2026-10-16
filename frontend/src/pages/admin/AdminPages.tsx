@@ -6,8 +6,8 @@ import { ORDER_STATUS, ROLE_LABELS, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
 import { invalidateMaps } from "../../maps";
 import type { Drone, MapLayer, Order, Video } from "../../types";
-import { OrderTable } from "../customer/CustomerOrders";
-import { DroneService } from "../technician/TechnicianPage";
+import { OrderTable } from "../../components/OrderTable";
+import { DroneService } from "../../components/DroneService";
 
 type Msg = { tone: string; text: string } | null;
 

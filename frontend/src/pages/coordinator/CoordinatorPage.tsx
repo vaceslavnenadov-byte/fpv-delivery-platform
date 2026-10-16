@@ -2,7 +2,7 @@ import { api } from "../../api";
 import { Card, Pending } from "../../components/ui";
 import { useLive } from "../../realtime";
 import type { Order } from "../../types";
-import { OrderTable } from "../customer/CustomerOrders";
+import { OrderTable } from "../../components/OrderTable";
 
 export function CoordinatorPage() {
   const q = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders"), [], (m) => m.kind.startsWith("order."));

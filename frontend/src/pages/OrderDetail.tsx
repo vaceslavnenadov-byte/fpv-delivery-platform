@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
+import { appUrl } from "../base";
 import { useAuth } from "../auth";
 import { CUSTOMER_STREAM_STATUSES, CustomerCameraPublisher, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
@@ -24,7 +25,7 @@ const MONITOR_STATUSES = ["accepted", "awaiting_readiness", "ready", "in_progres
 
 export function openFlightMonitor(orderId: string) {
   // Отдельное окно на каждый заказ: повторное нажатие переводит фокус на уже открытое окно.
-  const w = window.open(`/orders/${orderId}/monitor`, `fpv-monitor-${orderId}`,
+  const w = window.open(appUrl(`/orders/${orderId}/monitor`), `fpv-monitor-${orderId}`,
     "popup,width=1440,height=900,left=40,top=40");
   w?.focus();
 }

@@ -1,39 +1,12 @@
 import { Link } from "react-router";
 import { api } from "../../api";
-import { Badge, Card, Empty, Pending, Stat } from "../../components/ui";
-import { CARGO_TYPES, fmtDate, fmtDistance } from "../../labels";
+import { OrderTable } from "../../components/OrderTable";
+import { Card, Pending, Stat } from "../../components/ui";
 import { useLive } from "../../realtime";
 import type { Order } from "../../types";
 
 const ACTIVE = ["pending_confirmation", "awaiting_operator", "accepted", "awaiting_readiness", "ready", "in_progress",
   "awaiting_delivery_confirmation", "admin_review", "disputed"];
-
-export function OrderTable({ orders, showCustomer = false }: { orders: Order[]; showCustomer?: boolean }) {
-  if (!orders.length) return <Empty>Заказов нет</Empty>;
-  return (
-    <div className="table-wrap">
-      <table className="table">
-        <thead>
-          <tr><th>№</th><th>Статус</th><th>Груз</th><th>Маршрут</th><th>Окно доставки</th><th>Стоимость</th>{showCustomer && <th>Создан</th>}</tr>
-        </thead>
-        <tbody>
-          {orders.map((o) => (
-            <tr key={o.id}>
-              <td><Link to={`/orders/${o.id}`}>№{o.number}</Link></td>
-              <td><Badge kind="order" value={o.status} /></td>
-              <td>{CARGO_TYPES[o.cargo_type] ?? o.cargo_type}, {o.cargo_weight_g} г</td>
-              <td className="small">{o.route?.origin.address} → {o.route?.destination.address}<br />
-                <span className="muted">{fmtDistance(o.route?.distance_m)}</span></td>
-              <td className="small">{fmtDate(o.window_start)} — {fmtDate(o.window_end)}</td>
-              <td className="num">{o.quote_amount ? `${o.quote_amount} ₽` : "—"}</td>
-              {showCustomer && <td className="small">{fmtDate(o.created_at)}</td>}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 export function CustomerOrdersPage() {
   const { data } = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders"), [],
@@ -45,7 +18,7 @@ export function CustomerOrdersPage() {
     <div className="stack">
       <div className="row between">
         <h1>Мои заказы</h1>
-        <Link className="btn primary" to="/customer/new">Создать заказ</Link>
+        <Link className="btn primary" to="/new">Создать заказ</Link>
       </div>
       <div className="stats">
         <Stat label="Активные" value={active.length} />

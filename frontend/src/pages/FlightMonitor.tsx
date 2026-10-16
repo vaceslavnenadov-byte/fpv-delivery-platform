@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
+import { appUrl } from "../base";
 import { useAuth } from "../auth";
 import { CUSTOMER_STREAM_STATUSES, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
@@ -144,7 +145,7 @@ export function FlightMonitorPage() {
         <div className="mon-actions">
           <button className="mon-btn" title="Во весь экран" onClick={() =>
             document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()}>⛶</button>
-          <a className="mon-btn" href={`/orders/${o.id}`} target="fpv-main" title="Карточка заказа">☰</a>
+          <a className="mon-btn" href={appUrl(`/orders/${o.id}`)} target="fpv-main" title="Карточка заказа">☰</a>
         </div>
       </header>
 

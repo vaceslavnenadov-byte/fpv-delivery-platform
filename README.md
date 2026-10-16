@@ -42,6 +42,7 @@ fpv-delivery-platform/
 | [deployment.md](docs/deployment.md) | Ansible: комплект, /tmp/ancible, venv, режимы, секреты, откат; запуск для разработки |
 | [security-review.md](docs/security-review.md) | проверка безопасности, анализ зависимостей, остаточные риски |
 | [maps-and-live.md](docs/maps-and-live.md) | карты-подложки, прямая трансляция с дрона и с камеры заказчика |
+| [role-clients.md](docs/role-clients.md) | разделение интерфейса на отдельные клиенты по ролям |
 | [flight-monitor.md](docs/flight-monitor.md) | монитор полёта оператора: видео с телеметрией, карта, переписка с координатором |
 | [install-from-scratch.md](docs/install-from-scratch.md) | **установка на Debian 13 с нуля на одной машине: пошагово, с решениями известных проблем** |
 | [debian-packages.md](docs/debian-packages.md) | пакеты .deb, локальный apt-репозиторий /srv/packages |

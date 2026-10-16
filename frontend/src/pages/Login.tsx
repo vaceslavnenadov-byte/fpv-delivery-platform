@@ -1,18 +1,15 @@
 import { useState, type FormEvent } from "react";
-import { Navigate } from "react-router";
 import { errorText } from "../api";
 import { useAuth } from "../auth";
 import { Alert } from "../components/ui";
 
 export function LoginPage() {
-  const { me, login } = useAuth();
+  const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [device, setDevice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
-  if (me) return <Navigate to="/" replace />;
 
   async function submit(e: FormEvent) {
     e.preventDefault();

@@ -6,7 +6,7 @@ import { Alert, Badge, Card, Empty, Pending, Stat } from "../../components/ui";
 import { CARGO_TYPES, fmtDate, fmtDistance } from "../../labels";
 import { useLive } from "../../realtime";
 import type { Order } from "../../types";
-import { OrderTable } from "../customer/CustomerOrders";
+import { OrderTable } from "../../components/OrderTable";
 
 export function OperatorQueuePage() {
   const [maxDist, setMaxDist] = useState("");
