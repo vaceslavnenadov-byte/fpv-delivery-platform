@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Path as PathParam, Query, Request
+from fastapi import APIRouter, Depends, Header, Path as PathParam, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import runtime
 from ..errors import ValidationFailed
-from ..services import live, maps
+from ..services import customer_stream, live, maps
 from ..services.identity import Principal
 from . import schemas
 from .deps import current_principal, get_db
@@ -99,3 +99,66 @@ def live_segment(order_id: uuid.UUID, name: str = PathParam(..., pattern=r"^\d{1
                  p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     path = live.segment(db, p, order_id, name)
     return FileResponse(path, media_type="video/mp2t")
+
+
+# --- трансляция с камеры заказчика ---
+
+@router.post("/api/v1/orders/{order_id}/customer-stream/segments")
+async def customer_segment(order_id: uuid.UUID, request: Request,
+                           x_segment_seq: int = Header(...), x_segment_duration_ms: int = Header(...),
+                           content_type: str = Header(default="video/webm"),
+                           p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    limit = runtime.settings().video_max_segment_bytes
+    if int(request.headers.get("content-length") or 0) > limit:
+        raise ValidationFailed("Сегмент превышает допустимый размер")
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > limit:
+            raise ValidationFailed("Сегмент превышает допустимый размер")
+
+    def store():
+        result = customer_stream.publish(db, p, order_id, x_segment_seq, x_segment_duration_ms, bytes(data),
+                                         content_type.split(";")[0].strip().lower())
+        db.commit()
+        return result
+    return await run_in_threadpool(store)
+
+
+@router.get("/api/v1/orders/{order_id}/customer-stream")
+def customer_stream_status(order_id: uuid.UUID, p: Principal = Depends(current_principal),
+                           db: Session = Depends(get_db)):
+    return customer_stream.status(db, p, order_id)
+
+
+@router.delete("/api/v1/orders/{order_id}/customer-stream", status_code=204)
+def customer_stream_stop(order_id: uuid.UUID, p: Principal = Depends(current_principal),
+                         db: Session = Depends(get_db)):
+    customer_stream.stop(db, p, order_id)
+    db.commit()
+
+
+@router.post("/api/v1/orders/{order_id}/live/customer")
+def customer_live_start(order_id: uuid.UUID, p: Principal = Depends(current_principal),
+                        db: Session = Depends(get_db)):
+    result = live.start(db, p, order_id, "customer")
+    db.commit()
+    return result
+
+
+@router.get("/api/v1/orders/{order_id}/live/customer/playlist.m3u8")
+def customer_live_playlist(order_id: uuid.UUID, p: Principal = Depends(current_principal),
+                           db: Session = Depends(get_db)):
+    return PlainTextResponse(live.playlist(db, p, order_id, "customer"), media_type="application/vnd.apple.mpegurl")
+
+
+@router.get("/api/v1/orders/{order_id}/live/customer/frame.jpg")
+def customer_live_frame(order_id: uuid.UUID, p: Principal = Depends(current_principal),
+                        db: Session = Depends(get_db)):
+    return FileResponse(live.frame(db, p, order_id, "customer"), media_type="image/jpeg")
+
+
+@router.get("/api/v1/orders/{order_id}/live/customer/{name}.ts")
+def customer_live_segment(order_id: uuid.UUID, name: str = PathParam(..., pattern=r"^\d{13}_\d{1,9}$"),
+                          p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    return FileResponse(live.segment(db, p, order_id, name, "customer"), media_type="video/mp2t")

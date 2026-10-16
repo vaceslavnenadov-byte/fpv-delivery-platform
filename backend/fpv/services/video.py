@@ -62,14 +62,20 @@ def _order_dir(settings: Settings, order_id: uuid.UUID) -> Path:
     return Path(settings.video_spool_dir) / str(order_id)
 
 
-def open_buffer(settings: Settings, order_id: uuid.UUID) -> Path:
-    path = _order_dir(settings, order_id) / "ring"
+def ring_dir(settings: Settings, order_id: uuid.UUID, source: str = "drone") -> Path:
+    """Кольцевой буфер источника: ``drone`` — доказательная база, ``customer`` — камера заказчика."""
+    base = _order_dir(settings, order_id)
+    return base / "ring" if source == "drone" else base / source / "ring"
+
+
+def open_buffer(settings: Settings, order_id: uuid.UUID, source: str = "drone") -> Path:
+    path = ring_dir(settings, order_id, source)
     path.mkdir(parents=True, exist_ok=True, mode=0o750)
     return path
 
 
-def _segments(settings: Settings, order_id: uuid.UUID) -> List[Segment]:
-    ring = _order_dir(settings, order_id) / "ring"
+def _segments(settings: Settings, order_id: uuid.UUID, source: str = "drone") -> List[Segment]:
+    ring = ring_dir(settings, order_id, source)
     if not ring.is_dir():
         return []
     result = []
@@ -96,26 +102,33 @@ def add_segment(settings: Settings, order: Order, seq: int, duration_ms: int, da
         raise ValidationFailed("Недопустимый размер видеосегмента")
     if not (100 <= duration_ms <= 10000) or seq < 0:
         raise ValidationFailed("Недопустимые параметры видеосегмента")
-    ring = open_buffer(settings, order.id)
+    return write_segment(settings, order.id, "drone", seq, duration_ms, data,
+                         keep_s=settings.video_buffer_seconds + SPOOL_MARGIN_S)
+
+
+def write_segment(settings: Settings, order_id: uuid.UUID, source: str, seq: int, duration_ms: int,
+                  data: bytes, *, keep_s: int) -> Dict[str, Any]:
+    """Атомарная запись сегмента в кольцевой буфер источника и вытеснение устаревших."""
+    ring = open_buffer(settings, order_id, source)
     received_ms = _ms(clock.now())
-    if any(s.seq == seq for s in _segments(settings, order.id)):
+    if any(s.seq == seq for s in _segments(settings, order_id, source)):
         return {"accepted": False, "duplicate": True}
     name = f"{received_ms:013d}_{duration_ms}_{seq}.seg"
     fd, tmp = tempfile.mkstemp(dir=ring, prefix=".incoming-")
     with os.fdopen(fd, "wb") as f:
         f.write(data)
     os.replace(tmp, ring / name)
-    horizon = received_ms - (settings.video_buffer_seconds + SPOOL_MARGIN_S) * 1000
+    horizon = received_ms - keep_s * 1000
     evicted = 0
-    for s in _segments(settings, order.id):
+    for s in _segments(settings, order_id, source):
         if s.received_ms < horizon:
             s.path.unlink(missing_ok=True)
             evicted += 1
     return {"accepted": True, "duplicate": False, "evicted": evicted}
 
 
-def buffer_state(settings: Settings, order_id: uuid.UUID) -> Dict[str, Any]:
-    segs = _segments(settings, order_id)
+def buffer_state(settings: Settings, order_id: uuid.UUID, source: str = "drone") -> Dict[str, Any]:
+    segs = _segments(settings, order_id, source)
     if not segs:
         return {"segments": 0, "covered_seconds": 0.0, "last_segment_age_s": None}
     covered = (segs[-1].received_ms - segs[0].start_ms) / 1000

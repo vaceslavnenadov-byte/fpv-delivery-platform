@@ -31,6 +31,7 @@ export function onUnauthorized(fn: () => void) {
 interface RequestOptions {
   idempotencyKey?: string;
   retries?: number;
+  headers?: Record<string, string>;   // дополнительные заголовки (например, тип и номер видеосегмента)
 }
 
 async function request<T>(method: string, url: string, body?: unknown, opts: RequestOptions = {}): Promise<T> {
@@ -39,6 +40,7 @@ async function request<T>(method: string, url: string, body?: unknown, opts: Req
   const raw = typeof Blob !== "undefined" && body instanceof Blob;   // файл передаётся телом запроса как есть
   if (body !== undefined) headers["Content-Type"] = raw ? "application/octet-stream" : "application/json";
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
+  Object.assign(headers, opts.headers ?? {});
   let attempt = 0;
   const retries = opts.retries ?? (method === "GET" || opts.idempotencyKey ? 2 : 0);
   for (;;) {
@@ -83,7 +85,8 @@ export const api = {
   post: <T>(url: string, body?: unknown, opts?: RequestOptions) => request<T>("POST", url, body ?? {}, opts),
   put: <T>(url: string, body?: unknown) => request<T>("PUT", url, body ?? {}),
   patch: <T>(url: string, body?: unknown) => request<T>("PATCH", url, body ?? {}),
-  upload: <T>(url: string, file: Blob) => request<T>("POST", url, file),
+  upload: <T>(url: string, file: Blob, headers?: Record<string, string>) =>
+    request<T>("POST", url, file, { headers, retries: 0 }),
   del: <T>(url: string) => request<T>("DELETE", url),
 };
 

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
 import { useAuth } from "../auth";
+import { CUSTOMER_STREAM_STATUSES, CustomerCameraPublisher, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
 import { RouteMap } from "../components/RouteMap";
 import { ScoreCard } from "../components/ScoreCard";
@@ -226,6 +227,17 @@ export function OrderDetailPage() {
           {o.drone && ["lost", "degraded"].includes(o.drone.link_status) && (
             <Alert tone="danger">Нарушена связь с дроном. При потере связи дольше установленного порога задание будет прервано автоматически, дрон — переведён в «Требует проверки».</Alert>
           )}
+        </Card>
+      )}
+
+      {CUSTOMER_STREAM_STATUSES.includes(o.status) && isCustomer && can("video.publish") && (
+        <Card title="Трансляция с вашей камеры">
+          <CustomerCameraPublisher key={o.id} orderId={o.id} />
+        </Card>
+      )}
+      {CUSTOMER_STREAM_STATUSES.includes(o.status) && !isCustomer && can("video.live") && (
+        <Card title="Камера заказчика">
+          <CustomerCameraViewer key={o.id} orderId={o.id} />
         </Card>
       )}
 

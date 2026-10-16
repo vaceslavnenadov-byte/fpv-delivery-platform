@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
 import { useAuth } from "../auth";
+import { CUSTOMER_STREAM_STATUSES, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
 import { RouteMap } from "../components/RouteMap";
 import { CARGO_TYPES, ORDER_STATUS } from "../labels";
@@ -59,6 +60,7 @@ export function FlightMonitorPage() {
   const { orderId = "" } = useParams();
   const { me, can } = useAuth();
   const now = useNow();
+  const [sideTab, setSideTab] = useState<"map" | "customer">("map");
   const order = useLive(() => api.get<Order>(`/api/v1/orders/${orderId}`), [orderId],
     (m) => m.data.order_id === orderId && m.kind !== "telemetry");
   const telemetry = useLive(
@@ -106,6 +108,7 @@ export function FlightMonitorPage() {
   if (flying && stale) warnings.push(last ? `Нет телеметрии ${Math.round(age / 1000)} с` : "Телеметрия не поступает");
   if (battery != null && battery < 30) warnings.push(`Низкий заряд батареи: ${battery}%`);
   if (last && last.gnss_fix === false) warnings.push("Нет спутникового решения (GNSS)");
+  const customerCam = can("video.live") && o.customer_id !== me?.id && CUSTOMER_STREAM_STATUSES.includes(o.status);
   const canChat = can("order.chat") && (o.operator_id === me?.id || o.coordinator_id === me?.id || can("order.read_all"));
 
   return (
@@ -167,8 +170,19 @@ export function FlightMonitorPage() {
       </section>
 
       <section className="mon-panel mon-map">
-        <div className="mon-panel-head"><span>🗺 Карта маршрута</span></div>
-        {route ? (
+        <div className="mon-panel-head">
+          <div className="mon-tabs" role="tablist">
+            <button role="tab" aria-selected={sideTab === "map"} className={sideTab === "map" ? "active" : ""} onClick={() => setSideTab("map")}>🗺 Карта маршрута</button>
+            {customerCam && (
+              <button role="tab" aria-selected={sideTab === "customer"} className={sideTab === "customer" ? "active" : ""} onClick={() => setSideTab("customer")}>
+                📹 Камера заказчика
+              </button>
+            )}
+          </div>
+        </div>
+        {sideTab === "customer" && customerCam ? (
+          <div className="mon-cam"><CustomerCameraViewer orderId={o.id} variant="hud" /></div>
+        ) : route ? (
           <div className="mon-map-body">
             <RouteMap route={route} track={track} height={400} compact passed={Math.max(0, wpIndex - 1)} />
             <div className="mon-map-info">

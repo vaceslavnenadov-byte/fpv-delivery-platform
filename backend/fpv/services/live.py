@@ -11,6 +11,9 @@
 
 Доступ: разрешение ``video.live`` и право видеть заказ (заказчик — свой заказ, оператор и
 координатор — назначенный, администратор — любой). Начало просмотра фиксируется в аудите.
+
+Источники: ``drone`` — камера дрона (во время выполнения заказа), ``customer`` — камера заказчика
+(``services/customer_stream.py``, пока заказ в работе у оператора). Обработка одинаковая.
 """
 from __future__ import annotations
 
@@ -44,17 +47,28 @@ def _ffmpeg(settings: Settings) -> Optional[str]:
     return path if os.path.isabs(path) and os.access(path, os.X_OK) else shutil.which(path)
 
 
-def live_order(db: Session, p: Principal, order_id: uuid.UUID) -> Order:
+# Статусы заказа, в которых источник транслируется.
+ACTIVE_STATUSES = {
+    "drone": ("in_progress",),
+    "customer": ("accepted", "awaiting_readiness", "ready", "in_progress", "awaiting_delivery_confirmation"),
+}
+URL_PREFIX = {"drone": "live", "customer": "live/customer"}
+
+
+def live_order(db: Session, p: Principal, order_id: uuid.UUID, source: str = "drone") -> Order:
     p.require("video.live")
     order = order_svc.visible_order(db, p, order_id)      # 404 для чужих заказов
-    if order.status != "in_progress":
+    if order.status not in ACTIVE_STATUSES[source]:
         raise Conflict("Трансляция доступна только во время выполнения заказа", code="live_not_active")
     return order
 
 
-def _live_dir(settings: Settings, order_id: uuid.UUID) -> Path:
+def _live_dir(settings: Settings, order_id: uuid.UUID, source: str = "drone") -> Path:
     # Внутри каталога кольцевого буфера: удаляется вместе с ним после завершения заказа.
-    path = video.open_buffer(settings, order_id) / "live"
+    if source != "drone" and not video.ring_dir(settings, order_id, source).is_dir():
+        # Трансляция заказчика остановлена (буфер удалён) — зрители не создают его заново.
+        raise NotFound("Видеопоток пока не поступает", code="live_no_video")
+    path = video.open_buffer(settings, order_id, source) / "live"
     path.mkdir(exist_ok=True, mode=0o750)
     return path
 
@@ -126,27 +140,28 @@ def _prune(live: Path, keep: set) -> None:
             f.unlink(missing_ok=True)
 
 
-def start(db: Session, p: Principal, order_id: uuid.UUID) -> dict:
+def start(db: Session, p: Principal, order_id: uuid.UUID, source: str = "drone") -> dict:
     """Открытие трансляции: проверка доступа и запись в журнал аудита."""
     settings = runtime.settings()
-    order = live_order(db, p, order_id)
+    order = live_order(db, p, order_id, source)
     if not _ffmpeg(settings):
         raise ServiceUnavailable("Трансляция недоступна: на сервере не установлен ffmpeg", code="live_unavailable")
     audit.record(db, p.actor, "video.live.view", entity_type="order", entity_id=order.id,
-                 details={"order_number": order.number})
-    return {"playlist_url": f"/api/v1/orders/{order.id}/live/playlist.m3u8",
+                 details={"order_number": order.number, "source": source})
+    base = f"/api/v1/orders/{order.id}/{URL_PREFIX[source]}"
+    return {"playlist_url": f"{base}/playlist.m3u8", "frame_url": f"{base}/frame.jpg",
             "window_segments": settings.live_window_segments,
-            "buffer": video.buffer_state(settings, order.id)}
+            "buffer": video.buffer_state(settings, order.id, source)}
 
 
-def playlist(db: Session, p: Principal, order_id: uuid.UUID) -> str:
+def playlist(db: Session, p: Principal, order_id: uuid.UUID, source: str = "drone") -> str:
     settings = runtime.settings()
-    order = live_order(db, p, order_id)
+    order = live_order(db, p, order_id, source)
     ffmpeg = _ffmpeg(settings)
     if not ffmpeg:
         raise ServiceUnavailable("Трансляция недоступна: на сервере не установлен ffmpeg", code="live_unavailable")
-    live = _live_dir(settings, order.id)
-    segments = video._segments(settings, order.id)
+    live = _live_dir(settings, order.id, source)
+    segments = video._segments(settings, order.id, source)
     mapping = _assign(live, segments)
     window = segments[-settings.live_window_segments:]
     entries: List[Tuple[video.Segment, int, int]] = []
@@ -172,25 +187,25 @@ def playlist(db: Session, p: Principal, order_id: uuid.UUID) -> str:
     return "\n".join(lines) + "\n"
 
 
-def segment(db: Session, p: Principal, order_id: uuid.UUID, name: str) -> Path:
+def segment(db: Session, p: Principal, order_id: uuid.UUID, name: str, source: str = "drone") -> Path:
     settings = runtime.settings()
-    order = live_order(db, p, order_id)
-    live = _live_dir(settings, order.id)
+    order = live_order(db, p, order_id, source)
+    live = _live_dir(settings, order.id, source)
     path = live / f"{name}.ts"
     if not path.is_file():
         raise NotFound("Сегмент трансляции не найден")
     return path
 
 
-def frame(db: Session, p: Principal, order_id: uuid.UUID) -> Path:
+def frame(db: Session, p: Principal, order_id: uuid.UUID, source: str = "drone") -> Path:
     """Последний кадр потока (JPEG) — режим для браузеров без H.264 и медленных каналов."""
     settings = runtime.settings()
-    order = live_order(db, p, order_id)
+    order = live_order(db, p, order_id, source)
     ffmpeg = _ffmpeg(settings)
     if not ffmpeg:
         raise ServiceUnavailable("Трансляция недоступна: на сервере не установлен ffmpeg", code="live_unavailable")
-    live = _live_dir(settings, order.id)
-    for seg in reversed(video._segments(settings, order.id)[-3:]):
+    live = _live_dir(settings, order.id, source)
+    for seg in reversed(video._segments(settings, order.id, source)[-3:]):
         out = live / f"{_key(seg)}.jpg"
         if out.is_file():
             return out

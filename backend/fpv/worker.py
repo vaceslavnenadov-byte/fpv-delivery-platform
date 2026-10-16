@@ -18,7 +18,7 @@ from sqlalchemy import select, text
 from . import clock, db, runtime
 from .config import load_settings
 from .models import Order
-from .services import audit, events, orders, telemetry, video
+from .services import audit, customer_stream, events, orders, telemetry, video
 from .services import directory as directory_mod
 from .services import storage
 
@@ -70,6 +70,13 @@ def retention_once() -> Dict[str, int]:
         return {"videos_purged": purged, "telemetry_removed": removed}
 
 
+def customer_stream_sweep_once() -> int:
+    with db.session_scope() as s:
+        if not _locked(s, 7243104):
+            return 0
+        return customer_stream.sweep(s, runtime.settings())
+
+
 def tick(state: Dict[str, float]) -> None:
     now = time.monotonic()
     events.process_batch(db.new_session)
@@ -79,6 +86,9 @@ def tick(state: Dict[str, float]) -> None:
     if now - state.get("receipt", 0) >= 60:
         state["receipt"] = now
         receipt_timeouts_once()
+    if now - state.get("customer_stream", 0) >= 30:
+        state["customer_stream"] = now
+        customer_stream_sweep_once()
     if now - state.get("retention", 0) >= 3600:
         state["retention"] = now
         retention_once()

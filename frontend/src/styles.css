@@ -340,10 +340,10 @@ label.check { flex-direction: row; align-items: center; }
   background: var(--m-panel2); border: 1px solid var(--m-line); color: var(--m-muted); font-size: 0.8rem; }
 .mon-mode span { font-size: 18px; }
 .mon-mode.active { border-color: var(--m-accent); color: var(--m-text); background: #1b2d4d; box-shadow: inset 0 0 0 1px var(--m-accent); }
-.mon-kv { display: flex; gap: 16px; } .mon-kv > div { flex: 1; } .mon-kv small { display: block; font-size: 0.75rem; }
+.mon-kv { display: flex; gap: 12px; } .mon-kv > div { flex: 1; } .mon-kv small { display: block; font-size: 0.75rem; }
 .mon-kv > div { min-width: 0; }
 .mon-kv b { font-size: 0.95rem; white-space: nowrap; }
-.mon-kv > div:last-child b { white-space: normal; overflow-wrap: anywhere; }
+.mon-kv > div:last-child b { white-space: normal; hyphens: auto; }
 .mon-drone-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
 .mon-drone-big { font-size: 40px; }
 
@@ -367,3 +367,18 @@ label.check { flex-direction: row; align-items: center; }
 .mon-task-ok { color: var(--m-ok); font-weight: 600; }
 .mon-task-actions { display: flex; gap: 10px; }
 .mon-task-actions .mon-btn { font-size: 0.95rem; height: 42px; padding: 0 18px; }
+
+.cam-pub video { width: 100%; max-height: 360px; background: #0b1220; border-radius: 8px; object-fit: contain; }
+.mon-tabs { display: flex; gap: 4px; }
+.mon-tabs button { background: transparent; color: var(--m-muted); border: 1px solid transparent; border-radius: 6px; padding: 4px 10px;
+  font: inherit; font-weight: 600; cursor: pointer; }
+.mon-tabs button.active { color: var(--m-text); background: var(--m-panel2); border-color: var(--m-line); }
+.mon-map { overflow: hidden; }
+.mon-cam { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mon-cam .live { flex: 1; min-height: 0; gap: 6px; }
+.mon-cam .live > .row.between { flex-wrap: nowrap; gap: 6px; }
+.mon-cam .live > .row.between .row { flex-wrap: nowrap; gap: 6px; }
+.mon-cam .live select { max-width: 170px; }
+.mon-cam .live video, .mon-cam .live .live-frame { flex: 1; min-height: 0; max-height: none; height: 100%; object-fit: contain; }
+.mon-cam select, .mon-cam .btn { background: var(--m-panel2); color: var(--m-text); border: 1px solid var(--m-line); border-radius: 6px; padding: 4px 8px; }
+.mon-cam .muted { color: var(--m-muted); }
