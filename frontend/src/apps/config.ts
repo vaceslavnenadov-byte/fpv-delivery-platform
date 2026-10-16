@@ -14,11 +14,13 @@ export interface AppConfig {
   requiredPerm: string;  // разрешение, подтверждающее роль для этого клиента
   nav: NavItem[];
   hasMonitor: boolean;   // доступен ли монитор полёта (отдельное окно)
+  hasOrders: boolean;    // есть ли страница заказа (/orders/:id) — для ссылок из уведомлений
 }
 
 export const APPS: Record<string, AppConfig> = {
   customer: {
     key: "customer", base: "/customer", title: "FPV Доставка — заказчик", requiredPerm: "order.read_own",
+    hasOrders: true,
     hasMonitor: false,
     nav: [
       { to: "/", label: "Мои заказы" },
@@ -28,6 +30,7 @@ export const APPS: Record<string, AppConfig> = {
   },
   operator: {
     key: "operator", base: "/operator", title: "FPV Доставка — оператор", requiredPerm: "order.queue.read",
+    hasOrders: true,
     hasMonitor: true,
     nav: [
       { to: "/", label: "Очередь заказов" },
@@ -37,16 +40,19 @@ export const APPS: Record<string, AppConfig> = {
   },
   coordinator: {
     key: "coordinator", base: "/coordinator", title: "FPV Доставка — координатор", requiredPerm: "order.note.write",
+    hasOrders: true,
     hasMonitor: true,
     nav: [{ to: "/", label: "Назначенные заказы" }],
   },
   technician: {
     key: "technician", base: "/technician", title: "FPV Доставка — техник", requiredPerm: "drone.health.write",
+    hasOrders: false,
     hasMonitor: false,
     nav: [{ to: "/", label: "Парк дронов" }],
   },
   admin: {
     key: "admin", base: "/admin", title: "FPV Доставка — администратор", requiredPerm: "report.read",
+    hasOrders: true,
     hasMonitor: true,
     nav: [
       { to: "/", label: "Обзор" },
@@ -72,4 +78,18 @@ export function roleHome(can: (perm: string) => boolean): string | null {
     if (can(APPS[key].requiredPerm)) return `${APPS[key].base}/`;
   }
   return null;
+}
+
+/** Клиенты, доступные пользователю (для перехода между разделами при нескольких ролях). */
+export function accessibleApps(can: (perm: string) => boolean): AppConfig[] {
+  return HOME_ORDER.map((k) => APPS[k]).filter((a) => can(a.requiredPerm));
+}
+
+/** Адрес возврата после входа: только путь внутри доступного пользователю клиента
+ *  (защита от перенаправления на сторонние сайты). Иначе — null. */
+export function safeNext(next: string | null, can: (perm: string) => boolean): string | null {
+  if (!next || !/^\/[A-Za-z0-9/_\-.?=&%]*$/.test(next) || next.startsWith("//")) return null;
+  const m = next.match(/^\/(customer|operator|coordinator|technician|admin)(\/|$)/);
+  if (!m) return null;
+  return can(APPS[m[1]].requiredPerm) ? (m[2] ? next : `${next}/`) : null;
 }

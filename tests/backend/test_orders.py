@@ -176,3 +176,17 @@ def test_status_change_notifies_parties(world):
     notes = world.customer.get("/api/v1/me/notifications").json()["items"]
     accepted = [n for n in notes if "Принят оператором" in n["title"]]
     assert len(accepted) == 1
+
+
+def test_order_list_by_role_for_multi_role_user(world):
+    """Пользователь с ролями оператора и заказчика: клиент каждой роли видит только свои заказы."""
+    o = world.ready_order()                                   # world.operator — исполнитель заказа
+    r = world.admin.post(f"/api/v1/admin/users/{world.operator.user['id']}/roles",
+                         json={"role": "customer", "grant": True})
+    assert r.status_code == 200, r.text
+    world.operator.login()                                    # права пересчитываются при входе
+    ids = lambda q: [i["id"] for i in world.operator.get(f"/api/v1/orders{q}").json()["items"]]
+    assert o["id"] in ids("") and o["id"] in ids("?as=operator")
+    assert o["id"] not in ids("?as=customer")                 # чужой заказ не попадает в «Мои заказы»
+    assert world.customer.get("/api/v1/orders?as=operator").status_code == 403
+    assert world.customer.get("/api/v1/orders?as=driver").status_code == 422

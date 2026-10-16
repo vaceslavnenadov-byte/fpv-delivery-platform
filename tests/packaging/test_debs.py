@@ -118,12 +118,70 @@ def test_make_apt_repo_unsigned_and_index(tmp_path, debs):
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
     packages = (repo / "Packages").read_text()
-    assert packages.count("Package: ") == 2 and "Package: fpv-platform" in packages
+    assert packages.count("Package: ") == 3 and "Package: fpv-platform" in packages and "Package: fpv-desktop" in packages
     release = (repo / "Release").read_text()
     import hashlib
     assert hashlib.sha256((repo / "Packages").read_bytes()).hexdigest() in release
     r = subprocess.run(["bash", str(PKG / "make-apt-repo.sh"), str(tmp_path / "x")], capture_output=True, text=True)
     assert r.returncode != 0 and "--key" in r.stderr     # без подписи только явно
+
+
+def test_desktop_package(tmp_path, debs):
+    d = debs["fpv-desktop"]
+    assert _field(d, "Architecture") == "all" and _field(d, "Version") == _field(debs["fpv-platform"], "Version")
+    assert "xdg-utils" in _field(d, "Depends") and "fpv-platform (<< 0.1.0-10)" in _field(d, "Breaks")
+    entries = {path: perm for perm, _o, path in _contents(d)}
+    assert entries["/usr/bin/fpv-shortcuts"] == "-rwxr-xr-x" and "/etc/fpv-desktop.conf" in entries
+    assert not any("/usr/lib/" in p or p.endswith(".py") for p in entries), "рабочему месту не нужна серверная часть"
+    ctl = tmp_path / "ctl"
+    subprocess.run(["dpkg-deb", "--control", str(d), str(ctl)], check=True)
+    assert (ctl / "conffiles").read_text().split() == ["/etc/fpv-desktop.conf"]
+    # команда ярлыков больше не в серверном пакете (перенесена с Replaces/Breaks)
+    assert "/usr/bin/fpv-shortcuts" not in {p for _pm, _o, p in _contents(debs["fpv-platform"])}
+
+
+def _shortcuts(tmp_path, *args, uid="1000", conf=None):
+    """Запуск fpv-shortcuts от «обычного пользователя»: подменяется только id -u."""
+    fake = tmp_path / "fakebin"
+    fake.mkdir(exist_ok=True)
+    (fake / "id").write_text(f"#!/bin/sh\necho {uid}\n")
+    (fake / "id").chmod(0o755)
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    env = {"PATH": f"{fake}:/usr/bin:/bin", "HOME": str(home), "LANG": "C.UTF-8"}
+    if conf is not None:
+        env["FPV_DESKTOP_CONF"] = str(conf)
+    script = PKG / "fpv-desktop" / "files" / "usr" / "bin" / "fpv-shortcuts"
+    return subprocess.run(["sh", str(script), *args], capture_output=True, text=True, env=env), home
+
+
+def test_shortcuts_command(tmp_path):
+    conf = tmp_path / "desktop.conf"
+    conf.write_text('# адрес сайта\nFPV_SITE_URL="https://fpv.example.local:8443"\n')
+    r, home = _shortcuts(tmp_path, "--list", conf=conf)
+    assert r.returncode == 0 and "https://fpv.example.local:8443/operator/" in r.stdout
+    assert r.stdout.count("→") == 6                       # вход + пять клиентов
+    r, home = _shortcuts(tmp_path, "operator", "вход", conf=conf)
+    assert r.returncode == 0, r.stderr
+    desk = (home / "Desktop" / "fpv-operator.desktop").read_text()
+    assert "Exec=xdg-open https://fpv.example.local:8443/operator/\n" in desk and "Name=FPV Доставка — оператор" in desk
+    assert (home / ".local/share/applications/fpv-entrance.desktop").exists()
+    assert sorted(p.name for p in (home / "Desktop").iterdir()) == ["fpv-entrance.desktop", "fpv-operator.desktop"]
+    r, _ = _shortcuts(tmp_path, "--url", "https://override.example", "--list", conf=conf)
+    assert "https://override.example/admin/" in r.stdout
+    r, _ = _shortcuts(tmp_path, "--remove")
+    assert r.returncode == 0 and list((home / "Desktop").iterdir()) == []
+
+
+@pytest.mark.parametrize("url", ["ftp://x", "https://x y", "https://x\nExec=rm -rf ~", "https://x;id", "fpv.local"])
+def test_shortcuts_reject_unsafe_url(tmp_path, url):
+    r, home = _shortcuts(tmp_path, "--url", url, "operator")
+    assert r.returncode == 2 and not (home / "Desktop").exists()
+
+
+def test_shortcuts_refuse_root_without_sudo(tmp_path):
+    r, home = _shortcuts(tmp_path, "operator", uid="0")
+    assert r.returncode == 2 and "не от root" in r.stderr and not (home / "Desktop").exists()
 
 
 @pytest.mark.skipif(os.environ.get("FPV_TEST_DOCKER") != "1" or not os.environ.get("FPV_TEST_DEB_DATABASE_URL"),

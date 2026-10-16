@@ -37,6 +37,7 @@ def create_order(body: schemas.OrderIn, p: Principal = Depends(current_principal
 @router.get("")
 def list_orders(scope: str = Query("mine", pattern="^(mine|all)$"), status: Optional[str] = None,
                 limit: int = Query(200, ge=1, le=1000),
+                as_role: Optional[str] = Query(None, alias="as", pattern="^(customer|operator|coordinator)$"),
                 p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     if scope == "all":
         p.require("order.read_all")
@@ -45,7 +46,7 @@ def list_orders(scope: str = Query("mine", pattern="^(mine|all)$"), status: Opti
             stmt = stmt.where(Order.status == status)
         rows = list(db.execute(stmt.order_by(Order.created_at.desc()).limit(limit)).unique().scalars())
     else:
-        rows = svc.my_orders(db, p, status)
+        rows = svc.my_orders(db, p, status, as_role)
     return {"items": [serialize.order(db, o, p, brief=True) for o in rows]}
 
 

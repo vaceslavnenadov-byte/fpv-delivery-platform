@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink } from "react-router";
 import { api } from "../api";
-import type { NavItem } from "../apps/config";
+import { accessibleApps, type AppConfig } from "../apps/config";
 import { useAuth } from "../auth";
 import { ROLE_LABELS, fmtDate } from "../labels";
 import { realtime, useLive, useRealtimeStatus } from "../realtime";
@@ -9,8 +9,8 @@ import type { Notification } from "../types";
 
 // Каркас клиента: боковое меню только своей роли, шапка, уведомления.
 // Навигация приходит из конфигурации клиента (src/apps/config.ts).
-export function Layout({ nav, children }: { nav: NavItem[]; children: ReactNode }) {
-  const { me, logout } = useAuth();
+export function Layout({ app, children }: { app: AppConfig; children: ReactNode }) {
+  const { me, logout, can } = useAuth();
   const online = useRealtimeStatus();
   const [panel, setPanel] = useState(false);
   const notes = useLive(() => api.get<{ unread: number; items: Notification[] }>("/api/v1/me/notifications"), [],
@@ -22,6 +22,7 @@ export function Layout({ nav, children }: { nav: NavItem[]; children: ReactNode 
   }, []);
 
   if (!me) return null;
+  const others = accessibleApps(can).filter((a) => a.key !== app.key);
 
   return (
     <div className="shell">
@@ -29,13 +30,20 @@ export function Layout({ nav, children }: { nav: NavItem[]; children: ReactNode 
         <Link to="/" className="brand"><span className="brand-mark">◆</span> FPV Доставка</Link>
         <nav>
           <div className="nav-section">
-            <div className="nav-title">{me.roles.map((r) => ROLE_LABELS[r] ?? r).join(", ")}</div>
-            {nav.map((i) => (
+            <div className="nav-title">{app.title.replace("FPV Доставка — ", "")}</div>
+            {app.nav.map((i) => (
               <NavLink key={i.to} to={i.to} end className={({ isActive }) => (isActive ? "active" : "")}>
                 {i.label}
               </NavLink>
             ))}
           </div>
+          {others.length > 0 && (
+            <div className="nav-section">
+              <div className="nav-title">Другие разделы</div>
+              {/* другой клиент — отдельная страница (свой бандл), поэтому обычная ссылка */}
+              {others.map((a) => <a key={a.key} href={`${a.base}/`}>{a.title.replace("FPV Доставка — ", "")}</a>)}
+            </div>
+          )}
           <div className="nav-section">
             <div className="nav-title">Профиль</div>
             <NavLink to="/profile">Профиль и допуск</NavLink>
@@ -74,7 +82,7 @@ export function Layout({ nav, children }: { nav: NavItem[]; children: ReactNode 
                   <span className="muted small">{fmtDate(n.created_at)}</span>
                 </div>
                 {n.body && <div className="small">{n.body}</div>}
-                {n.order_id && <Link to={`/orders/${n.order_id}`} onClick={() => setPanel(false)} className="small">Открыть заказ</Link>}
+                {n.order_id && app.hasOrders && <Link to={`/orders/${n.order_id}`} onClick={() => setPanel(false)} className="small">Открыть заказ</Link>}
               </div>
             ))}
           </div>

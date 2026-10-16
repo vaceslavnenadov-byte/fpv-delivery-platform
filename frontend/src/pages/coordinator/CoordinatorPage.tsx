@@ -5,7 +5,7 @@ import type { Order } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
 
 export function CoordinatorPage() {
-  const q = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders"), [], (m) => m.kind.startsWith("order."));
+  const q = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders?as=coordinator"), [], (m) => m.kind.startsWith("order."));
   if (!q.data) return <Pending />;
   const active = q.data.items.filter((o) => !["completed", "rejected", "cancelled", "aborted_technical"].includes(o.status));
   return (

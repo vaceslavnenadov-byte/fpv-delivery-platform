@@ -9,7 +9,7 @@ const ACTIVE = ["pending_confirmation", "awaiting_operator", "accepted", "awaiti
   "awaiting_delivery_confirmation", "admin_review", "disputed"];
 
 export function CustomerOrdersPage() {
-  const { data } = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders"), [],
+  const { data } = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders?as=customer"), [],
     (m) => m.kind.startsWith("order."));
   if (!data) return <Pending />;
   const active = data.items.filter((o) => ACTIVE.includes(o.status));

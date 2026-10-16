@@ -3,7 +3,17 @@
 # (вход и клиенты по ролям) на рабочем столе и в меню приложений пользователя.
 set -eu
 
+CONF="${FPV_DESKTOP_CONF:-/etc/fpv-desktop.conf}"
 DEFAULT_SITE="https://fpv.dc.fpv.local"
+# Адрес по умолчанию для всех пользователей компьютера — из /etc/fpv-desktop.conf (строка FPV_SITE_URL=...).
+# Файл читается как данные, а не выполняется. Он лежит вне /etc/fpv: на сервере тот каталог закрыт (секреты).
+if [ -e "$CONF" ] && [ ! -r "$CONF" ]; then
+  echo "fpv-shortcuts: нет доступа на чтение $CONF — используется адрес по умолчанию" >&2
+fi
+if [ -r "$CONF" ]; then
+  conf_site="$(sed -n 's/^[[:space:]]*FPV_SITE_URL=["]\{0,1\}\([^"[:space:]]*\)["]\{0,1\}[[:space:]]*$/\1/p' "$CONF" | tail -n 1)"
+  if [ -n "$conf_site" ]; then DEFAULT_SITE="$conf_site"; fi
+fi
 ALL="entrance customer operator coordinator technician admin"
 
 usage() {
@@ -16,7 +26,7 @@ fpv-shortcuts — ярлыки запуска клиентов FPV Достав�
   fpv-shortcuts --help
 
 РОЛЬ: вход customer operator coordinator technician admin
-Адрес сайта по умолчанию: $DEFAULT_SITE
+Адрес сайта по умолчанию: $DEFAULT_SITE (из $CONF)
 Можно задать переменной FPV_SITE_URL или параметром --url.
 Запуск от своего пользователя (не root); через sudo ярлыки создаются вызвавшему пользователю.
 USAGE
@@ -52,10 +62,15 @@ done
 
 [ -n "$ROLES" ] || ROLES="$ALL"
 SITE="${SITE%/}"
+# Только http(s)://хост[:порт][/путь] без пробелов и спецсимволов: адрес попадает в файл ярлыка.
+# Сначала — вся строка целиком (grep проверяет построчно и пропустил бы перевод строки).
 case "$SITE" in
-  http://*|https://*) ;;
-  *) echo "fpv-shortcuts: адрес должен начинаться с http:// или https:// ($SITE)" >&2; exit 2;;
+  *[!A-Za-z0-9._~:/-]*) echo "fpv-shortcuts: недопустимые символы в адресе сайта" >&2; exit 2;;
 esac
+if ! printf '%s' "$SITE" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$'; then
+  echo "fpv-shortcuts: недопустимый адрес сайта: $SITE (ожидается https://имя[:порт][/путь])" >&2
+  exit 2
+fi
 
 label() {
   case "$1" in

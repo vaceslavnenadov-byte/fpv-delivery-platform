@@ -1,11 +1,13 @@
 #!/bin/bash
-# Сборка пакетов Debian 13: fpv-platform (amd64) и fpv-drone-agent (all).
+# Сборка пакетов Debian 13: fpv-platform (amd64, сервер), fpv-drone-agent (all)
+# и fpv-desktop (all, ярлыки клиентов для рабочих мест).
 #
 #   packaging/debian/build-debs.sh [--wheels DIR] [--out DIR] [--revision N] [--build-frontend]
 #
 # --wheels  каталог wheel-файлов для Python 3.13 / x86_64 (по умолчанию
 #           ../fpv-delivery-packages/python/wheels, формируется scripts/fetch-wheels.sh)
-# Результат: <out>/fpv-platform_<версия>_amd64.deb, fpv-drone-agent_<версия>_all.deb, SHA256SUMS
+# Результат: <out>/fpv-platform_<версия>_amd64.deb, fpv-drone-agent_<версия>_all.deb,
+#            fpv-desktop_<версия>_all.deb, SHA256SUMS
 set -Eeuo pipefail
 umask 022
 
@@ -110,6 +112,11 @@ mkdir -p "$A/usr/lib/fpv-drone-agent"
 cp -a "$REPO/drone-agent/fpv_agent" "$A/usr/lib/fpv-drone-agent/"
 cp "$REPO/drone-agent/README.md" "$A/usr/share/doc/fpv-drone-agent/README.md"
 finish_package "$A" "$HERE/fpv-drone-agent" all fpv-drone-agent
+
+# ----------------------------------------------------------------- fpv-desktop
+D="$STAGE/fpv-desktop"
+cp -a "$HERE/fpv-desktop/files" "$D"
+finish_package "$D" "$HERE/fpv-desktop" all fpv-desktop
 
 (cd "$OUT" && sha256sum ./*"_${VERSION}_"*.deb | sed 's# \./# #' > "SHA256SUMS-$VERSION")
 echo "контрольные суммы: $OUT/SHA256SUMS-$VERSION"

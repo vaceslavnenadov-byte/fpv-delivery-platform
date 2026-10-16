@@ -1,0 +1,17 @@
+Package: fpv-desktop
+Version: @VERSION@
+Section: web
+Priority: optional
+Architecture: all
+Installed-Size: @SIZE@
+Depends: xdg-utils
+Recommends: firefox-esr | www-browser
+Replaces: fpv-platform (<< 0.1.0-10)
+Breaks: fpv-platform (<< 0.1.0-10)
+Maintainer: FPV Platform Team <fpv-platform@fpv.local>
+Description: FPV Доставка — ярлыки клиентов для рабочих мест
+ Команда fpv-shortcuts одной командой создаёт ярлыки входа и клиентов
+ по ролям (заказчик, оператор, координатор, техник, администратор)
+ на рабочем столе и в меню приложений пользователя. Адрес сайта для всех
+ пользователей задаётся в /etc/fpv-desktop.conf. Пакет не содержит
+ серверной части и не запускает служб.

@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router";
-import { roleHome } from "../apps/config";
+import { roleHome, safeNext } from "../apps/config";
 import { AuthProvider, useAuth } from "../auth";
 import { Pending } from "../components/ui";
 import { LoginPage } from "../pages/Login";
@@ -12,7 +12,9 @@ import "../styles.css";
 // пользователь без назначенной роли остаётся здесь и заполняет профиль.
 function Landing() {
   const { me, loading, logout } = useAuth();
-  const home = me ? roleHome((p) => me.permissions.includes(p)) : null;
+  const can = (p: string) => !!me?.permissions.includes(p);
+  // Возврат туда, откуда пришёл пользователь (только внутри доступного ему клиента).
+  const home = me ? safeNext(new URLSearchParams(window.location.search).get("next"), can) ?? roleHome(can) : null;
 
   useEffect(() => {
     if (home) window.location.replace(home);

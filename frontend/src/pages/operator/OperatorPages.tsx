@@ -76,7 +76,7 @@ export function OperatorQueuePage() {
 }
 
 export function OperatorMinePage() {
-  const q = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders"), [], (m) => m.kind.startsWith("order."));
+  const q = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders?as=operator"), [], (m) => m.kind.startsWith("order."));
   if (!q.data) return <Pending />;
   const mine = q.data.items;
   const active = mine.filter((o) => ["accepted", "awaiting_readiness", "ready", "in_progress"].includes(o.status));

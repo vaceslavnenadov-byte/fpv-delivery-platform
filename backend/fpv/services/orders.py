@@ -349,13 +349,17 @@ def queue(db: Session, p: Principal, *, max_distance_m: Optional[int] = None,
     return list(db.execute(stmt.order_by(Order.window_start)).unique().scalars())
 
 
-def my_orders(db: Session, p: Principal, status: Optional[str] = None) -> List[Order]:
+def my_orders(db: Session, p: Principal, status: Optional[str] = None, as_role: Optional[str] = None) -> List[Order]:
+    """Заказы пользователя. ``as_role`` — только в одной роли (клиент роли не смешивает
+    собственные заказы пользователя с назначенными ему, если ролей несколько)."""
     conds = []
-    if p.has("order.read_own"):
+    if p.has("order.read_own") and as_role in (None, "customer"):
         conds.append(Order.customer_id == p.user_id)
     if p.has("order.read_assigned"):
-        conds.append(Order.operator_id == p.user_id)
-        conds.append(Order.coordinator_id == p.user_id)
+        if as_role in (None, "operator"):
+            conds.append(Order.operator_id == p.user_id)
+        if as_role in (None, "coordinator"):
+            conds.append(Order.coordinator_id == p.user_id)
     if not conds:
         raise Forbidden("Недостаточно прав")
     stmt = select(Order).where(or_(*conds))

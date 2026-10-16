@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Outlet } from "react-router";
 import type { AppConfig } from "./config";
 import { roleHome } from "./config";
@@ -6,14 +6,18 @@ import { useAuth } from "../auth";
 import { Layout } from "../components/Layout";
 import { Pending } from "../components/ui";
 
-/** Пока проверяется сессия — заглушка; без сессии — возврат на общий вход (/). */
+/** Пока проверяется сессия — заглушка; без сессии — общий вход (/) с адресом возврата,
+ *  чтобы после входа вернуться туда же (например, в окно монитора полёта). */
 export function Gate({ children }: { children: ReactNode }) {
   const { me, loading } = useAuth();
-  if (loading) return <Pending label="Проверка сессии…" />;
-  if (!me) {
-    window.location.replace("/");
-    return null;
-  }
+  const noSession = !loading && !me;
+  useEffect(() => {
+    if (noSession) {
+      const back = window.location.pathname + window.location.search;
+      window.location.replace(`/?next=${encodeURIComponent(back)}`);
+    }
+  }, [noSession]);
+  if (loading || !me) return <Pending label="Проверка сессии…" />;
   return <>{children}</>;
 }
 
@@ -40,5 +44,5 @@ function WrongApp({ app }: { app: AppConfig }) {
 export function ShellOutlet({ app }: { app: AppConfig }) {
   const { can } = useAuth();
   if (!can(app.requiredPerm)) return <WrongApp app={app} />;
-  return <Layout nav={app.nav}><Outlet /></Layout>;
+  return <Layout app={app}><Outlet /></Layout>;
 }
