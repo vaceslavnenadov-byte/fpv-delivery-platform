@@ -39,6 +39,7 @@ class DroneIn(StrictModel):
     adapter_kind: Literal["simulator", "vendor_sdk", "mavlink_readonly"] = "simulator"
     max_payload_g: int = Field(ge=50, le=25000)
     max_range_m: int = Field(ge=500, le=100000)
+    fleet_id: Optional[uuid.UUID] = None
 
 
 class MapUpdateIn(StrictModel):
@@ -220,7 +221,7 @@ class TelemetryPointIn(StrictModel):
     battery_pct: Optional[int] = Field(default=None, ge=0, le=100)
     link_quality: Optional[int] = Field(default=None, ge=0, le=100)
     gnss_fix: Optional[bool] = None
-    flight_phase: Optional[Literal["idle", "preflight", "takeoff", "cruise", "approach", "delivery",
+    flight_phase: Optional[Literal["idle", "preflight", "takeoff", "cruise", "approach", "pickup", "delivery",
                                    "return", "landed"]] = None
     extra: Dict[str, Any] = Field(default_factory=dict)
 
@@ -245,6 +246,29 @@ class TelemetryBatchIn(StrictModel):
     records: List[TelemetryPointIn] = Field(min_length=1, max_length=500)
 
 
+class FleetIn(StrictModel):
+    name: str = Field(min_length=1, max_length=120)
+    base: "PointIn"
+
+
+class FleetUpdateIn(StrictModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    base: Optional["PointIn"] = None
+    active: Optional[bool] = None
+
+
+class PublishIn(StrictModel):
+    published: bool
+
+
+class FleetAssignIn(StrictModel):
+    fleet_id: uuid.UUID
+
+
+class RevokeIn(StrictModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+
 class VideoSourceItem(StrictModel):
     id: str = Field(max_length=110)
     kind: Literal["usb", "rtsp", "file", "test"]
@@ -261,5 +285,5 @@ class VideoSourceSelectIn(StrictModel):
 
 
 class DeviceEventIn(StrictModel):
-    kind: Literal["delivery_completed", "error", "self_check"]
+    kind: Literal["delivery_completed", "cargo_picked_up", "error", "self_check"]
     data: Dict[str, Any] = Field(default_factory=dict)

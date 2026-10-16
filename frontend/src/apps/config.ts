@@ -25,7 +25,6 @@ export const APPS: Record<string, AppConfig> = {
     nav: [
       { to: "/", label: "Мои заказы" },
       { to: "/new", label: "Новый заказ" },
-      { to: "/drones", label: "Мои дроны" },
     ],
   },
   operator: {
@@ -46,9 +45,13 @@ export const APPS: Record<string, AppConfig> = {
   },
   technician: {
     key: "technician", base: "/technician", title: "FPV Доставка — техник", requiredPerm: "drone.health.write",
-    hasOrders: false,
+    hasOrders: true,
     hasMonitor: false,
-    nav: [{ to: "/", label: "Парк дронов" }],
+    nav: [
+      { to: "/", label: "Мой парк" },
+      { to: "/orders", label: "Заказы на дронах парка" },
+      { to: "/service", label: "Обслуживание" },
+    ],
   },
   admin: {
     key: "admin", base: "/admin", title: "FPV Доставка — администратор", requiredPerm: "report.read",

@@ -98,6 +98,18 @@ def handle_device_event(db: Session, settings: Settings, drone: Drone, kind: str
             return {"handled": False, "reason": "Нет выполняемого заказа"}
         orders.complete(db, settings, actor, order, actor_kind="drone")
         return {"handled": True, "order_id": str(order.id), "status": order.status}
+    if kind == "cargo_picked_up":
+        # Груз забран в точке Б (по датчику/подтверждению на борту) — сведение для участников, статус не меняется.
+        order = current_order(db, drone)
+        if order is None:
+            return {"handled": False, "reason": "Нет выполняемого заказа"}
+        audit.record(db, actor, "order.cargo_picked_up", entity_type="order", entity_id=order.id)
+        notifications.create(db, [order.customer_id, order.operator_id, order.coordinator_id], "order.cargo",
+                             f"Заказ №{order.number}: груз забран, дрон летит к получателю", order_id=order.id,
+                             dedup_key=f"pickup:{order.id}")
+        events.notify(db, "order.updated", {"order_id": order.id},
+                      users=[order.customer_id, order.operator_id, order.coordinator_id], roles=["admin"])
+        return {"handled": True, "order_id": str(order.id)}
     if kind == "error":
         severity = data.get("severity", "warning")
         code = str(data.get("code", "unknown"))[:64]
@@ -132,10 +144,13 @@ def mission_info(db: Session, drone: Drone) -> Dict[str, Any]:
     """Справочная информация о задании для сервисного модуля (не команды)."""
     order = current_order(db, drone, statuses=("ready", "in_progress"))
     if order is None:
-        return {"active": False, "video_source": drone.video_source_selected}
+        from .fleets import check_active
+        # Без заказа видео передаётся только во время проверки видео техником.
+        return {"active": False, "video_source": drone.video_source_selected, "video_check": check_active(drone)}
     r = order.route
     return {"active": True, "order_id": str(order.id), "number": order.number, "status": order.status,
-            "route": {"origin": {"lat": r.origin_lat, "lon": r.origin_lon},
+            "route": {"base": {"lat": r.base_lat, "lon": r.base_lon} if r.base_lat is not None else None,
+                      "origin": {"lat": r.origin_lat, "lon": r.origin_lon},
                       "destination": {"lat": r.dest_lat, "lon": r.dest_lon},
                       "checkpoints": r.checkpoints, "max_altitude_m": r.max_altitude_m},
             "video_buffer_seconds": None,

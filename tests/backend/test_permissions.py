@@ -37,13 +37,16 @@ def test_role_cannot_call_foreign_endpoints(api, role, method, path):
 
 def test_only_customer_creates_orders_and_drones(world):
     body = world.order_payload()
+    drone = {"serial_number": "SN-X", "registration_number": "RU-X", "manufacturer": "Maker", "model": "X1",
+             "max_payload_g": 500, "max_range_m": 5000}
     for client in (world.operator, world.technician, world.coordinator, world.admin):
         r = client.post("/api/v1/orders", json=body)
         assert r.status_code == 403 and r.json()["error"]["details"]["permission"] == "order.create"
-        r = client.post("/api/v1/drones", json={"serial_number": "SN-X", "registration_number": "RU-X",
-                                                "manufacturer": "Maker", "model": "X1", "max_payload_g": 500,
-                                                "max_range_m": 5000})
-        assert r.status_code == 403
+    # Дроны заводит только техник — и только в свой парк.
+    for client in (world.customer, world.operator, world.coordinator, world.admin):
+        assert client.post("/api/v1/drones", json=drone).status_code == 403
+    r = world.technician.post("/api/v1/drones", json=drone)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "fleet_required"
 
 
 def test_customer_cannot_see_foreign_order(world, api):
@@ -53,11 +56,15 @@ def test_customer_cannot_see_foreign_order(world, api):
     assert other.post(f"/api/v1/orders/{o['id']}/cancel", json={"reason": "x"}).status_code == 404
 
 
-def test_customer_cannot_use_foreign_drone(world, api):
+def test_customer_can_use_only_published_fleet_drones(world, api):
     other = api("customer2")
     body = world.order_payload()
+    assert other.post("/api/v1/orders", json=body).status_code == 201          # открытый дрон парка
+    r = world.technician.post(f"/api/v1/drones/{world.drone_id}/publish", json={"published": False})
+    assert r.status_code == 200
     r = other.post("/api/v1/orders", json=body)
     assert r.status_code == 422 and r.json()["error"]["code"] == "drone_invalid"
+    assert all(d["id"] != world.drone_id for d in other.get("/api/v1/available-drones").json()["items"])
 
 
 def test_operator_cannot_act_on_foreign_assignment(world, api, app):

@@ -5,7 +5,7 @@ import { Alert, Badge, Card, Empty, KV, Pending, Stat, Tone } from "../../compon
 import { ORDER_STATUS, ROLE_LABELS, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
 import { invalidateMaps } from "../../maps";
-import type { Drone, MapLayer, Order, Video } from "../../types";
+import type { Drone, Fleet, MapLayer, Order, Video } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
 import { DroneService } from "../../components/DroneService";
 
@@ -119,6 +119,12 @@ export function AdminOrdersPage() {
 
 export function AdminDronesPage() {
   const list = useLive(() => api.get<{ items: Drone[] }>("/api/v1/drones?scope=all"), [], (m) => m.kind.startsWith("drone."));
+  const fleets = useLive(() => api.get<{ items: Fleet[] }>("/api/v1/fleets"), []);
+  const fleetName = (id?: string | null) => fleets.data?.items.find((f) => f.id === id)?.name;
+  const moveTo = (d: Drone, fleetId: string) => {
+    if (!fleetId || !confirm(`Перевести дрон ${d.registration_number} в парк «${fleetName(fleetId)}»? Он будет закрыт для заказов до решения техника.`)) return;
+    void run(setMsg, () => api.post(`/api/v1/drones/${d.id}/fleet`, { fleet_id: fleetId }), "Дрон переведён в парк", list.reload);
+  };
   const [msg, setMsg] = useState<Msg>(null);
   const [sel, setSel] = useState<string | null>(null);
   const decide = (d: Drone, action: string) => {
@@ -132,11 +138,18 @@ export function AdminDronesPage() {
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
       <Card title="Реестр дронов">
         {!list.data ? <Pending /> : (
-          <table className="table"><thead><tr><th>Учётный номер</th><th>Модель</th><th>Регистрация</th><th>Техсостояние</th><th>Связь</th><th>Действия</th></tr></thead>
+          <table className="table"><thead><tr><th>Учётный номер</th><th>Модель</th><th>Парк</th><th>Регистрация</th><th>Техсостояние</th><th>Связь</th><th>Действия</th></tr></thead>
             <tbody>{list.data.items.map((d) => (
               <tr key={d.id}>
                 <td><button className="link" onClick={() => setSel(d.id)}>{d.registration_number}</button><div className="muted small">S/N {d.serial_number}</div></td>
                 <td>{d.manufacturer} {d.model}</td>
+                <td>
+                  <select value={d.fleet_id ?? ""} onChange={(e) => moveTo(d, e.target.value)} aria-label="Парк дрона">
+                    <option value="" disabled>{d.fleet_id ? "—" : "без парка"}</option>
+                    {(fleets.data?.items ?? []).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                  {d.published && <div className="small muted">открыт для заказов</div>}
+                </td>
                 <td><Badge kind="drone" value={d.status} />{d.blocked_reason && <div className="small">{d.blocked_reason}</div>}</td>
                 <td><Badge kind="health" value={d.health_status} /></td>
                 <td><Badge kind="link" value={d.link_status} /></td>

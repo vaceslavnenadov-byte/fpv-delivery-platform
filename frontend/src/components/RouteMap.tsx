@@ -56,7 +56,15 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
     }
   };
   const fixes = track.filter((t) => t.lat != null && t.lon != null);
-  const pts = [route.origin, route.destination, ...route.checkpoints, ...fixes.map((t) => ({ lat: t.lat!, lon: t.lon! }))];
+  // С базой парка: А — база, Б — забор груза (origin), В — получатель (destination); без базы — А→Б.
+  const hasBase = !!route.base;
+  const pickupLabel = hasBase ? "Б" : "А";
+  const destLabel = hasBase ? "В" : "Б";
+  const cps = route.checkpoints.filter((c) => c.kind !== "pickup");
+  // Линия маршрута: [А →] контрольные точки (в т.ч. Б) → получатель.
+  const line = [route.base ?? route.origin, ...route.checkpoints, route.destination];
+  const pts = [...(route.base ? [route.base] : []), route.origin, route.destination, ...route.checkpoints,
+               ...fixes.map((t) => ({ lat: t.lat!, lon: t.lon! }))];
   const lats = pts.map((p) => p.lat);
   const lons = pts.map((p) => p.lon);
   const latMin = Math.min(...lats), latMax = Math.max(...lats);
@@ -72,7 +80,7 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
   const last = fixes[fixes.length - 1];
   const fresh = last && Date.now() - new Date(last.recorded_at).getTime() < 30000;
   const gridStep = 50;
-  const basemap = pickMap(layers, [route.origin, route.destination, ...route.checkpoints]);
+  const basemap = pickMap(layers, [...(route.base ? [route.base] : []), route.origin, route.destination, ...route.checkpoints]);
   const base = showBase ? basemap : null;
 
   return (
@@ -90,9 +98,9 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
         {!base && Array.from({ length: Math.ceil(H / gridStep) }, (_, i) => (
           <line key={`h${i}`} x1={0} y1={i * gridStep} x2={W} y2={i * gridStep} className="map-grid" />
         ))}
-        <line x1={x(route.origin.lon)} y1={y(route.origin.lat)} x2={x(route.destination.lon)} y2={y(route.destination.lat)}
-              className={`map-route ${route.approval_status === "approved" ? "approved" : ""}`} />
-        {route.checkpoints.map((c) => (
+        <polyline points={line.map((p) => `${x(p.lon)},${y(p.lat)}`).join(" ")}
+                  className={`map-route ${route.approval_status === "approved" ? "approved" : ""}`} />
+        {cps.map((c) => (
           <g key={c.name}>
             <circle cx={x(c.lon)} cy={y(c.lat)} r={4} className={`map-cp ${route.checkpoints.indexOf(c) < passed ? "passed" : ""}`} />
             <text x={x(c.lon) + 6} y={y(c.lat) - 6} className="map-label small">{c.name}</text>
@@ -101,13 +109,19 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
         {fixes.length > 1 && (
           <polyline points={fixes.map((t) => `${x(t.lon!)},${y(t.lat!)}`).join(" ")} className="map-track" />
         )}
+        {route.base && (
+          <g>
+            <circle cx={x(route.base.lon)} cy={y(route.base.lat)} r={9} className="map-base-pin" />
+            <text x={x(route.base.lon)} y={y(route.base.lat) + 4} className="map-pin">А</text>
+          </g>
+        )}
         <g>
-          <circle cx={x(route.origin.lon)} cy={y(route.origin.lat)} r={9} className="map-a" />
-          <text x={x(route.origin.lon)} y={y(route.origin.lat) + 4} className="map-pin">А</text>
+          <circle cx={x(route.origin.lon)} cy={y(route.origin.lat)} r={9} className={hasBase ? "map-pickup" : "map-a"} />
+          <text x={x(route.origin.lon)} y={y(route.origin.lat) + 4} className="map-pin">{pickupLabel}</text>
         </g>
         <g>
           <circle cx={x(route.destination.lon)} cy={y(route.destination.lat)} r={9} className="map-b" />
-          <text x={x(route.destination.lon)} y={y(route.destination.lat) + 4} className="map-pin">Б</text>
+          <text x={x(route.destination.lon)} y={y(route.destination.lat) + 4} className="map-pin">{destLabel}</text>
         </g>
         {last && (
           <g>
@@ -122,7 +136,8 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
         )}
       </svg>
       <figcaption>
-        {!compact && <>Маршрут {(route.distance_m / 1000).toFixed(2)} км, высота до {route.max_altitude_m} м.
+        {!compact && hasBase && <>А — база парка, Б — забор груза, В — получатель. </>}
+        {!compact && <>Маршрут {(route.distance_m / 1000).toFixed(2)} км{route.return_m != null && `, возврат на базу ${(route.return_m / 1000).toFixed(2)} км`}, высота до {route.max_altitude_m} м.
         {status && <> Статус: {status}.</>} {track.length === 0 && "Позиция дрона не отображается (нет данных или прав доступа)."}</>}
         {basemap && (
           <label className="map-toggle">

@@ -90,14 +90,21 @@ def select(db: Session, p: Principal, order_id: uuid.UUID, source_id: str) -> Di
     order, drone = _order_drone(db, p, order_id)
     if not can_select(p, order):
         raise Forbidden("Источник видео выбирает назначенный оператор, пока заказ в работе")
+    apply_selection(db, p, drone, source_id, entity_type="order", entity_id=order.id,
+                    notify_users=_participants(order), order_id=order.id)
+    return get(db, p, order_id)
+
+
+def apply_selection(db: Session, p: Principal, drone: Drone, source_id: str, *, entity_type: str,
+                    entity_id: Any, notify_users: Any = (), order_id: Any = None) -> None:
+    """Запомнить выбранный источник (оператор — в заказе, техник — при подключении дрона)."""
     if source_id not in {s["id"] for s in drone.video_sources or []}:
         raise ValidationFailed("Такого источника нет у сервисного модуля дрона", code="unknown_video_source")
     previous = drone.video_source_selected
     drone.video_source_selected = source_id
     drone.video_source_selected_by = p.user_id
     drone.video_source_selected_at = clock.now()
-    audit.record(db, p.actor, "drone.video_source.selected", entity_type="order", entity_id=order.id,
+    audit.record(db, p.actor, "drone.video_source.selected", entity_type=entity_type, entity_id=entity_id,
                  details={"drone_id": str(drone.id), "from": previous, "to": source_id})
-    events.notify(db, "video_source", {"drone_id": drone.id, "order_id": order.id},
-                  users=_participants(order), roles=["admin"])
-    return get(db, p, order_id)
+    events.notify(db, "video_source", {"drone_id": drone.id, "order_id": order_id},
+                  users=list(notify_users) + [p.user_id], roles=["admin"])

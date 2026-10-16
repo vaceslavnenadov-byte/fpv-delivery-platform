@@ -178,12 +178,14 @@ label.check { flex-direction: row; align-items: center; }
 .map figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
 .map-bg { fill: #f0f5fc; }
 .map-grid { stroke: #dfe8f5; stroke-width: 1; }
-.map-route { stroke: #8aa8d6; stroke-width: 3; stroke-dasharray: 8 6; }
+.map-route { fill: none; stroke: #8aa8d6; stroke-width: 3; stroke-dasharray: 8 6; }
 .map-route.approved { stroke: var(--accent); }
 .map-cp { fill: #fff; stroke: var(--accent); stroke-width: 2; }
 .map-track { fill: none; stroke: #f08c00; stroke-width: 2.5; }
 .map-a { fill: var(--ok); }
 .map-b { fill: var(--danger); }
+.map-base-pin { fill: #475467; }
+.map-pickup { fill: #d97706; }
 .map-pin { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; }
 .map-drone { fill: #f08c00; stroke: #fff; stroke-width: 2; }
 .map-drone.stale { fill: #aab4c3; }

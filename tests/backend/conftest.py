@@ -43,6 +43,7 @@ USERS = {
     "operator2": ["FPV-Operators"],
     "coordinator": ["FPV-Coordinators"],
     "technician": ["FPV-Technicians"],
+    "technician2": ["FPV-Technicians"],
     "admin": ["FPV-Admins"],
     "norole": ["Domain Users"],
 }
@@ -269,6 +270,7 @@ def run_outbox():
 
 ORIGIN = {"lat": 55.7500, "lon": 37.6000, "address": "Склад, ул. Примерная, 1"}
 DEST = {"lat": 55.7600, "lon": 37.6300, "address": "Офис, пр. Тестовый, 10"}
+BASE = {"lat": 55.7450, "lon": 37.5900, "address": "База парка, ул. Ангарная, 3"}
 
 
 @pytest.fixture()
@@ -291,14 +293,20 @@ class World:
         r = self.admin.post(f"/api/v1/admin/operators/{self.operator.user['id']}/decision",
                             json={"approve": True, "notes": "Допуск подтверждён"})
         assert r.status_code == 200, r.text
-        self.drone_id, self.drone_key = self.make_drone(self.customer, "SN-0001", "RU-0001")
+        r = self.technician.post("/api/v1/fleets", json={"name": "Парк «Центр»", "base": BASE})
+        assert r.status_code == 201, r.text
+        self.fleet_id = r.json()["id"]
+        self.drone_id, self.drone_key = self.make_drone(self.technician, "SN-0001", "RU-0001")
         self.drone = DroneClient(app, self.drone_key)
         assert self.drone.telemetry().status_code == 200
 
-    def make_drone(self, owner: Api, serial: str, reg: str, serviceable: bool = True):
-        r = owner.post("/api/v1/drones", json={"serial_number": serial, "registration_number": reg,
-                                               "manufacturer": "Гражданские БВС", "model": "Курьер-1",
-                                               "max_payload_g": 1500, "max_range_m": 20000})
+    def make_drone(self, owner: Api, serial: str, reg: str, serviceable: bool = True, publish: bool = True):
+        """Дрон парка техника: регистрация → подтверждение администратором → осмотр → ключ → открыт для заказов."""
+        body = {"serial_number": serial, "registration_number": reg, "manufacturer": "Гражданские БВС",
+                "model": "Курьер-1", "max_payload_g": 1500, "max_range_m": 20000}
+        if owner is self.technician:
+            body["fleet_id"] = self.fleet_id
+        r = owner.post("/api/v1/drones", json=body)
         assert r.status_code == 201, r.text
         drone_id = r.json()["id"]
         r = self.admin.post(f"/api/v1/drones/{drone_id}/decision", json={"action": "approve"})
@@ -310,7 +318,23 @@ class World:
             assert r.status_code == 201, r.text
         r = owner.post(f"/api/v1/drones/{drone_id}/key")
         assert r.status_code == 200, r.text
-        return drone_id, r.json()["api_key"]
+        key = r.json()["api_key"]
+        if serviceable and publish and owner is self.technician:
+            r = self.technician.post(f"/api/v1/drones/{drone_id}/publish", json={"published": True})
+            assert r.status_code == 200, r.text
+        return drone_id, key
+
+    def tech_confirm(self, order_id: str, drone: "DroneClient" = None, drone_id: str = None) -> Dict:
+        """Техник парка: проверка видео (сегмент пробной трансляции) и подтверждение готовности к заказу."""
+        drone, drone_id = drone or self.drone, drone_id or self.drone_id
+        r = self.technician.post(f"/api/v1/drones/{drone_id}/video-check")
+        assert r.status_code == 200, r.text
+        assert drone.telemetry().status_code == 200
+        r = drone.segment(900000 + drone.seq)
+        assert r.status_code == 200 and r.json().get("check"), r.text
+        r = self.technician.post(f"/api/v1/orders/{order_id}/tech-ready")
+        assert r.status_code == 200 and r.json()["ready"], r.text
+        return r.json()["order"]
 
     def order_payload(self, **overrides):
         now = clock.now()
@@ -341,6 +365,7 @@ class World:
         o = self.placed_order()
         r = self.operator.post(f"/api/v1/orders/{o['id']}/accept", json={})
         assert r.status_code == 200, r.text
+        self.tech_confirm(o["id"])
         r = self.operator.post(f"/api/v1/orders/{o['id']}/readiness-check")
         assert r.status_code == 200 and r.json()["ready"], r.text
         return r.json()["order"]

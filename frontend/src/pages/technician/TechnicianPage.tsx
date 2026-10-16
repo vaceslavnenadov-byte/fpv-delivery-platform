@@ -14,7 +14,7 @@ export function TechnicianPage() {
   const [selected, setSelected] = useState<string | null>(null);
   return (
     <div className="stack">
-      <h1>Парк дронов</h1>
+      <h1>Обслуживание дронов</h1>
       <Card title="Зарегистрированные дроны" actions={
         <select value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="">Все</option>

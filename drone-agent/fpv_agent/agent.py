@@ -134,12 +134,15 @@ class ServiceModule:
                     log.error("список источников видео отклонён: %s", res)
             for ev in self.adapter.pending_events():
                 self._send("POST", "/drone-link/v1/events", ev)
-            if self.mission.active and self.mission.status == "in_progress":
+            flying = self.mission.active and self.mission.status == "in_progress"
+            if flying or (not self.mission.active and self.mission.video_check):
+                # Видео — во время задания и во время проверки видео техником (без заказа).
                 segment = self.adapter.read_video_segment()
                 if segment:
                     self.video_seq += 1
                     self._send("POST", "/drone-link/v1/video/segments", raw=segment,
                                headers={"X-Segment-Seq": str(self.video_seq), "X-Segment-Duration-Ms": "1000"})
+            if flying:
                 if self.auto_complete and getattr(self.adapter, "arrived", False) \
                         and self.completed_sent != self.mission.order_id:
                     res = self._send("POST", "/drone-link/v1/events", {"kind": "delivery_completed", "data": {}})

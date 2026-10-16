@@ -45,6 +45,15 @@ def visible_drone(db: Session, p: Principal, drone_id: uuid.UUID) -> Drone:
 
 def register(db: Session, p: Principal, data: Dict[str, Any]) -> Drone:
     p.require("drone.register")
+    fleet_id = data.get("fleet_id")
+    if p.has("fleet.manage"):
+        # Техник заводит дрон в свой парк.
+        from . import fleets
+        if not fleet_id:
+            raise ValidationFailed("Выберите парк, в который заводится дрон", code="fleet_required")
+        fleets.own_fleet(db, p, fleet_id)
+    elif fleet_id:
+        raise Forbidden("Заводить дроны в парк может только его техник")
     for field in ("serial_number", "registration_number"):
         if db.execute(select(Drone.id).where(getattr(Drone, field) == data[field])).first():
             raise Conflict("Дрон с таким серийным или учётным номером уже зарегистрирован", code="drone_exists")
@@ -52,7 +61,8 @@ def register(db: Session, p: Principal, data: Dict[str, Any]) -> Drone:
                   registration_number=data["registration_number"], manufacturer=data["manufacturer"],
                   model=data["model"], adapter_kind=data.get("adapter_kind", "simulator"),
                   max_payload_g=data["max_payload_g"], max_range_m=data["max_range_m"],
-                  status="pending_approval", health_status="requires_check", link_status="offline")
+                  status="pending_approval", health_status="requires_check", link_status="offline",
+                  fleet_id=fleet_id)
     db.add(drone)
     db.flush()
     audit.record(db, p.actor, "drone.registered", entity_type="drone", entity_id=drone.id,
@@ -100,7 +110,8 @@ def issue_key(db: Session, p: Principal, drone_id: uuid.UUID) -> Tuple[Drone, st
     """Выпуск (ротация) ключа сервисного модуля. Ключ показывается один раз."""
     p.require("drone.issue_key")
     drone = get_drone(db, drone_id, for_update=True)
-    if drone.owner_id != p.user_id:
+    from . import fleets
+    if drone.owner_id != p.user_id and fleets.fleet_technician(db, drone) != p.user_id:
         raise NotFound("Дрон не найден")
     if drone.status != "active":
         raise Conflict("Ключ можно выпустить только для дрона с подтверждённой регистрацией")

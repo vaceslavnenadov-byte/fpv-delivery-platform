@@ -9,7 +9,7 @@
 | `/customer/` | Заказчик | `order.read_own` |
 | `/operator/` | Оператор | `order.queue.read` |
 | `/coordinator/` | Координатор | `order.note.write` |
-| `/technician/` | Техник | `drone.health.write` |
+| `/technician/` | Техник: свой парк дронов, подключение и проверка видео, подтверждение готовности к заказам (`docs/fleets.md`) | `drone.health.write` |
 | `/admin/` | Администратор | `report.read` |
 
 ## Как работает вход

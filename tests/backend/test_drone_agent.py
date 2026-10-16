@@ -76,6 +76,47 @@ def test_agent_full_mission_with_simulator(world, tmp_path):
     assert len(tel) >= 3 and tel[-1]["flight_phase"] == "delivery"
 
 
+def test_simulator_flies_base_pickup_recipient(world, tmp_path):
+    """А (база) → Б (забор груза, остановка) → В (получатель); видео идёт и при проверке техником без заказа."""
+    o = world.placed_order()
+    client = InProcessClient(world.app, world.drone_key)
+    fake_time = {"t": 0.0}
+
+    def tick():
+        fake_time["t"] += 10.0
+        return fake_time["t"]
+
+    sim = SimulatedDrone(SimulatorScenario.preset("fast"), clock=tick)
+    sim.read_video_segment = lambda: b"SIMSEG" * 200 if (sim.mission_started or sim.mission.video_check) else None
+    agent = ServiceModule(sim, client, tmp_path, auto_complete=True)
+    agent.adapter.connect()
+    world.operator.post(f"/api/v1/orders/{o['id']}/accept", json={})
+    world.technician.post(f"/api/v1/drones/{world.drone_id}/video-check")
+    agent._last_mission = 0
+    agent.step()                                  # справка: проверка видео → сегмент в буфер дрона
+    assert agent.mission.video_check is True
+    assert "/drone-link/v1/video/segments" in client.calls
+    r = world.technician.post(f"/api/v1/orders/{o['id']}/tech-ready")
+    assert r.json()["ready"] is True, r.json()
+    assert world.operator.post(f"/api/v1/orders/{o['id']}/readiness-check").json()["ready"] is True
+    world.operator.post(f"/api/v1/orders/{o['id']}/start", json={})
+    phases = []
+    for _ in range(60):
+        agent._last_mission = 0
+        agent.step()
+        phases.append(sim.phase)
+        if world.status(o["id"]) != "in_progress":
+            break
+    assert world.status(o["id"]) == "awaiting_delivery_confirmation"
+    tel = world.operator.get(f"/api/v1/orders/{o['id']}/telemetry?limit=600").json()["items"]
+    first = next(t for t in tel if t["flight_phase"] in ("takeoff", "cruise"))
+    from conftest import BASE
+    assert abs(first["lat"] - BASE["lat"]) < 0.01                # вылет с базы парка
+    assert "pickup" in phases and phases.index("pickup") < phases.index("delivery")
+    log = world.admin.get("/api/v1/admin/audit?action=order.cargo_picked_up").json()
+    assert any(e["entity_id"] == o["id"] for e in log["items"])
+
+
 def test_agent_buffers_telemetry_during_link_loss(world, tmp_path):
     client = InProcessClient(world.app, world.drone_key)
     agent = ServiceModule(SimulatedDrone(), client, tmp_path)

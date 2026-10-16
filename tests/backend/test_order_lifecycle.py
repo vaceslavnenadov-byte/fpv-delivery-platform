@@ -20,6 +20,10 @@ def test_full_lifecycle_with_video_and_scoring(world, fake_clock):
     assert r.status_code == 200 and r.json()["status"] == "accepted"
     assert w.operator.get("/api/v1/orders/queue").json()["items"] == []
 
+    # Без подтверждения техника парка оператор не проходит проверку готовности.
+    r = w.operator.post(f"/api/v1/orders/{o['id']}/readiness-check")
+    assert r.json()["ready"] is False and any("Техник парка" in x for x in r.json()["reasons"])
+    w.tech_confirm(o["id"])
     r = w.operator.post(f"/api/v1/orders/{o['id']}/readiness-check")
     assert r.json()["ready"] is True and r.json()["order"]["status"] == "ready"
 

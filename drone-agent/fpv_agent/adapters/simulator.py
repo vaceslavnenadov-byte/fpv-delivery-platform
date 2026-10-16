@@ -25,6 +25,7 @@ from .base import DroneAdapter, MissionInfo
 
 HOME = {"lat": 55.7500, "lon": 37.6000}
 GROUND_MSL_M = 145.0          # высота поверхности над уровнем моря в районе имитации
+PICKUP_HOLD_S = 30.0          # имитация забора груза в точке Б (модельные секунды)
 
 
 @dataclass
@@ -80,6 +81,8 @@ class SimulatedDrone(DroneAdapter):
         self.cruise_alt = 80.0
         self._wp_index = 0
         self._vspeed = 0.0
+        self._hold_until: Optional[float] = None
+        self._pickup_done = False
 
     # --- подключение ---
     def connect(self) -> None:
@@ -107,13 +110,18 @@ class SimulatedDrone(DroneAdapter):
             self.video.select(mission.video_source)
         if mission.active and mission.status == "in_progress" and self.mission_started is None:
             self.mission_started = self.clock()
-            if mission.origin:
-                self.position = {"lat": mission.origin["lat"], "lon": mission.origin["lon"]}
+            start = mission.base or mission.origin     # вылет с базы парка (А), без базы — из точки забора
+            if start:
+                self.position = {"lat": start["lat"], "lon": start["lon"]}
+            self._hold_until = None
+            self._pickup_done = False
             self.cruise_alt = float(min(80.0, mission.max_altitude_m or 80.0))
             self._wp_index = 0
             self.phase = "takeoff"
         elif mission.active and mission.status == "ready":
             self.phase = "preflight"
+        elif not mission.active and self.mission_started is None and not mission.video_check and self.video:
+            self.video.stop()           # проверка видео закончилась
         elif not mission.active and self.mission_started is not None:
             self.mission_started = None
             self.phase = "landed"
@@ -125,8 +133,9 @@ class SimulatedDrone(DroneAdapter):
         m = self.mission
         if not m or not m.destination:
             return []
-        cps = [{"lat": c["lat"], "lon": c["lon"]} for c in (m.checkpoints or []) if "lat" in c and "lon" in c]
-        return cps + [{"lat": m.destination["lat"], "lon": m.destination["lon"]}]
+        cps = [{"lat": c["lat"], "lon": c["lon"], "kind": c.get("kind", "checkpoint")}
+               for c in (m.checkpoints or []) if "lat" in c and "lon" in c]
+        return cps + [{"lat": m.destination["lat"], "lon": m.destination["lon"], "kind": "destination"}]
 
     @staticmethod
     def _bearing(a: Dict[str, float], b: Dict[str, float]) -> float:
@@ -147,6 +156,18 @@ class SimulatedDrone(DroneAdapter):
         wps = self._waypoints()
         step = self.scenario.cruise_speed_mps * dt
         alt_before = self.alt
+        # Забор груза в точке Б: снижение и ожидание, затем продолжение маршрута к получателю (В).
+        hold = getattr(self, "_hold_until", None)
+        if hold is not None:
+            if now < hold:
+                self.phase = "pickup"
+                self.alt = max(3.0, self.alt - 5 * dt)
+                self._vspeed = (self.alt - alt_before) / dt if dt > 0 else 0.0
+                return
+            self._hold_until = None
+            self._pickup_done = True
+            self._events.append({"kind": "cargo_picked_up", "data": {}})
+            step = 0                                 # в этом такте — только набор высоты
         # Перемещение по контрольным точкам маршрута к точке Б (модель для отображения, не управление).
         while self._wp_index < len(wps) and step > 0:
             target = wps[self._wp_index]
@@ -159,12 +180,17 @@ class SimulatedDrone(DroneAdapter):
                 self.position = {"lat": target["lat"], "lon": target["lon"]}
                 step -= dist_m
                 self._wp_index += 1
+                if target.get("kind") == "pickup" and not getattr(self, "_pickup_done", False):
+                    self._hold_until = now + PICKUP_HOLD_S
+                    break
             else:
                 frac = step / dist_m
                 self.position["lat"] += dlat * frac
                 self.position["lon"] += dlon * frac
                 step = 0
-        if self._wp_index >= len(wps):
+        if getattr(self, "_hold_until", None) is not None:
+            self.phase = "pickup"
+        elif self._wp_index >= len(wps):
             if self.phase != "delivery":
                 self.phase = "delivery"
             self.alt = max(0.0, self.alt - 5 * dt)
@@ -209,7 +235,8 @@ class SimulatedDrone(DroneAdapter):
                 "firmware_version": "sim-1.0.0", "sensors": {"imu": "ok", "gnss": "ok", "camera": "ok"}}
 
     def read_video_segment(self) -> Optional[bytes]:
-        if not self.scenario.video_enabled or self.mission_started is None:
+        checking = bool(self.mission and self.mission.video_check)     # проверка видео техником без заказа
+        if not self.scenario.video_enabled or (self.mission_started is None and not checking):
             return None
         self._video_seq += 1
         if self.video and self.video.ffmpeg:

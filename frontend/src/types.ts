@@ -18,11 +18,13 @@ export interface Point {
 }
 
 export interface RouteInfo {
+  base?: Point | null;          // А — база парка (если есть, origin = Б — забор груза, destination = В)
   origin: Point;
   destination: Point;
   distance_m: number;
+  return_m?: number | null;
   max_altitude_m: number;
-  checkpoints: { name: string; lat: number; lon: number }[];
+  checkpoints: { name: string; lat: number; lon: number; kind?: string }[];
   approval_status: string;
   approval_notes: { code: string; ok: boolean; message: string }[];
 }
@@ -67,6 +69,9 @@ export interface Drone {
   key_prefix: string | null;
   blocked_reason: string | null;
   owner_id: string;
+  fleet_id?: string | null;
+  published?: boolean;
+  video_checked_at?: string | null;
   health_checks?: HealthCheck[];
   maintenance?: Maintenance[];
   readiness?: { ready: boolean; reasons: string[] };
@@ -134,6 +139,8 @@ export interface Order {
   customer_id: string;
   operator_id: string | null;
   coordinator_id: string | null;
+  tech_ready_at?: string | null;
+  tech_ready_by?: UserBrief | null;
   started_at?: string | null;
   created_at: string;
   delivered_at: string | null;
@@ -231,4 +238,48 @@ export interface HistoryItem {
   actor: string | null;
   reason: string;
   created_at: string;
+}
+
+export interface Fleet {
+  id: string;
+  name: string;
+  technician_id: string;
+  base: Point;
+  active: boolean;
+  drone_count: number;
+  created_at: string;
+}
+
+export interface AvailableDrone {
+  id: string;
+  registration_number: string;
+  model: string;
+  manufacturer: string;
+  max_payload_g: number;
+  max_range_m: number;
+  link_status: string;
+  battery_pct: number | null;
+  busy: boolean;
+  fleet: { id: string; name: string; base: Point };
+}
+
+export interface DroneConnection {
+  link_status: string;
+  last_seen_at: string | null;
+  battery_pct: number | null;
+  telemetry: null | {
+    recorded_at: string; age_s: number; lat: number | null; lon: number | null; alt_m: number | null;
+    battery_pct: number | null; link_quality: number | null; gnss_fix: boolean | null; flight_phase: string | null;
+  };
+  video: {
+    sources: { id: string; kind: string; label: string }[];
+    active: string | null;
+    selected: string | null;
+    check_active: boolean;
+    check_until: string | null;
+    checked_at: string | null;
+    receiving: boolean;
+  };
+  has_key: boolean;
+  published: boolean;
 }

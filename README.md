@@ -44,6 +44,7 @@ fpv-delivery-platform/
 | [maps-and-live.md](docs/maps-and-live.md) | карты-подложки, прямая трансляция с дрона и с камеры заказчика |
 | [role-clients.md](docs/role-clients.md) | разделение интерфейса на отдельные клиенты по ролям |
 | [flight-monitor.md](docs/flight-monitor.md) | монитор полёта оператора: видео с телеметрией, карта, переписка с координатором |
+| [fleets.md](docs/fleets.md) | парки дронов: техник заводит и подключает дроны, проверяет видео, подтверждает готовность; маршрут А (база) → Б (забор груза) → В (получатель) |
 | [install-from-scratch.md](docs/install-from-scratch.md) | **установка на Debian 13 с нуля на одной машине: пошагово, с решениями известных проблем** |
 | [debian-packages.md](docs/debian-packages.md) | пакеты .deb, локальный apt-репозиторий /srv/packages |
 | [os-lifecycle.md](docs/os-lifecycle.md) | целевая ОС Debian 13, сроки поддержки, перенос с Debian 11 |

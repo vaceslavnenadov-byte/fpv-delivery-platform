@@ -59,6 +59,7 @@ def test_drone_fault_between_accept_and_start(world):
 def test_drone_offline_blocks_readiness(world, fake_clock):
     o = world.placed_order()
     world.operator.post(f"/api/v1/orders/{o['id']}/accept", json={})
+    world.tech_confirm(o["id"])
     fake_clock.advance(minutes=2)
     r = world.operator.post(f"/api/v1/orders/{o['id']}/readiness-check")
     assert r.json()["ready"] is False

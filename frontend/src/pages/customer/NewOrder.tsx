@@ -5,7 +5,7 @@ import { RouteMap } from "../../components/RouteMap";
 import { Alert, Card, Pending } from "../../components/ui";
 import { CARGO_TYPES } from "../../labels";
 import { useLive } from "../../realtime";
-import type { Drone, Order } from "../../types";
+import type { AvailableDrone, Order } from "../../types";
 
 const PRESETS = [
   { name: "Склад (ул. Примерная, 1)", lat: 55.75, lon: 37.6 },
@@ -21,7 +21,9 @@ function localInput(d: Date): string {
 
 export function NewOrderPage() {
   const navigate = useNavigate();
-  const drones = useLive(() => api.get<{ items: Drone[] }>("/api/v1/drones"), []);
+  // Дроны, которые техники открыли для заказов (по паркам); база парка — точка А маршрута.
+  const drones = useLive(() => api.get<{ items: AvailableDrone[] }>("/api/v1/available-drones"), [],
+    (m) => m.kind === "drone.updated");
   const now = new Date();
   const [f, setF] = useState({
     drone_id: "", cargo_type: "documents", cargo_description: "", cargo_weight_g: 300,
@@ -44,11 +46,15 @@ export function NewOrderPage() {
     setF((s) => ({ ...s, [k]: numeric ? Number(e.target.value) : e.target.value }));
   };
 
-  const usable = (drones.data?.items ?? []).filter((d) => d.status === "active");
+  const usable = (drones.data?.items ?? []).filter((d) => !d.busy);
+  const chosen = usable.find((d) => d.id === f.drone_id) ?? usable[0];
+  const base = chosen?.fleet.base;
   const preview = useMemo(() => ({
+    base: base ?? null,
     origin: { lat: f.origin_lat, lon: f.origin_lon }, destination: { lat: f.dest_lat, lon: f.dest_lon },
     distance_m: 0, max_altitude_m: 120, checkpoints: [], approval_status: "pending", approval_notes: [],
-  }), [f.origin_lat, f.origin_lon, f.dest_lat, f.dest_lon]);
+  }), [base, f.origin_lat, f.origin_lon, f.dest_lat, f.dest_lon]);
+  const fleets = Array.from(new Map(usable.map((d) => [d.fleet.id, d.fleet.name])).entries());
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -56,7 +62,7 @@ export function NewOrderPage() {
     setError("");
     try {
       const body = {
-        drone_id: f.drone_id || usable[0]?.id, cargo_type: f.cargo_type, cargo_description: f.cargo_description,
+        drone_id: chosen?.id, cargo_type: f.cargo_type, cargo_description: f.cargo_description,
         cargo_weight_g: f.cargo_weight_g, cargo_length_mm: f.cargo_length_mm, cargo_width_mm: f.cargo_width_mm,
         cargo_height_mm: f.cargo_height_mm,
         origin: { lat: f.origin_lat, lon: f.origin_lon, address: f.origin_address },
@@ -110,7 +116,7 @@ export function NewOrderPage() {
           <Card title="Условия выполнения">
             {order.route && <RouteMap route={order.route} height={220} />}
             <p className="price">{order.quote_amount ? `${order.quote_amount} ₽` : "—"}</p>
-            <p className="muted small">Предварительная стоимость: базовый тариф + расстояние + масса груза.</p>
+            <p className="muted small">Предварительная стоимость: базовый тариф + расстояние полёта (А→Б→В) + масса груза.</p>
           </Card>
         </div>
         <Alert>{error}</Alert>
@@ -126,14 +132,23 @@ export function NewOrderPage() {
   return (
     <div className="stack">
       <h1>Новый заказ</h1>
-      {usable.length === 0 && <Alert tone="warn">Нет дронов с подтверждённой регистрацией. Зарегистрируйте дрон в разделе «Мои дроны».</Alert>}
+      {usable.length === 0 && <Alert tone="warn">Сейчас нет свободных дронов: техники парков ещё не открыли дроны для заказов или все заняты.</Alert>}
       <form className="stack" onSubmit={create}>
         <div className="grid2">
           <Card title="Груз">
             <div className="form grid2">
-              <label>Дрон
-                <select value={f.drone_id || usable[0]?.id || ""} onChange={set("drone_id")} required>
-                  {usable.map((d) => <option key={d.id} value={d.id}>{d.registration_number} — {d.model} (до {d.max_payload_g} г)</option>)}
+              <label className="span2">Дрон (из открытых парков)
+                <select value={chosen?.id ?? ""} onChange={set("drone_id")} required>
+                  {fleets.map(([id, name]) => (
+                    <optgroup key={id} label={`Парк «${name}»`}>
+                      {usable.filter((d) => d.fleet.id === id).map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.registration_number} — {d.manufacturer} {d.model}, до {d.max_payload_g} г, дальность {(d.max_range_m / 1000).toFixed(0)} км
+                          {d.link_status === "online" ? "" : " (сейчас не на связи)"}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </label>
               <label>Тип груза
@@ -153,7 +168,11 @@ export function NewOrderPage() {
           <Card title="Маршрут">
             <RouteMap route={preview} height={200} />
             <div className="form grid2">
-              <label className="span2">Точка А (отправление)
+              <div className="span2 muted small">
+                <b>А — база парка:</b> {base ? `${base.address} (${base.lat.toFixed(4)}, ${base.lon.toFixed(4)})` : "—"}.
+                Дрон вылетает с базы, забирает груз в точке Б и доставляет получателю в точку В.
+              </div>
+              <label className="span2">Точка Б — где забрать груз
                 <select onChange={(e) => { const p = PRESETS[Number(e.target.value)]; idemKey.current = newIdempotencyKey();
                   setF((s) => ({ ...s, origin_address: p.name, origin_lat: p.lat, origin_lon: p.lon })); }}
                   value={PRESETS.findIndex((p) => p.name === f.origin_address)}>
@@ -161,10 +180,10 @@ export function NewOrderPage() {
                   <option value={-1}>Другая точка (координаты ниже)</option>
                 </select>
               </label>
-              <label>Широта А<input type="number" step="0.0001" value={f.origin_lat} onChange={set("origin_lat")} /></label>
-              <label>Долгота А<input type="number" step="0.0001" value={f.origin_lon} onChange={set("origin_lon")} /></label>
-              <label className="span2">Адрес А<input value={f.origin_address} onChange={set("origin_address")} /></label>
-              <label className="span2">Точка Б (получение)
+              <label>Широта Б<input type="number" step="0.0001" value={f.origin_lat} onChange={set("origin_lat")} /></label>
+              <label>Долгота Б<input type="number" step="0.0001" value={f.origin_lon} onChange={set("origin_lon")} /></label>
+              <label className="span2">Адрес Б<input value={f.origin_address} onChange={set("origin_address")} /></label>
+              <label className="span2">Точка В — куда доставить (получатель)
                 <select onChange={(e) => { const p = PRESETS[Number(e.target.value)]; idemKey.current = newIdempotencyKey();
                   setF((s) => ({ ...s, dest_address: p.name, dest_lat: p.lat, dest_lon: p.lon })); }}
                   value={PRESETS.findIndex((p) => p.name === f.dest_address)}>
@@ -172,9 +191,9 @@ export function NewOrderPage() {
                   <option value={-1}>Другая точка (координаты ниже)</option>
                 </select>
               </label>
-              <label>Широта Б<input type="number" step="0.0001" value={f.dest_lat} onChange={set("dest_lat")} /></label>
-              <label>Долгота Б<input type="number" step="0.0001" value={f.dest_lon} onChange={set("dest_lon")} /></label>
-              <label className="span2">Адрес Б<input value={f.dest_address} onChange={set("dest_address")} /></label>
+              <label>Широта В<input type="number" step="0.0001" value={f.dest_lat} onChange={set("dest_lat")} /></label>
+              <label>Долгота В<input type="number" step="0.0001" value={f.dest_lon} onChange={set("dest_lon")} /></label>
+              <label className="span2">Адрес В<input value={f.dest_address} onChange={set("dest_address")} /></label>
             </div>
           </Card>
         </div>

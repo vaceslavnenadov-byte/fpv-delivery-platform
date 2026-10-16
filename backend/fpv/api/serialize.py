@@ -33,6 +33,8 @@ def drone(d: Drone, *, full: bool = True) -> Dict[str, Any]:
         "has_key": d.api_key_hash is not None, "key_prefix": d.api_key_prefix,
         "key_issued_at": ts(d.api_key_issued_at), "blocked_reason": d.blocked_reason,
         "owner_id": str(d.owner_id), "created_at": ts(d.created_at),
+        "fleet_id": str(d.fleet_id) if d.fleet_id else None, "published": bool(d.published),
+        "video_checked_at": ts(d.video_checked_at),
     }
     return data
 
@@ -68,9 +70,13 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
         "route": {
             "origin": {"lat": r.origin_lat, "lon": r.origin_lon, "address": r.origin_address},
             "destination": {"lat": r.dest_lat, "lon": r.dest_lon, "address": r.dest_address},
+            "base": {"lat": r.base_lat, "lon": r.base_lon, "address": r.base_address}
+                    if r.base_lat is not None else None,
+            "return_m": r.return_m,
             "distance_m": r.distance_m, "max_altitude_m": r.max_altitude_m, "checkpoints": r.checkpoints,
             "approval_status": r.approval_status, "approval_notes": r.approval_notes,
         } if r else None,
+        "tech_ready_at": ts(o.tech_ready_at),
     }
     if brief:
         return data
@@ -80,6 +86,7 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
     data["customer"] = user_brief(db, o.customer_id)
     data["operator"] = user_brief(db, o.operator_id)
     data["coordinator"] = user_brief(db, o.coordinator_id)
+    data["tech_ready_by"] = user_brief(db, o.tech_ready_by)
     d = db.get(Drone, o.drone_id)
     data["drone"] = drone(d) if d else None
     ev = db.execute(select(VideoEvidence).where(VideoEvidence.order_id == o.id)).scalar_one_or_none()

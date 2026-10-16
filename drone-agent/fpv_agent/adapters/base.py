@@ -28,16 +28,18 @@ class MissionInfo:
     checkpoints: List[Dict[str, Any]] = field(default_factory=list)
     max_altitude_m: Optional[float] = None
     video_source: Optional[str] = None      # источник видео, выбранный оператором (настройка видео)
+    video_check: bool = False               # техник проверяет видео (без заказа)
+    base: Optional[Dict[str, float]] = None # точка А — база парка
 
     @classmethod
     def from_api(cls, data: Dict[str, Any]) -> "MissionInfo":
         if not data.get("active"):
-            return cls(active=False, video_source=data.get("video_source"))
+            return cls(active=False, video_source=data.get("video_source"), video_check=bool(data.get("video_check")))
         route = data.get("route") or {}
         return cls(active=True, order_id=data.get("order_id"), status=data.get("status"),
                    origin=route.get("origin"), destination=route.get("destination"),
                    checkpoints=route.get("checkpoints") or [], max_altitude_m=route.get("max_altitude_m"),
-                   video_source=data.get("video_source"))
+                   video_source=data.get("video_source"), base=route.get("base"))
 
 
 class DroneAdapter(abc.ABC):

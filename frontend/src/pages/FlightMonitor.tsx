@@ -18,7 +18,8 @@ import type { Note, Order, Point, Telemetry, TelemetryExtra } from "../types";
 
 const PHASES: Record<string, string> = {
   idle: "На земле", preflight: "Предполётная подготовка", takeoff: "Взлёт", cruise: "В полёте",
-  approach: "Заход на точку Б", delivery: "Доставка", return: "Возврат", landed: "Посадка выполнена",
+  approach: "Заход на точку", pickup: "Забор груза (точка Б)", delivery: "Доставка", return: "Возврат",
+  landed: "Посадка выполнена",
 };
 const MODES: { key: string; label: string; icon: string }[] = [
   { key: "manual", label: "Ручной", icon: "🎮" },

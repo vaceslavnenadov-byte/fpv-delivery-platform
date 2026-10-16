@@ -155,13 +155,17 @@ def start(db: Session, p: Principal, order_id: uuid.UUID, source: str = "drone")
 
 
 def playlist(db: Session, p: Principal, order_id: uuid.UUID, source: str = "drone") -> str:
-    settings = runtime.settings()
     order = live_order(db, p, order_id, source)
+    return build_playlist(runtime.settings(), order.id, source)
+
+
+def build_playlist(settings: Settings, key: uuid.UUID, source: str) -> str:
+    """Плейлист HLS буфера ``key`` (заказ или — для проверки видео техником — дрон)."""
     ffmpeg = _ffmpeg(settings)
     if not ffmpeg:
         raise ServiceUnavailable("Трансляция недоступна: на сервере не установлен ffmpeg", code="live_unavailable")
-    live = _live_dir(settings, order.id, source)
-    segments = video._segments(settings, order.id, source)
+    live = _live_dir(settings, key, source)
+    segments = video._segments(settings, key, source)
     mapping = _assign(live, segments)
     window = segments[-settings.live_window_segments:]
     entries: List[Tuple[video.Segment, int, int]] = []
@@ -188,9 +192,12 @@ def playlist(db: Session, p: Principal, order_id: uuid.UUID, source: str = "dron
 
 
 def segment(db: Session, p: Principal, order_id: uuid.UUID, name: str, source: str = "drone") -> Path:
-    settings = runtime.settings()
     order = live_order(db, p, order_id, source)
-    live = _live_dir(settings, order.id, source)
+    return segment_path(runtime.settings(), order.id, name, source)
+
+
+def segment_path(settings: Settings, key: uuid.UUID, name: str, source: str) -> Path:
+    live = _live_dir(settings, key, source)
     path = live / f"{name}.ts"
     if not path.is_file():
         raise NotFound("Сегмент трансляции не найден")
@@ -199,13 +206,16 @@ def segment(db: Session, p: Principal, order_id: uuid.UUID, name: str, source: s
 
 def frame(db: Session, p: Principal, order_id: uuid.UUID, source: str = "drone") -> Path:
     """Последний кадр потока (JPEG) — режим для браузеров без H.264 и медленных каналов."""
-    settings = runtime.settings()
     order = live_order(db, p, order_id, source)
+    return frame_path(runtime.settings(), order.id, source)
+
+
+def frame_path(settings: Settings, key: uuid.UUID, source: str) -> Path:
     ffmpeg = _ffmpeg(settings)
     if not ffmpeg:
         raise ServiceUnavailable("Трансляция недоступна: на сервере не установлен ffmpeg", code="live_unavailable")
-    live = _live_dir(settings, order.id, source)
-    for seg in reversed(video._segments(settings, order.id, source)[-3:]):
+    live = _live_dir(settings, key, source)
+    for seg in reversed(video._segments(settings, key, source)[-3:]):
         out = live / f"{_key(seg)}.jpg"
         if out.is_file():
             return out

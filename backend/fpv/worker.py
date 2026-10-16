@@ -18,7 +18,7 @@ from sqlalchemy import select, text
 from . import clock, db, runtime
 from .config import load_settings
 from .models import Order
-from .services import audit, customer_stream, events, orders, telemetry, video
+from .services import audit, customer_stream, events, fleets, orders, telemetry, video
 from .services import directory as directory_mod
 from .services import storage
 
@@ -74,7 +74,8 @@ def customer_stream_sweep_once() -> int:
     with db.session_scope() as s:
         if not _locked(s, 7243104):
             return 0
-        return customer_stream.sweep(s, runtime.settings())
+        removed = customer_stream.sweep(s, runtime.settings())
+        return removed + fleets.sweep_checks(s, runtime.settings())   # буферы проверки видео техником
 
 
 def tick(state: Dict[str, float]) -> None:

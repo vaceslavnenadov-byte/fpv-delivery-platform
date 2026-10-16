@@ -60,7 +60,9 @@ export function OperatorQueuePage() {
               <article key={o.id} className="order-card">
                 <div className="row between"><Link to={`/orders/${o.id}`}><strong>№{o.number}</strong></Link><Badge kind="order" value={o.status} /></div>
                 <div>{CARGO_TYPES[o.cargo_type] ?? o.cargo_type}, {o.cargo_weight_g} г — {o.cargo_description}</div>
-                <div className="small">А: {o.route?.origin.address}<br />Б: {o.route?.destination.address}</div>
+                <div className="small">{o.route?.base
+                  ? <>А (база): {o.route.base.address}<br />Б (забор): {o.route.origin.address}<br />В: {o.route.destination.address}</>
+                  : <>А: {o.route?.origin.address}<br />Б: {o.route?.destination.address}</>}</div>
                 <div className="small muted">{fmtDistance(o.route?.distance_m)} · окно {fmtDate(o.window_start)} — {fmtDate(o.window_end)}</div>
                 <div className="row">
                   <button className="btn primary small" onClick={() => accept(o)}>Принять</button>

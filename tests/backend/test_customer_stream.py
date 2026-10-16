@@ -92,7 +92,7 @@ def test_viewers_restricted(world, fake_clock, webm_segments):
     send(world.customer, o["id"], 0, webm_segments[0])
     url = f"/api/v1/orders/{o['id']}/live/customer"
     assert world.technician.post(url, json={}).status_code == 403
-    assert world.technician.get(f"/api/v1/orders/{o['id']}/customer-stream").status_code == 404
+    assert world.technician.get(f"/api/v1/orders/{o['id']}/customer-stream").status_code == 403   # заказ своего парка, но не камера
     assert world.coordinator.post(url, json={}).status_code == 404       # не назначен
     assert world.admin.post(url, json={}).status_code == 200
 

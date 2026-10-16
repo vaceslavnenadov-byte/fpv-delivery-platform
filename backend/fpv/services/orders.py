@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from .. import clock
 from ..config import Settings
 from ..errors import Conflict, Forbidden, NotFound, ValidationFailed
-from ..models import (Assignment, Complaint, DeliveryConfirmation, Drone, Order, OrderNote,
+from ..models import (Assignment, Complaint, DeliveryConfirmation, Drone, Fleet, Order, OrderNote,
                       OrderStatusHistory, Role, Route, User, UserRole)
 from . import audit, drones, events, geo
 from .identity import Principal
@@ -87,6 +87,9 @@ def can_view(db: Session, p: Principal, order: Order) -> bool:
         return True
     if p.has("order.queue.read") and order.status == "awaiting_operator":
         return True
+    if p.has("order.read_fleet"):
+        from . import fleets
+        return fleets.is_fleet_technician_of(db, p, order)
     return False
 
 
@@ -142,6 +145,21 @@ def quote(settings: Settings, distance_m: int, weight_g: int) -> Decimal:
     return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def route_range_m(route: Route) -> int:
+    """Требуемая дальность дрона: А→Б→В и возврат на базу; для маршрутов без базы — А→Б и обратно."""
+    if route.base_lat is not None and route.return_m is not None:
+        return route.distance_m + route.return_m
+    return route.distance_m * 2
+
+
+def route_points(route: Route) -> List[Tuple[float, float]]:
+    """Опорные точки маршрута по порядку: [А (база)], Б (забор груза), В (получатель)."""
+    pts = [(route.origin_lat, route.origin_lon), (route.dest_lat, route.dest_lon)]
+    if route.base_lat is not None:
+        pts.insert(0, (route.base_lat, route.base_lon))
+    return pts
+
+
 def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) -> Dict[str, Any]:
     checks: List[Dict[str, Any]] = []
 
@@ -160,14 +178,14 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
     max_dim = max(order.cargo_length_mm, order.cargo_width_mm, order.cargo_height_mm)
     check("cargo_dimensions", max_dim <= settings.max_cargo_dim_mm,
           f"Габариты не более {settings.max_cargo_dim_mm} мм по любой стороне")
-    check("service_area", geo.in_bbox(r.origin_lat, r.origin_lon, settings.service_area)
-          and geo.in_bbox(r.dest_lat, r.dest_lon, settings.service_area),
-          "Точки А и Б в зоне обслуживания")
+    points = route_points(r)
+    check("service_area", all(geo.in_bbox(lat, lon, settings.service_area) for lat, lon in points),
+          "Все точки маршрута в зоне обслуживания")
     check("distance", 0 < r.distance_m <= settings.max_distance_m,
           f"Расстояние маршрута {r.distance_m} м (допустимо до {settings.max_distance_m} м, точки не совпадают)")
     violated = []
     for z in settings.no_fly_zones:
-        d = geo.segment_point_distance_m((r.origin_lat, r.origin_lon), (r.dest_lat, r.dest_lon), (z.lat, z.lon))
+        d = min(geo.segment_point_distance_m(a, b, (z.lat, z.lon)) for a, b in zip(points, points[1:]))
         if d < z.radius_m:
             violated.append(z.name)
     check("airspace", not violated, "Маршрут не пересекает зоны ограничения полётов" if not violated
@@ -178,7 +196,7 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
     check("time_window", window_ok,
           f"Временное окно в будущем и не короче {settings.min_window_minutes} мин")
     ok_drone, reasons = drones.readiness(db, settings, drone, cargo_weight_g=order.cargo_weight_g,
-                                         distance_m=r.distance_m * 2, require_online=False)
+                                         distance_m=route_range_m(r), require_online=False)
     check("drone", ok_drone, "Дрон допущен к эксплуатации" if ok_drone else "; ".join(reasons))
     busy = db.execute(select(Order.id).where(Order.drone_id == drone.id, Order.id != order.id,
                                              Order.status.in_(ACTIVE_EXECUTION))).first()
@@ -193,10 +211,21 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
 def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, Any]) -> Order:
     p.require("order.create")
     drone = db.get(Drone, data["drone_id"])
-    if drone is None or drone.owner_id != p.user_id:
-        raise ValidationFailed("Выберите собственный зарегистрированный дрон", code="drone_invalid")
+    fleet = db.get(Fleet, drone.fleet_id) if drone is not None and drone.fleet_id else None
+    # Дрон из открытого парка; дрон, зарегистрированный заказчиком до появления парков, — только свой.
+    fleet_ok = fleet is not None and fleet.active and drone.published
+    legacy_ok = drone is not None and fleet is None and drone.owner_id == p.user_id
+    if drone is None or not (fleet_ok or legacy_ok):
+        raise ValidationFailed("Выберите дрон из открытых для заказов парков", code="drone_invalid")
     o, d = data["origin"], data["destination"]
-    distance = int(round(geo.haversine_m(o["lat"], o["lon"], d["lat"], d["lon"])))
+    leg_bc = geo.haversine_m(o["lat"], o["lon"], d["lat"], d["lon"])
+    if fleet is not None:
+        base = {"lat": fleet.base_lat, "lon": fleet.base_lon, "address": fleet.base_address}
+        leg_ab = geo.haversine_m(base["lat"], base["lon"], o["lat"], o["lon"])
+        return_m = int(round(geo.haversine_m(d["lat"], d["lon"], base["lat"], base["lon"])))
+    else:
+        base, leg_ab, return_m = None, 0.0, None
+    distance = int(round(leg_ab + leg_bc))
     order = Order(customer_id=p.user_id, drone_id=drone.id, status="draft",
                   cargo_type=data["cargo_type"], cargo_description=data["cargo_description"],
                   cargo_weight_g=data["cargo_weight_g"], cargo_length_mm=data["cargo_length_mm"],
@@ -206,13 +235,11 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
                   created_at=clock.now(), updated_at=clock.now())
     db.add(order)
     db.flush()
-    checkpoints = [{"name": f"КТ-{i}", "lat": round(lat, 6), "lon": round(lon, 6)}
-                   for i, (lat, lon) in enumerate(
-                       (geo.interpolate((o["lat"], o["lon"]), (d["lat"], d["lon"]), t) for t in (0.25, 0.5, 0.75)),
-                       start=1)]
     db.add(Route(order_id=order.id, origin_lat=o["lat"], origin_lon=o["lon"], origin_address=o["address"],
                  dest_lat=d["lat"], dest_lon=d["lon"], dest_address=d["address"], distance_m=distance,
-                 checkpoints=checkpoints))
+                 checkpoints=build_checkpoints(base, o, d),
+                 base_lat=base["lat"] if base else None, base_lon=base["lon"] if base else None,
+                 base_address=base["address"] if base else None, return_m=return_m))
     db.add(OrderStatusHistory(order_id=order.id, from_status=None, to_status="draft", actor_id=p.user_id,
                               actor_kind="user", reason="Создан черновик", created_at=clock.now()))
     db.flush()
@@ -220,6 +247,22 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     audit.record(db, p.actor, "order.created", entity_type="order", entity_id=order.id,
                  details={"drone_id": drone.id, "distance_m": distance})
     return order
+
+
+def build_checkpoints(base: Optional[Dict[str, Any]], o: Dict[str, Any], d: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Контрольные точки: [подлёт А→Б, Б — забор груза (kind=pickup)], затем Б→В.
+    Справочные точки маршрута для отображения и учёта прохождения, не команды дрону."""
+    def pt(name: str, lat: float, lon: float, kind: str = "checkpoint") -> Dict[str, Any]:
+        return {"name": name, "lat": round(lat, 6), "lon": round(lon, 6), "kind": kind}
+    cps: List[Dict[str, Any]] = []
+    if base is not None:
+        lat, lon = geo.interpolate((base["lat"], base["lon"]), (o["lat"], o["lon"]), 0.5)
+        cps.append(pt("Подлёт", lat, lon))
+        cps.append(pt("Б — забор груза", o["lat"], o["lon"], "pickup"))
+    for i, t in enumerate((0.25, 0.5, 0.75), start=1):
+        lat, lon = geo.interpolate((o["lat"], o["lon"]), (d["lat"], d["lon"]), t)
+        cps.append(pt(f"КТ-{i}", lat, lon))
+    return cps
 
 
 def submit(db: Session, settings: Settings, p: Principal, order_id: uuid.UUID,
@@ -431,6 +474,17 @@ def decline(db: Session, p: Principal, order_id: uuid.UUID, reason: str,
     raise Conflict("Отказ от заказа в текущем статусе невозможен", code="invalid_transition")
 
 
+def operator_readiness(db: Session, settings: Settings, order: Order, drone: Drone) -> Tuple[bool, List[str]]:
+    """Готовность к началу задания: допуск дрона и подтверждение техника парка."""
+    ok, reasons = drones.readiness(db, settings, drone, cargo_weight_g=order.cargo_weight_g,
+                                   distance_m=route_range_m(order.route))
+    if order.tech_ready_at is None:
+        reasons.append("Техник парка ещё не подтвердил готовность дрона к этому заказу"
+                       if drone.fleet_id else
+                       "Дрон не входит в парк: администратор должен перевести его в парк техника")
+    return (not reasons), reasons
+
+
 def check_readiness(db: Session, settings: Settings, p: Principal, order_id: uuid.UUID) -> Tuple[Order, List[str]]:
     p.require("order.execute")
     order = visible_order(db, p, order_id, for_update=True)
@@ -438,8 +492,7 @@ def check_readiness(db: Session, settings: Settings, p: Principal, order_id: uui
     if order.status not in ("accepted", "awaiting_readiness", "ready"):
         raise Conflict("Проверка готовности недоступна в текущем статусе", code="invalid_transition")
     drone = drones.get_drone(db, order.drone_id)
-    ok, reasons = drones.readiness(db, settings, drone, cargo_weight_g=order.cargo_weight_g,
-                                   distance_m=order.route.distance_m * 2)
+    ok, reasons = operator_readiness(db, settings, order, drone)
     if order.status == "accepted":
         transition(db, order, "awaiting_readiness", p.actor, reason="Запрошена проверка готовности")
     if ok and order.status == "awaiting_readiness":
@@ -463,14 +516,17 @@ def start(db: Session, settings: Settings, p: Principal, order_id: uuid.UUID,
     if order.status != "ready":
         raise Conflict("Начать можно только заказ в статусе «Готов к выполнению»", code="invalid_transition")
     drone = drones.get_drone(db, order.drone_id)
-    ok, reasons = drones.readiness(db, settings, drone, cargo_weight_g=order.cargo_weight_g,
-                                   distance_m=order.route.distance_m * 2)
+    ok, reasons = operator_readiness(db, settings, order, drone)
     if not ok:
         transition(db, order, "awaiting_readiness", audit.Actor.system("readiness-check"), actor_kind="system",
                    reason="; ".join(reasons))
         return order
     order.started_at = clock.now()
     transition(db, order, "in_progress", p.actor, reason="Задание начато оператором")
+    # Проверка видео техником заканчивается: дальше видео идёт в буфер заказа.
+    from . import fleets
+    drone.video_check_until = None
+    fleets.remove_check_buffer(settings, drone.id)
     video.open_buffer(settings, order.id)
     return order
 

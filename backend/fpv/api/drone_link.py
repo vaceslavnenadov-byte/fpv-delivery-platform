@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from .. import runtime
 from ..errors import Conflict, ValidationFailed
 from ..models import Drone
-from ..services import telemetry, video, video_sources
+from ..services import fleets, telemetry, video, video_sources
 from . import schemas
 from .deps import current_drone, get_db
 
@@ -73,6 +73,14 @@ async def video_segment(request: Request, drone: Drone = Depends(current_drone),
     def store_segment():
         order = telemetry.current_order(db, drone)
         if order is None:
+            if fleets.check_active(drone):
+                # Проверка видео техником до заказа: отдельный короткий буфер дрона.
+                result = fleets.accept_check_segment(db, settings, drone, x_segment_seq, x_segment_duration_ms, data,
+                                                     content_type.split(";")[0].strip())
+                telemetry.mark_seen(db, settings, drone)
+                db.commit()
+                result["check"] = True
+                return result
             raise Conflict("Нет выполняемого заказа для видеопотока", code="no_active_order")
         result = video.add_segment(settings, order, x_segment_seq, x_segment_duration_ms, data,
                                    content_type.split(";")[0].strip())

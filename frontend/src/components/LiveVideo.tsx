@@ -25,9 +25,10 @@ interface Props {
   autoStart?: boolean;
   children?: ReactNode;         // наложение поверх видео (только для hud)
   source?: "drone" | "customer";  // камера дрона или камера заказчика
+  baseUrl?: string;             // другой адрес трансляции (проверка видео техником до заказа)
 }
 
-export function LiveVideo({ orderId, variant = "card", autoStart = false, children, source = "drone" }: Props) {
+export function LiveVideo({ orderId, variant = "card", autoStart = false, children, source = "drone", baseUrl }: Props) {
   const canVideo = useRef(h264Supported()).current;
   const video = useRef<HTMLVideoElement>(null);
   const hls = useRef<Hls | null>(null);
@@ -36,7 +37,7 @@ export function LiveVideo({ orderId, variant = "card", autoStart = false, childr
   const [state, setState] = useState<State>("idle");
   const [frameUrl, setFrameUrl] = useState("");
   const [error, setError] = useState("");
-  const base = `/api/v1/orders/${orderId}/live${source === "customer" ? "/customer" : ""}`;
+  const base = baseUrl ?? `/api/v1/orders/${orderId}/live${source === "customer" ? "/customer" : ""}`;
 
   const teardown = () => {
     window.clearTimeout(timer.current);

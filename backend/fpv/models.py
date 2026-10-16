@@ -140,6 +140,20 @@ class Operator(Base):
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 
+class Fleet(Base):
+    """Парк дронов техника; база парка — точка А маршрута."""
+    __tablename__ = "fleets"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text)
+    technician_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    base_lat: Mapped[float] = mapped_column(Float)
+    base_lon: Mapped[float] = mapped_column(Float)
+    base_address: Mapped[str] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
 class Drone(Base):
     __tablename__ = "drones"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -161,6 +175,10 @@ class Drone(Base):
     api_key_prefix: Mapped[Optional[str]] = mapped_column(Text)
     api_key_issued_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     blocked_reason: Mapped[Optional[str]] = mapped_column(Text)
+    fleet_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("fleets.id"))
+    published: Mapped[bool] = mapped_column(Boolean, default=False)       # открыт для выбора заказчиками
+    video_check_until: Mapped[Optional[dt.datetime]] = mapped_column(TS)  # проверка видео техником до заказа
+    video_checked_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)   # когда в проверке пришло видео
     # Источники видео (сообщает сервисный модуль) и выбор оператора — см. services/video_sources.py
     video_sources: Mapped[Any] = mapped_column(JSONB, default=list)
     video_source_active: Mapped[Optional[str]] = mapped_column(Text)
@@ -229,6 +247,9 @@ class Order(Base):
     delivered_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     completed_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     closed_reason: Mapped[Optional[str]] = mapped_column(Text)
+    # Первичная готовность дрона к заказу, подтверждённая техником парка
+    tech_ready_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    tech_ready_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
 
     route: Mapped[Optional["Route"]] = relationship(back_populates="order", uselist=False, lazy="joined")
 
@@ -261,6 +282,11 @@ class Route(Base):
     approval_status: Mapped[str] = mapped_column(Text, default="pending")
     approval_notes: Mapped[Any] = mapped_column(JSONB, default=list)
     approved_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    # Точка А — база парка (у заказов до 0007 пусто: маршрут А→Б)
+    base_lat: Mapped[Optional[float]] = mapped_column(Float)
+    base_lon: Mapped[Optional[float]] = mapped_column(Float)
+    base_address: Mapped[Optional[str]] = mapped_column(Text)
+    return_m: Mapped[Optional[int]] = mapped_column(Integer)    # возврат от получателя на базу
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     order: Mapped[Order] = relationship(back_populates="route")
 

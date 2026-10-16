@@ -132,9 +132,19 @@ export function OrderDetailPage() {
           <KV items={[
             ["Груз", `${CARGO_TYPES[o.cargo_type] ?? o.cargo_type}: ${o.cargo_description}`],
             ["Масса / габариты", `${o.cargo_weight_g} г, ${o.cargo_dims_mm.join("×")} мм`],
-            ["Точка А", o.route?.origin.address],
-            ["Точка Б", o.route?.destination.address],
+            ...(o.route?.base ? [
+              ["А — база парка", o.route.base.address],
+              ["Б — забор груза", o.route.origin.address],
+              ["В — получатель", o.route.destination.address],
+            ] as [string, string | undefined][] : [
+              ["Точка А", o.route?.origin.address],
+              ["Точка Б", o.route?.destination.address],
+            ] as [string, string | undefined][]),
             ["Расстояние", fmtDistance(o.route?.distance_m)],
+            ["Готовность дрона (техник парка)", o.tech_ready_at
+              ? <Tone tone="ok">подтверждена {fmtDate(o.tech_ready_at)}</Tone>
+              : ["awaiting_operator", "accepted", "awaiting_readiness", "ready"].includes(o.status)
+                ? <Tone tone="warn">ожидает подтверждения техника</Tone> : "—"],
             ["Временное окно", `${fmtDate(o.window_start)} — ${fmtDate(o.window_end)}`],
             ["Получатель", `${o.recipient_name ?? "—"}, ${o.recipient_phone ?? ""}`],
             ["Стоимость", o.quote_amount ? `${o.quote_amount} ₽` : "—"],
