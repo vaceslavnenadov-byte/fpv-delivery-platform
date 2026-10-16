@@ -1,0 +1,118 @@
+#!/bin/sh
+# fpv-shortcuts — одной командой создаёт ярлыки запуска клиентов FPV Доставки
+# (вход и клиенты по ролям) на рабочем столе и в меню приложений пользователя.
+set -eu
+
+DEFAULT_SITE="https://fpv.dc.fpv.local"
+ALL="entrance customer operator coordinator technician admin"
+
+usage() {
+  cat <<USAGE
+fpv-shortcuts — ярлыки запуска клиентов FPV Доставки.
+
+  fpv-shortcuts [--url АДРЕС] [РОЛЬ...]   создать ярлыки (по умолчанию — все)
+  fpv-shortcuts --remove [РОЛЬ...]        удалить ярлыки
+  fpv-shortcuts --list                    показать, что будет создано
+  fpv-shortcuts --help
+
+РОЛЬ: вход customer operator coordinator technician admin
+Адрес сайта по умолчанию: $DEFAULT_SITE
+Можно задать переменной FPV_SITE_URL или параметром --url.
+Запуск от своего пользователя (не root); через sudo ярлыки создаются вызвавшему пользователю.
+USAGE
+}
+
+# Через sudo — создавать ярлыки вызвавшему пользователю, а не root.
+if [ "$(id -u)" = 0 ]; then
+  if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+    exec runuser -u "$SUDO_USER" -- env FPV_SITE_URL="${FPV_SITE_URL:-$DEFAULT_SITE}" "$0" "$@"
+  fi
+  echo "fpv-shortcuts: запустите от своего пользователя, не от root:" >&2
+  echo "  fpv-shortcuts            (в сеансе своего пользователя)" >&2
+  echo "  sudo -u ПОЛЬЗОВАТЕЛЬ fpv-shortcuts" >&2
+  exit 2
+fi
+
+SITE="${FPV_SITE_URL:-$DEFAULT_SITE}"
+ACTION=create
+ROLES=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --url) SITE="${2:?--url требует адрес}"; shift 2;;
+    --url=*) SITE="${1#--url=}"; shift;;
+    --remove|-r) ACTION=remove; shift;;
+    --list|-l) ACTION=list; shift;;
+    --help|-h) usage; exit 0;;
+    вход) ROLES="$ROLES entrance"; shift;;
+    entrance|customer|operator|coordinator|technician|admin) ROLES="$ROLES $1"; shift;;
+    *) echo "fpv-shortcuts: неизвестный аргумент: $1" >&2; usage >&2; exit 2;;
+  esac
+done
+
+[ -n "$ROLES" ] || ROLES="$ALL"
+SITE="${SITE%/}"
+case "$SITE" in
+  http://*|https://*) ;;
+  *) echo "fpv-shortcuts: адрес должен начинаться с http:// или https:// ($SITE)" >&2; exit 2;;
+esac
+
+label() {
+  case "$1" in
+    entrance)    echo "FPV Доставка";;
+    customer)    echo "FPV Доставка — заказчик";;
+    operator)    echo "FPV Доставка — оператор";;
+    coordinator) echo "FPV Доставка — координатор";;
+    technician)  echo "FPV Доставка — техник";;
+    admin)       echo "FPV Доставка — администратор";;
+  esac
+}
+url_of() {
+  case "$1" in entrance) echo "$SITE/";; *) echo "$SITE/$1/";; esac
+}
+
+APPS="$HOME/.local/share/applications"
+DESK="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
+[ -n "${DESK:-}" ] || DESK="$HOME/Desktop"
+mkdir -p "$APPS" "$DESK"
+
+make_one() {
+  role="$1"; name="$(label "$role")"; url="$(url_of "$role")"; file="fpv-$role.desktop"
+  tmp="$APPS/.$file.tmp"
+  cat > "$tmp" <<DESK
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=$name
+Comment=Клиент платформы FPV Доставка
+Exec=xdg-open $url
+Icon=applications-internet
+Terminal=false
+Categories=Network;Office;
+StartupNotify=true
+DESK
+  mv "$tmp" "$APPS/$file"
+  chmod +x "$APPS/$file"
+  cp "$APPS/$file" "$DESK/$file"
+  chmod +x "$DESK/$file"
+  gio set "$DESK/$file" metadata::trusted true 2>/dev/null || true
+  echo "создан: $name → $url"
+}
+
+case "$ACTION" in
+  list)
+    echo "Сайт: $SITE"
+    for role in $ROLES; do echo "  $(label "$role")  →  $(url_of "$role")"; done
+    ;;
+  remove)
+    for role in $ROLES; do rm -f "$APPS/fpv-$role.desktop" "$DESK/fpv-$role.desktop"; echo "удалён: $(label "$role")"; done
+    update-desktop-database "$APPS" 2>/dev/null || true
+    ;;
+  create)
+    for role in $ROLES; do make_one "$role"; done
+    update-desktop-database "$APPS" 2>/dev/null || true
+    echo
+    echo "Готово. Ярлыки — на рабочем столе и в меню приложений (поиск: «FPV Доставка»)."
+    echo "Если в GNOME на значке надпись «Не доверять» — правой кнопкой → «Разрешить запуск»."
+    ;;
+esac

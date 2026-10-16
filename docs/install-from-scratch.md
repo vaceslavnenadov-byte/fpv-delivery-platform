@@ -283,34 +283,31 @@ Firefox при первом открытии предупредит о само�
 
 ---
 
-## 8. Ярлык на рабочем столе
+## 8. Ярлыки клиентов на рабочем столе
 
-**[vboxuser]** (не root — иначе ярлык окажется у root)
+Интерфейс разделён на клиенты по ролям (`docs/role-clients.md`). Пакет содержит команду
+`fpv-shortcuts`, которая **одной командой** создаёт ярлыки входа и всех клиентов на рабочем столе
+и в меню приложений.
+
+**[vboxuser]** (от своего пользователя, не от root):
 
 ```bash
-whoami                                   # vboxuser
-DESK="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
-mkdir -p "$DESK" ~/.local/share/applications
-cat > ~/.local/share/applications/fpv-platform.desktop <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=FPV Платформа
-Comment=Платформа доставки FPV-дронами
-Exec=xdg-open https://fpv.dc.fpv.local
-Icon=applications-internet
-Terminal=false
-Categories=Network;Office;
-EOF
-cp ~/.local/share/applications/fpv-platform.desktop "$DESK/"
-chmod +x "$DESK/fpv-platform.desktop"
-gio set "$DESK/fpv-platform.desktop" metadata::trusted true 2>/dev/null || true
-grep -q "alias fpv=" ~/.bashrc || echo "alias fpv='gtk-launch fpv-platform'" >> ~/.bashrc
-source ~/.bashrc
+fpv-shortcuts                                   # все ярлыки, адрес https://fpv.dc.fpv.local
 ```
 
-Запуск: двойной щелчок по значку (в GNOME при надписи «Ненадёжный» — правой кнопкой
-→ «Разрешить запуск»), в терминале — `fpv`, `gtk-launch fpv-platform` или
-`xdg-open https://fpv.dc.fpv.local`.
+Другие варианты:
+
+```bash
+fpv-shortcuts operator                          # только клиент оператора
+fpv-shortcuts --url https://fpv.dc.fpv.local    # указать адрес сайта
+fpv-shortcuts --list                            # показать, что будет создано
+fpv-shortcuts --remove                          # удалить ярлыки
+sudo -u vboxuser fpv-shortcuts                  # создать ярлыки этому пользователю из-под root
+```
+
+Запуск: двойной щелчок по значку (в GNOME при надписи «Не доверять» — правой кнопкой
+→ «Разрешить запуск»). Каждый пользователь видит в своём клиенте только свою роль; на общем
+входе достаточно одного ярлыка «FPV Доставка» — он сам откроет нужный раздел после входа.
 
 ---
 
@@ -398,7 +395,8 @@ fpv-migrate --check                     # все миграции примене
 | `dpkg-scanpackages: command not found` | нет `dpkg-dev` | шаг 1 |
 | `apt update`: `NO_PUBKEY` / `is not signed` | ключ не скопирован в `/usr/share/keyrings` или репозиторий не подписан | шаг 3.3; после изменения пакетов — снова 3.2 |
 | `Running Firefox as root … is not supported` | браузер запущен от root | `exit` в vboxuser; ярлык — шаг 8 от vboxuser |
-| `./fpv-platform.desktop: [Desktop: команда не найдена` | `.desktop` выполнен как скрипт | `gtk-launch fpv-platform` или двойной щелчок |
+| `./fpv-*.desktop: [Desktop: команда не найдена` | `.desktop` запущен как скрипт | двойной щелчок по значку или `gtk-launch fpv-operator` |
+| `fpv-shortcuts: запустите от своего пользователя` | команда запущена от root | выполнить от своего пользователя или `sudo -u ПОЛЬЗОВАТЕЛЬ fpv-shortcuts` |
 | Сайт не открывается / «соединение сброшено» | сайт nginx не включён, нет записи в `/etc/hosts`, нет сертификата, открыт `localhost` | шаг 7, адрес только `https://fpv.dc.fpv.local` |
 | `nginx -t`: duplicate default server | включён стандартный сайт nginx | `rm /etc/nginx/sites-enabled/default` |
 | Вход: `JSON.parse: unexpected character…` или «Сервер приложения недоступен» | `fpv-api` не может обратиться к БД (пустой `database_url`, PostgreSQL не запущен) | шаг 5; `journalctl -u fpv-api` |

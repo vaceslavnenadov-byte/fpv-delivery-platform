@@ -29,6 +29,7 @@ fpv-platform для Debian 13
   /var/log/fpv                           журналы
 
 Команды: fpv-migrate [--check], fpv-cli sync-directory|verify-audit|verify-videos|outbox-stats
+  fpv-shortcuts — ярлыки клиентов по ролям на рабочем столе пользователя (одной командой)
 
 Обновление: apt install --only-upgrade fpv-platform — venv пересоздаётся, миграции
 применяются автоматически (FPV_AUTO_MIGRATE в /etc/default/fpv-platform).
