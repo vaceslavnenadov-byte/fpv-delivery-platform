@@ -107,6 +107,20 @@ export function OrderDetailPage() {
       </div>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
 
+      {isCustomer && can("video.live") && CUSTOMER_STREAM_STATUSES.includes(o.status) && (
+        <Card title="📡 Трансляция с дрона">
+          {o.status === "in_progress" ? (
+            // Заказчик смотрит свой полёт сразу, без лишних действий; открытие трансляции фиксируется в аудите.
+            <LiveVideo key={o.id} orderId={o.id} autoStart />
+          ) : o.status === "awaiting_delivery_confirmation" ? (
+            <p className="muted">Полёт завершён — трансляция окончена. Видеоподтверждение доставки — ниже, в блоке «Видеоподтверждение».</p>
+          ) : (
+            <p className="muted">Трансляция с камеры дрона начнётся сама, когда оператор начнёт выполнение заказа —
+              страницу обновлять не нужно. Сейчас: {o.status_label}.</p>
+          )}
+        </Card>
+      )}
+
       <div className="grid2">
         <Card title="Маршрут и статус">
           {o.route && <RouteMap route={o.route} track={telemetry.data?.items ?? []} status={o.status_label} />}
@@ -242,7 +256,7 @@ export function OrderDetailPage() {
         </Card>
       )}
 
-      {o.status === "in_progress" && can("video.live") && (
+      {o.status === "in_progress" && can("video.live") && !isCustomer && (
         <Card title="Прямая трансляция">
           <LiveVideo key={o.id} orderId={o.id} />
         </Card>

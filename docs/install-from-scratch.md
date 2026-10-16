@@ -63,8 +63,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-15_all.deb  fpv-drone-agent_0.1.0-15_all.deb
-# fpv-platform_0.1.0-15_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-16_all.deb  fpv-drone-agent_0.1.0-16_all.deb
+# fpv-platform_0.1.0-16_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -112,7 +112,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-15, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-16, источник file:/srv/packages
 ```
 
 ---
@@ -446,7 +446,9 @@ FPV_AGENT_VIDEO_FPS=15
    завершением полёта. Если сессия истекла, окно отправит на вход и после входа вернётся
    в монитор.
 4. Пока заказ выполняется, в его карточке доступна **«Прямая трансляция»** с камеры дрона
-   (заказчику, назначенным оператору и координатору, администратору). Режим «Кадры» — для
+   (заказчику, назначенным оператору и координатору, администратору). У заказчика блок
+   **«📡 Трансляция с дрона»** — вверху карточки с момента принятия заказа: видео включается само,
+   когда оператор начинает задание; в списке «Мои заказы» у такого заказа метка «● В ЭФИРЕ». Режим «Кадры» — для
    браузеров без H.264 и медленных каналов.
 5. После завершения начисляются баллы (временное окно — 30, результат — 70, один раз).
 
@@ -506,7 +508,7 @@ fpv-migrate --check                     # все миграции примене
 | Заказ: «Нет связи с сервисным модулем дрона (offline)» | не запущен симулятор или неверный ключ | шаг 10; `journalctl -u fpv-agent` |
 | В окне ⚙ нет USB-камеры | камера не подключена или не проброшена в ВМ | `ls /dev/video*`; VirtualBox — «Устройства» → «Веб-камеры»; подождать 30 с или `systemctl restart fpv-agent` |
 | В окне ⚙ нет ролика | неподходящее имя файла (пробелы, кириллица) или расширение | переименовать, например `flight-1.mp4`; расширения `.mp4 .mkv .webm .mov .avi .ts .m4v` |
-| В окне ⚙ «модуль ещё не сообщил список источников» | `fpv-agent` не запущен или старой версии | `systemctl status fpv-agent`; обновить пакеты до 0.1.0-15 |
+| В окне ⚙ «модуль ещё не сообщил список источников» | `fpv-agent` не запущен или старой версии | `systemctl status fpv-agent`; обновить пакеты до 0.1.0-15 или новее |
 | Выбран RTSP, видео нет; агент: `видео rtsp:… остановилось` | камера недоступна, неверный адрес или пароль | проверить адрес: `ffmpeg -rtsp_transport tcp -i 'rtsp://…' -frames:v 1 /tmp/x.jpg` |
 | Агент: `видео usb:video0 остановилось: … Permission denied` / `Device or resource busy` | нет доступа к камере или её занял браузер | пакет 0.1.0-14+ (служба в группе `video`); закрыть «Включить камеру» в браузере на этой же машине |
 | Агент: `видео usb:video0 остановилось: … Invalid argument` | камера не поддерживает заданный размер | `FPV_AGENT_VIDEO_SIZE=640x480` или `1280x720` в `/etc/default/fpv-agent` |

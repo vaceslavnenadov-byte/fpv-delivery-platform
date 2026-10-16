@@ -15,7 +15,10 @@ export function OrderTable({ orders, showCustomer = false }: { orders: Order[]; 
           {orders.map((o) => (
             <tr key={o.id}>
               <td><Link to={`/orders/${o.id}`}>№{o.number}</Link></td>
-              <td><Badge kind="order" value={o.status} /></td>
+              <td><Badge kind="order" value={o.status} />
+                {o.status === "in_progress" && (
+                  <> <Link to={`/orders/${o.id}`} className="live-badge" title="Смотреть трансляцию с дрона">● В ЭФИРЕ</Link></>
+                )}</td>
               <td>{CARGO_TYPES[o.cargo_type] ?? o.cargo_type}, {o.cargo_weight_g} г</td>
               <td className="small">{o.route?.origin.address} → {o.route?.destination.address}<br />
                 <span className="muted">{fmtDistance(o.route?.distance_m)}</span></td>
