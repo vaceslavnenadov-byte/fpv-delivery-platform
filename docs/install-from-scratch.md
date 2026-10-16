@@ -63,8 +63,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-14_all.deb  fpv-drone-agent_0.1.0-14_all.deb
-# fpv-platform_0.1.0-14_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-15_all.deb  fpv-drone-agent_0.1.0-15_all.deb
+# fpv-platform_0.1.0-15_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -112,7 +112,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-14, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-15, источник file:/srv/packages
 ```
 
 ---
@@ -385,26 +385,49 @@ journalctl -u fpv-agent -n 20 --no-pager # без 401 и ошибок SSL
 `normal`, `fast`, `link-loss`, `link-blip`, `critical-error`, `no-video`, `faulty`;
 после изменения — `systemctl restart fpv-agent`.
 
-### 10.1. Камера дрона (по желанию)
+### 10.1. Видеопотоки дрона: USB, RTSP, тестовый ролик
 
-По умолчанию симулятор передаёт тестовую таблицу. Если к машине, где работает `fpv-agent`,
-подключена камера (на стенде — веб-камера, проброшенная в ВМ: VirtualBox «Устройства» → «Веб-камеры», нужен Extension Pack), видео с неё идёт в
-платформу **как видео дрона**: главное окно монитора полёта с телеметрией поверх, трансляция
-в карточке заказа, видеоподтверждение доставки.
+Сервисный модуль сообщает платформе, какие источники видео у него есть, а оператор выбирает
+один из них в мониторе полёта — кнопка **⚙** вверху справа → «Видеопоток дрона» → «Применить».
+Модуль переключает видео за несколько секунд; оно идёт **как видео дрона**: главное окно
+монитора с телеметрией поверх, трансляция в карточке заказа, видеоподтверждение доставки.
+
+| Источник | Откуда берётся |
+|---|---|
+| USB-камеры | камеры и платы захвата, подключённые к машине с `fpv-agent` (`/dev/videoN`; в ВМ — проброшенная веб-камера: VirtualBox «Устройства» → «Веб-камеры», нужен Extension Pack) |
+| RTSP-потоки | IP-камеры из `/etc/fpv-agent/cameras.conf`, строки `имя=rtsp://…`; оператор видит только имя, адрес с паролем остаётся на модуле |
+| Тестовые ролики | файлы `.mp4 .mkv .webm .mov .avi .ts .m4v` из `/var/lib/fpv-agent/videos`, воспроизводятся по кругу; при установке там создаётся `example-test.mp4` |
+| Тестовая таблица | генерируется модулем; используется, если ничего не выбрано |
 
 **[root]**
 
 ```bash
-ls -l /dev/video* /dev/v4l/by-id/ 2>/dev/null     # какие камеры есть
+# Свой тестовый ролик (имя — латиница, цифры, точка, дефис, подчёркивание; без пробелов)
+cp /home/vboxuser/Видео/flight.mp4 /var/lib/fpv-agent/videos/flight.mp4
+chmod 644 /var/lib/fpv-agent/videos/flight.mp4
+
+# RTSP-камера
+echo 'nose=rtsp://user:password@192.168.1.10:554/stream1' >> /etc/fpv-agent/cameras.conf
+
+# Источник по умолчанию (необязательно): USB-камера вместо тестовой таблицы
 sed -i 's#^FPV_AGENT_VIDEO_DEVICE=.*#FPV_AGENT_VIDEO_DEVICE=/dev/video0#' /etc/default/fpv-agent
-grep ^FPV_AGENT_VIDEO /etc/default/fpv-agent       # если строк нет — дописать их (пакет до 0.1.0-14)
-systemctl restart fpv-agent
-journalctl -u fpv-agent -n 20 --no-pager           # после начала задания: «захват видео с /dev/video0»
+
+systemctl restart fpv-agent             # новые ролики и камеры подхватываются и сами в течение 30 с
+journalctl -u fpv-agent -n 20 --no-pager # при выполнении задания: «видео: file:flight.mp4 (640x480, 15 к/с)»
 ```
 
-Камера открывается только на время выполнения задания. Модуль камеру только читает;
-команд дрону через неё не передаётся. Чтобы вернуть тестовую таблицу — оставить
-`FPV_AGENT_VIDEO_DEVICE=` пустым и перезапустить службу.
+Выбирает источник только назначенный оператор, пока заказ у него в работе; выбор
+записывается в журнал аудита. Координатор и администратор видят список и активный источник.
+Источник открывается только на время задания; модуль видео только читает — команд дрону через
+него не передаётся. Если в `/etc/default/fpv-agent` нет строк `FPV_AGENT_VIDEO_*` (файл правили вручную до
+обновления), допишите их:
+
+```
+FPV_AGENT_VIDEO_DEVICE=
+FPV_AGENT_VIDEO_DIR=/var/lib/fpv-agent/videos
+FPV_AGENT_VIDEO_SIZE=640x480
+FPV_AGENT_VIDEO_FPS=15
+```
 
 Проверка: в карточке дрона статус связи `online`; у администратора — «Мониторинг» →
 «Подключённые дроны».
@@ -481,9 +504,12 @@ fpv-migrate --check                     # все миграции примене
 | Оператор не видит очередь заказов | оператор не допущен администратором | шаг 9.4 |
 | Кнопки «Выпустить ключ» нет | дрон не подтверждён администратором | шаг 9.2 |
 | Заказ: «Нет связи с сервисным модулем дрона (offline)» | не запущен симулятор или неверный ключ | шаг 10; `journalctl -u fpv-agent` |
-| Агент: `камера /dev/video0 не найдена` | камера не подключена или не проброшена в ВМ | `ls /dev/video*`; VirtualBox — «Устройства» → «Веб-камеры» |
-| Агент: `захват с /dev/video0 завершился: … Permission denied` / `Device or resource busy` | нет доступа к камере или её занял браузер | пакет 0.1.0-14+ (служба в группе `video`); закрыть «Включить камеру» в браузере на этой же машине |
-| Агент: захват завершился `… Invalid argument` | камера не поддерживает заданный размер | `FPV_AGENT_VIDEO_SIZE=640x480` или `1280x720` в `/etc/default/fpv-agent` |
+| В окне ⚙ нет USB-камеры | камера не подключена или не проброшена в ВМ | `ls /dev/video*`; VirtualBox — «Устройства» → «Веб-камеры»; подождать 30 с или `systemctl restart fpv-agent` |
+| В окне ⚙ нет ролика | неподходящее имя файла (пробелы, кириллица) или расширение | переименовать, например `flight-1.mp4`; расширения `.mp4 .mkv .webm .mov .avi .ts .m4v` |
+| В окне ⚙ «модуль ещё не сообщил список источников» | `fpv-agent` не запущен или старой версии | `systemctl status fpv-agent`; обновить пакеты до 0.1.0-15 |
+| Выбран RTSP, видео нет; агент: `видео rtsp:… остановилось` | камера недоступна, неверный адрес или пароль | проверить адрес: `ffmpeg -rtsp_transport tcp -i 'rtsp://…' -frames:v 1 /tmp/x.jpg` |
+| Агент: `видео usb:video0 остановилось: … Permission denied` / `Device or resource busy` | нет доступа к камере или её занял браузер | пакет 0.1.0-14+ (служба в группе `video`); закрыть «Включить камеру» в браузере на этой же машине |
+| Агент: `видео usb:video0 остановилось: … Invalid argument` | камера не поддерживает заданный размер | `FPV_AGENT_VIDEO_SIZE=640x480` или `1280x720` в `/etc/default/fpv-agent` |
 | Агент: `файл ключа доступен другим пользователям` | права ключа не 600 | `chmod 600 /etc/fpv-agent/key` |
 | Агент: `CERTIFICATE_VERIFY_FAILED` | сертификат сайта не добавлен в доверенные | шаг 7.3 |
 | Агент: `401` | ключ перевыпущен или вставлен с ошибкой | выпустить ключ заново, повторить шаг 10 |

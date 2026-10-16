@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .. import runtime
 from ..errors import ValidationFailed
-from ..services import customer_stream, live, maps
+from ..services import customer_stream, live, maps, video_sources
 from ..services.identity import Principal
 from . import schemas
 from .deps import current_principal, get_db
@@ -162,3 +162,16 @@ def customer_live_frame(order_id: uuid.UUID, p: Principal = Depends(current_prin
 def customer_live_segment(order_id: uuid.UUID, name: str = PathParam(..., pattern=r"^\d{13}_\d{1,9}$"),
                           p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     return FileResponse(live.segment(db, p, order_id, name, "customer"), media_type="video/mp2t")
+
+
+@router.get("/api/v1/orders/{order_id}/video-source")
+def video_source_get(order_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    return video_sources.get(db, p, order_id)
+
+
+@router.put("/api/v1/orders/{order_id}/video-source")
+def video_source_select(order_id: uuid.UUID, body: schemas.VideoSourceSelectIn,
+                        p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    result = video_sources.select(db, p, order_id, body.source_id)
+    db.commit()
+    return result

@@ -119,48 +119,116 @@ def test_agent_rejects_plain_http_to_remote_server():
         ServerClient("http://fpv.example.org", "k")
 
 
-# --- камера дрона (--video-device) ---
+# --- источники видео дрона: USB, RTSP, тестовые ролики; выбор оператором ---
 
-from fpv_agent.camera import CameraSource  # noqa: E402
+import shutil as _shutil  # noqa: E402
+import subprocess as _subprocess  # noqa: E402
+import time as _time  # noqa: E402
+
+from fpv_agent.video import VideoManager, discover  # noqa: E402
 from fpv_agent.__main__ import main as agent_main  # noqa: E402
 
-
-class _TestPatternCamera(CameraSource):
-    """Та же цепочка сегментирования, но вход — тестовый источник вместо /dev/videoN."""
-
-    def command(self, out_dir):
-        cmd = super().command(out_dir)
-        i = cmd.index("-f")
-        return cmd[:i] + ["-re", "-f", "lavfi", "-i", f"testsrc=size={self.size}:rate={self.fps}"] + cmd[cmd.index(self.device) + 1:]
+needs_ffmpeg = pytest.mark.skipif(not _shutil.which("ffmpeg"), reason="нет ffmpeg")
 
 
-@pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="нет ffmpeg")
-def test_camera_segments_used_as_drone_video(tmp_path):
-    import time
-    dev = tmp_path / "video0"
-    dev.touch()                                   # устройство «существует»
-    cam = _TestPatternCamera(str(dev), "320x240", 10)
-    drone = SimulatedDrone(SimulatorScenario(), camera=cam)
-    assert drone.read_video_segment() is None     # вне задания камера не открывается
-    assert not cam.running
-    drone.mission_started = drone.clock()
-    got = []
-    deadline = time.monotonic() + 15
-    while len(got) < 2 and time.monotonic() < deadline:
-        seg = drone.read_video_segment()
-        if seg:
-            got.append(seg)
-        time.sleep(0.2)
-    assert cam.running and len(got) >= 2
-    assert all(s[0] == 0x47 for s in got)         # MPEG-TS (sync byte), как у видео дрона
-    assert drone.read_telemetry()["extra"]["video_resolution"] == "320x240"
-    drone.disconnect()
-    assert not cam.running
+def _fake_v4l(tmp_path):
+    sysfs, dev = tmp_path / "sys", tmp_path / "dev"
+    for node, index, name in (("video0", "0", "USB Camera"), ("video1", "1", "USB Camera"), ("video2", "0", "Capture")):
+        (sysfs / node).mkdir(parents=True)
+        (sysfs / node / "index").write_text(index)
+        (sysfs / node / "name").write_text(name)
+    dev.mkdir()
+    for node in ("video0", "video1"):           # video2 — в sysfs есть, устройства нет
+        (dev / node).touch()
+    return sysfs, dev
 
 
-def test_camera_missing_device_gives_no_video(tmp_path):
-    cam = CameraSource(str(tmp_path / "nope"))
-    assert cam.read_segment() is None and not cam.running
+def _make_clip(path):
+    _subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=10",
+                     "-t", "3", "-c:v", "mpeg4", str(path)], check=True)
+
+
+def test_video_sources_discovery(tmp_path):
+    sysfs, dev = _fake_v4l(tmp_path)
+    videos = tmp_path / "videos"
+    videos.mkdir()
+    (videos / "flight.mp4").write_bytes(b"x")
+    (videos / "notes.txt").write_text("x")
+    (videos / "bad name.mp4").write_bytes(b"x")
+    cams = tmp_path / "cameras.conf"
+    cams.write_text("# комментарий\nnose=rtsp://user:secret@10.0.0.5:554/stream1\nbad name=rtsp://x\nhttp=http://x/\n")
+    found = discover(videos, cams, sysfs, dev)
+    ids = [s.id for s in found]
+    assert ids == ["usb:video0", "rtsp:nose", "file:flight.mp4", "test"]
+    pub = [s.public() for s in found]
+    assert "secret" not in repr(pub) and "10.0.0.5" not in repr(pub)     # адреса RTSP остаются на модуле
+    assert pub[0]["label"] == "USB Camera (video0)"
+
+
+@needs_ffmpeg
+def test_video_manager_plays_file_and_switches(tmp_path):
+    videos = tmp_path / "videos"
+    videos.mkdir()
+    _make_clip(videos / "clip.mp4")
+    vm = VideoManager(videos, tmp_path / "none.conf", size="320x240", fps=10,
+                      sys_v4l=tmp_path / "nosys", dev=tmp_path / "nodev")
+    assert [s["id"] for s in vm.inventory()["sources"]] == ["file:clip.mp4", "test"]
+
+    def collect(n):
+        got, deadline = [], _time.monotonic() + 20
+        while len(got) < n and _time.monotonic() < deadline:
+            seg = vm.read_segment()
+            if seg:
+                got.append(seg)
+            _time.sleep(0.2)
+        return got
+
+    assert len(collect(2)) == 2 and vm.active_id == "test"          # по умолчанию — таблица
+    vm.select("file:clip.mp4")
+    segs = collect(4)                                               # ролик 3 с — идёт по кругу
+    assert len(segs) == 4 and all(s[0] == 0x47 for s in segs) and vm.active_id == "file:clip.mp4"
+    vm.select("usb:video9")                                         # неизвестный — остаётся по умолчанию
+    collect(1)
+    assert vm.active_id == "test"
+    vm.stop()
+    assert vm.active_id is None
+
+
+def test_operator_selects_video_source_end_to_end(world, tmp_path):
+    o = world.ready_order()
+    client = InProcessClient(world.app, world.drone_key)
+    videos = tmp_path / "videos"
+    videos.mkdir()
+    (videos / "demo.mp4").write_bytes(b"x")
+    vm = VideoManager(videos, tmp_path / "none.conf", sys_v4l=tmp_path / "nosys", dev=tmp_path / "nodev")
+    agent = ServiceModule(SimulatedDrone(video=vm), client, tmp_path / "state")
+    agent.step()
+    assert "/drone-link/v1/video/sources" in client.calls
+    url = f"/api/v1/orders/{o['id']}/video-source"
+    info = world.operator.get(url).json()
+    assert [s["id"] for s in info["sources"]] == ["file:demo.mp4", "test"] and info["can_select"] is True
+    # Не из списка модуля — отказ; координатор и заказчик выбирать не могут.
+    assert world.operator.put(url, json={"source_id": "file:../../etc/passwd"}).status_code == 422
+    assert world.operator.put(url, json={"source_id": "rtsp:other"}).status_code == 422
+    assert world.coordinator.put(url, json={"source_id": "test"}).status_code in (403, 404)
+    assert world.customer.get(url).status_code in (403, 404)
+    r = world.operator.put(url, json={"source_id": "file:demo.mp4"})
+    assert r.status_code == 200 and r.json()["selected"] == "file:demo.mp4"
+    agent._last_mission = 0
+    agent.step()
+    assert agent.mission.video_source == "file:demo.mp4" and vm.selected == "file:demo.mp4"
+    log = world.admin.get("/api/v1/admin/audit?action=drone.video_source.selected").json()
+    assert any(e["action"] == "drone.video_source.selected" for e in log.get("items", log if isinstance(log, list) else []))
+
+
+def test_drone_link_rejects_bad_source_list(world):
+    bad = [{"sources": [{"id": "usb:../x", "kind": "usb", "label": ""}]},
+           {"sources": [{"id": "file:a.mp4", "kind": "usb", "label": ""}]},
+           {"sources": [{"id": "test", "kind": "test"}], "active": "usb:video0"},
+           {"sources": [{"id": "test", "kind": "test"}] * 2}]
+    for body in bad:
+        r = world.drone.client.post("/drone-link/v1/video/sources", json=body, headers=world.drone.headers)
+        assert r.status_code == 422, body
 
 
 @pytest.mark.parametrize("args", [["--video-device", "/dev/sda"], ["--video-device", "/dev/video0;rm"],

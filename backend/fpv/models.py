@@ -161,6 +161,12 @@ class Drone(Base):
     api_key_prefix: Mapped[Optional[str]] = mapped_column(Text)
     api_key_issued_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     blocked_reason: Mapped[Optional[str]] = mapped_column(Text)
+    # Источники видео (сообщает сервисный модуль) и выбор оператора — см. services/video_sources.py
+    video_sources: Mapped[Any] = mapped_column(JSONB, default=list)
+    video_source_active: Mapped[Optional[str]] = mapped_column(Text)
+    video_source_selected: Mapped[Optional[str]] = mapped_column(Text)
+    video_source_selected_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    video_source_selected_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 

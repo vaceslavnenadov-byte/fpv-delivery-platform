@@ -15,8 +15,11 @@ export FPV_DRONE_KEY_FILE=/etc/fpv-agent/key   # права 600, ключ вып
 python -m fpv_agent --server https://fpv.dc.local --scenario normal --ca-file /etc/fpv-agent/ca.pem
 ```
 
-Камера дрона: `--video-device /dev/video0` (или `FPV_AGENT_VIDEO_DEVICE`) — видео с камеры
-вместо тестовой таблицы, `--video-size 640x480`, `--video-fps 15`. Камера только читается
-(ffmpeg, V4L2) и открывается лишь на время задания; см. `fpv_agent/camera.py`.
+Видео дрона (`fpv_agent/video.py`): источники — USB-камеры V4L2 (`/dev/videoN`), RTSP-потоки
+из `--cameras-file` (`/etc/fpv-agent/cameras.conf`, строки `имя=rtsp://…`), тестовые ролики из
+`--video-dir` (по умолчанию `<state-dir>/videos`) и тестовая таблица. Модуль сообщает список
+серверу (`POST /drone-link/v1/video/sources`), выбор оператора приходит в справке о задании
+(`video_source`). `--video-device /dev/video0` — источник по умолчанию, `--video-size`, `--video-fps`.
+Источники только читаются (ffmpeg) и открываются лишь на время задания.
 
 Подключение реального оборудования — отдельный этап, см. `docs/hardware-integration-plan.md`.

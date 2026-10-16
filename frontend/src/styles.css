@@ -386,3 +386,19 @@ label.check { flex-direction: row; align-items: center; }
 .mon-cam .live video, .mon-cam .live .live-frame { flex: 1; min-height: 0; max-height: none; height: 100%; object-fit: contain; }
 .mon-cam select, .mon-cam .btn { background: var(--m-panel2); color: var(--m-text); border: 1px solid var(--m-line); border-radius: 6px; padding: 4px 8px; }
 .mon-cam .muted { color: var(--m-muted); }
+
+/* Окно выбора видеопотока дрона (монитор полёта) */
+.mon-dialog { background: var(--m-panel); color: var(--m-text); border: 1px solid var(--m-line); border-radius: 12px;
+  padding: 16px 18px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+.mon-dialog::backdrop { background: rgba(3, 6, 12, 0.6); }
+.mon-dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 1.05rem; }
+.mon-dialog-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 12px; }
+.mon-vs-group { border: 1px solid var(--m-line); border-radius: 8px; padding: 6px 10px 8px; margin: 0 0 10px; }
+.mon-vs-group legend { padding: 0 4px; font-weight: 600; }
+.mon-vs-group legend small { font-weight: 400; color: var(--m-muted); }
+.mon-vs-item { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px;
+  cursor: pointer; font-size: 0.92rem; color: var(--m-text); text-align: left; }
+.mon-vs-item input { margin: 0; padding: 0; width: auto; accent-color: var(--m-accent); }
+.mon-vs-item.checked { background: var(--m-panel2); }
+.mon-vs-item em { margin-left: auto; font-style: normal; font-size: 0.8rem; }
+.mon-vs-group:disabled .mon-vs-item { cursor: default; opacity: 0.85; }

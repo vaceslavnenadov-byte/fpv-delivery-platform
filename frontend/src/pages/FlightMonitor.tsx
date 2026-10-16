@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { CUSTOMER_STREAM_STATUSES, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
 import { RouteMap } from "../components/RouteMap";
+import { VideoSourceDialog } from "../components/VideoSourceDialog";
 import { CARGO_TYPES, ORDER_STATUS } from "../labels";
 import { useLive } from "../realtime";
 import type { Note, Order, Point, Telemetry, TelemetryExtra } from "../types";
@@ -64,6 +65,7 @@ export function FlightMonitorPage() {
   const [sideTab, setSideTab] = useState<"map" | "customer">("map");
   // Источник главного окна: камера дрона (по умолчанию) или камера заказчика; второй уходит в правую панель.
   const [mainSource, setMainSource] = useState<"drone" | "customer">("drone");
+  const [videoSettings, setVideoSettings] = useState(false);
   const order = useLive(() => api.get<Order>(`/api/v1/orders/${orderId}`), [orderId],
     (m) => m.data.order_id === orderId && m.kind !== "telemetry");
   const telemetry = useLive(
@@ -152,11 +154,17 @@ export function FlightMonitorPage() {
           <FinishButton order={o} onDone={() => order.reload()} />
         )}
         <div className="mon-actions">
+          {can("video.live") && o.drone_id && (
+            <button className="mon-btn" title="Видеопоток дрона: USB, RTSP, тестовый ролик" aria-haspopup="dialog"
+                    onClick={() => setVideoSettings(true)}>⚙</button>
+          )}
           <button className="mon-btn" title="Во весь экран" onClick={() =>
             document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()}>⛶</button>
           <a className="mon-btn" href={appUrl(`/orders/${o.id}`)} target="fpv-main" title="Карточка заказа">☰</a>
         </div>
       </header>
+
+      {videoSettings && <VideoSourceDialog orderId={o.id} onClose={() => setVideoSettings(false)} />}
 
       <section className="mon-video">
         {mainCustomer ? (

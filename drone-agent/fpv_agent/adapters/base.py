@@ -27,15 +27,17 @@ class MissionInfo:
     destination: Optional[Dict[str, float]] = None
     checkpoints: List[Dict[str, Any]] = field(default_factory=list)
     max_altitude_m: Optional[float] = None
+    video_source: Optional[str] = None      # источник видео, выбранный оператором (настройка видео)
 
     @classmethod
     def from_api(cls, data: Dict[str, Any]) -> "MissionInfo":
         if not data.get("active"):
-            return cls(active=False)
+            return cls(active=False, video_source=data.get("video_source"))
         route = data.get("route") or {}
         return cls(active=True, order_id=data.get("order_id"), status=data.get("status"),
                    origin=route.get("origin"), destination=route.get("destination"),
-                   checkpoints=route.get("checkpoints") or [], max_altitude_m=route.get("max_altitude_m"))
+                   checkpoints=route.get("checkpoints") or [], max_altitude_m=route.get("max_altitude_m"),
+                   video_source=data.get("video_source"))
 
 
 class DroneAdapter(abc.ABC):
@@ -69,6 +71,11 @@ class DroneAdapter(abc.ABC):
 
     def on_mission_update(self, mission: MissionInfo) -> None:
         """Уведомление о статусе задания (только информация, без управления)."""
+
+    def video_inventory(self, force: bool = False) -> Optional[Dict[str, Any]]:
+        """Доступные источники видео и активный: {"sources": [...], "active": id}.
+        None — список не изменился (force=True — вернуть всегда) или адаптер их не различает."""
+        return None
 
     def link_available(self) -> bool:
         """Есть ли канал передачи данных до сервера (для имитации потери связи)."""

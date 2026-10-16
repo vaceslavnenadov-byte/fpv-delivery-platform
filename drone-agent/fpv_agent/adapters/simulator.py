@@ -3,9 +3,9 @@
 Имитирует: подключение, готовность, телеметрию, качество связи, полёт по
 маршруту задания (как модель, а не управление), видеопоток, ошибки, потерю
 и восстановление соединения. Через симулятор невозможно управлять реальным
-оборудованием. Единственный аппаратный интерфейс, который он может открыть, — камера
-(--video-device, только чтение видео): тогда в платформу идёт видео с этой камеры
-вместо тестовой таблицы.
+оборудованием. Единственные внешние источники, которые он открывает, — видео (USB-камера, RTSP-поток,
+тестовый ролик; только чтение, см. fpv_agent/video.py): выбранный оператором источник
+идёт в платформу как видео дрона.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..camera import CameraSource
+from ..video import VideoManager
 from .base import DroneAdapter, MissionInfo
 
 HOME = {"lat": 55.7500, "lon": 37.6000}
@@ -58,7 +58,7 @@ class SimulatorScenario:
 class SimulatedDrone(DroneAdapter):
     def __init__(self, scenario: Optional[SimulatorScenario] = None, serial: str = "SIM-0001",
                  rng: Optional[random.Random] = None, clock=time.monotonic,
-                 camera: Optional[CameraSource] = None) -> None:
+                 video: Optional[VideoManager] = None) -> None:
         self.scenario = scenario or SimulatorScenario()
         self.serial = serial
         self.rng = rng or random.Random(42)
@@ -75,7 +75,7 @@ class SimulatedDrone(DroneAdapter):
         self._error_sent = False
         self._ffmpeg = shutil.which("ffmpeg")
         self._video_seq = 0
-        self.camera = camera        # камера дрона; без неё — тестовая таблица ffmpeg
+        self.video = video          # источники видео; без менеджера — тестовая таблица ffmpeg
         self.heading = 0.0
         self.cruise_alt = 80.0
         self._wp_index = 0
@@ -87,8 +87,8 @@ class SimulatedDrone(DroneAdapter):
 
     def disconnect(self) -> None:
         self.connected = False
-        if self.camera:
-            self.camera.stop()
+        if self.video:
+            self.video.stop()
 
     def _elapsed(self) -> float:
         return self.clock() - self.mission_started if self.mission_started else 0.0
@@ -103,6 +103,8 @@ class SimulatedDrone(DroneAdapter):
     # --- модель полёта (имитация, не управление) ---
     def on_mission_update(self, mission: MissionInfo) -> None:
         self.mission = mission
+        if self.video:
+            self.video.select(mission.video_source)
         if mission.active and mission.status == "in_progress" and self.mission_started is None:
             self.mission_started = self.clock()
             if mission.origin:
@@ -116,8 +118,8 @@ class SimulatedDrone(DroneAdapter):
             self.mission_started = None
             self.phase = "landed"
             self.alt = 0.0
-            if self.camera:
-                self.camera.stop()      # камера занята только во время задания
+            if self.video:
+                self.video.stop()       # источник открыт только во время задания
 
     def _waypoints(self) -> List[Dict[str, float]]:
         m = self.mission
@@ -196,8 +198,8 @@ class SimulatedDrone(DroneAdapter):
                           "flight_mode": "auto" if self.mission_started else "manual",
                           "waypoint_index": min(self._wp_index + 1, total) if total else 0,
                           "waypoint_total": total,
-                          "video_resolution": self.camera.size if self.camera else "320x240",
-                          "video_fps": self.camera.fps if self.camera else 10}}
+                          "video_resolution": self.video.size if self.video else "320x240",
+                          "video_fps": self.video.fps if self.video else 10}}
 
     def self_check(self) -> Dict[str, Any]:
         if self.scenario.self_check_fail:
@@ -210,8 +212,8 @@ class SimulatedDrone(DroneAdapter):
         if not self.scenario.video_enabled or self.mission_started is None:
             return None
         self._video_seq += 1
-        if self.camera:
-            return self.camera.read_segment()
+        if self.video and self.video.ffmpeg:
+            return self.video.read_segment()
         if self._ffmpeg:
             return self._ffmpeg_segment()
         # Без ffmpeg — синтетические байты в контейнере-заглушке (для проверки буфера и хранения).
@@ -238,6 +240,16 @@ class SimulatedDrone(DroneAdapter):
                 except (subprocess.SubprocessError, OSError):
                     return None
             return out.read_bytes()
+
+    def video_inventory(self, force: bool = False) -> Optional[Dict[str, Any]]:
+        if not self.video:
+            return None
+        changed = self.video.rescan(force=force)
+        active = self.video.active_id
+        if force or changed or active != getattr(self, "_reported_active", None):
+            self._reported_active = active
+            return self.video.inventory()
+        return None
 
     def pending_events(self) -> List[Dict[str, Any]]:
         events, self._events = self._events, []

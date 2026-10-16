@@ -132,13 +132,15 @@ def mission_info(db: Session, drone: Drone) -> Dict[str, Any]:
     """Справочная информация о задании для сервисного модуля (не команды)."""
     order = current_order(db, drone, statuses=("ready", "in_progress"))
     if order is None:
-        return {"active": False}
+        return {"active": False, "video_source": drone.video_source_selected}
     r = order.route
     return {"active": True, "order_id": str(order.id), "number": order.number, "status": order.status,
             "route": {"origin": {"lat": r.origin_lat, "lon": r.origin_lon},
                       "destination": {"lat": r.dest_lat, "lon": r.dest_lon},
                       "checkpoints": r.checkpoints, "max_altitude_m": r.max_altitude_m},
-            "video_buffer_seconds": None}
+            "video_buffer_seconds": None,
+            # выбранный оператором источник видео (настройка видео, не команда полёта)
+            "video_source": drone.video_source_selected}
 
 
 def monitor_links(db: Session, settings: Settings) -> Dict[str, int]:

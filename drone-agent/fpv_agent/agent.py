@@ -87,6 +87,7 @@ class ServiceModule:
         self.online = True
         self._last_check = 0.0
         self._last_mission = 0.0
+        self._last_inventory = 0.0
 
     def _load_seq(self) -> int:
         try:
@@ -122,6 +123,15 @@ class ServiceModule:
                 info = self._send("GET", "/drone-link/v1/mission")
                 self.mission = MissionInfo.from_api(info)
                 self.adapter.on_mission_update(self.mission)
+            # Список источников видео: при изменении и не реже раза в 5 минут.
+            inv = self.adapter.video_inventory(force=now - self._last_inventory > 300)
+            if inv is not None:
+                self._last_inventory = 0.0      # при обрыве связи — повторить на следующем такте
+                res = self._send("POST", "/drone-link/v1/video/sources", inv)
+                if not res.get("_status"):
+                    self._last_inventory = now
+                else:
+                    log.error("список источников видео отклонён: %s", res)
             for ev in self.adapter.pending_events():
                 self._send("POST", "/drone-link/v1/events", ev)
             if self.mission.active and self.mission.status == "in_progress":

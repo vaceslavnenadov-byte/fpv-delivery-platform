@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .adapters import SimulatedDrone, SimulatorScenario
 from .agent import ServerClient, ServiceModule
-from .camera import CameraSource
+from .video import VideoManager
 
 
 def _read_key() -> str:
@@ -45,21 +45,29 @@ def main(argv=None) -> int:
     ap.add_argument("--auto-complete", action="store_true",
                     help="отправлять событие завершения при прибытии в точку Б")
     ap.add_argument("--video-device", default=os.environ.get("FPV_AGENT_VIDEO_DEVICE", ""),
-                    help="камера дрона (например /dev/video0); пусто — тестовая таблица")
+                    help="источник видео по умолчанию: /dev/videoN; пусто — тестовая таблица "
+                         "(оператор может выбрать другой источник в мониторе полёта)")
+    ap.add_argument("--video-dir", default=os.environ.get("FPV_AGENT_VIDEO_DIR", ""),
+                    help="папка тестовых роликов (по умолчанию <state-dir>/videos)")
+    ap.add_argument("--cameras-file", default=os.environ.get("FPV_AGENT_CAMERAS_FILE", "/etc/fpv-agent/cameras.conf"),
+                    help="RTSP-камеры: строки имя=rtsp://…")
     ap.add_argument("--video-size", default=os.environ.get("FPV_AGENT_VIDEO_SIZE", "640x480"))
     ap.add_argument("--video-fps", type=int, default=int(os.environ.get("FPV_AGENT_VIDEO_FPS", "15") or 15))
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if args.video_device and not re.fullmatch(r"/dev/video\d+|/dev/v4l/by-(id|path)/[\w.:-]+", args.video_device):
-        print("ОШИБКА: --video-device: ожидается /dev/videoN или /dev/v4l/by-id/...", file=sys.stderr)
+    if args.video_device and not re.fullmatch(r"/dev/video\d+", args.video_device):
+        print("ОШИБКА: --video-device: ожидается /dev/videoN", file=sys.stderr)
         return 2
     if not re.fullmatch(r"\d{2,4}x\d{2,4}", args.video_size) or not 1 <= args.video_fps <= 60:
         print("ОШИБКА: --video-size ШИРИНАxВЫСОТА, --video-fps 1..60", file=sys.stderr)
         return 2
-    camera = CameraSource(args.video_device, args.video_size, args.video_fps) if args.video_device else None
-    adapter = SimulatedDrone(SimulatorScenario.preset(args.scenario), serial=args.serial, camera=camera)
+    state_dir = Path(args.state_dir)
+    video = VideoManager(Path(args.video_dir) if args.video_dir else state_dir / "videos", Path(args.cameras_file),
+                         default="usb:" + Path(args.video_device).name if args.video_device else "test",
+                         size=args.video_size, fps=args.video_fps)
+    adapter = SimulatedDrone(SimulatorScenario.preset(args.scenario), serial=args.serial, video=video)
     client = ServerClient(args.server, _read_key(), ca_file=args.ca_file)
-    ServiceModule(adapter, client, Path(args.state_dir), auto_complete=args.auto_complete).run(args.duration)
+    ServiceModule(adapter, client, state_dir, auto_complete=args.auto_complete).run(args.duration)
     return 0
 
 

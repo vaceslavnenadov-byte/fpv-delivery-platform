@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from .. import runtime
 from ..errors import Conflict, ValidationFailed
 from ..models import Drone
-from ..services import telemetry, video
+from ..services import telemetry, video, video_sources
 from . import schemas
 from .deps import current_drone, get_db
 
@@ -40,6 +40,15 @@ def mission(drone: Drone = Depends(current_drone), db: Session = Depends(get_db)
 @router.post("/telemetry")
 def ingest(body: schemas.TelemetryBatchIn, drone: Drone = Depends(current_drone), db: Session = Depends(get_db)):
     result = telemetry.ingest(db, runtime.settings(), drone, [r.model_dump() for r in body.records])
+    db.commit()
+    return result
+
+
+@router.post("/video/sources")
+def report_video_sources(body: schemas.VideoSourcesIn, drone: Drone = Depends(current_drone),
+                         db: Session = Depends(get_db)):
+    result = video_sources.report(db, drone, [s.model_dump() for s in body.sources], body.active)
+    telemetry.mark_seen(db, runtime.settings(), drone)
     db.commit()
     return result
 

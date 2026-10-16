@@ -245,6 +245,21 @@ class TelemetryBatchIn(StrictModel):
     records: List[TelemetryPointIn] = Field(min_length=1, max_length=500)
 
 
+class VideoSourceItem(StrictModel):
+    id: str = Field(max_length=110)
+    kind: Literal["usb", "rtsp", "file", "test"]
+    label: str = Field(default="", max_length=200)
+
+
+class VideoSourcesIn(StrictModel):
+    sources: List[VideoSourceItem] = Field(max_length=64)
+    active: Optional[str] = Field(default=None, max_length=110)
+
+
+class VideoSourceSelectIn(StrictModel):
+    source_id: str = Field(max_length=110)
+
+
 class DeviceEventIn(StrictModel):
     kind: Literal["delivery_completed", "error", "self_check"]
     data: Dict[str, Any] = Field(default_factory=dict)
