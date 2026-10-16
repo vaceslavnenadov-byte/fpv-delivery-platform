@@ -10,6 +10,6 @@ if [ "${1:-}" = "--migrate" ]; then MODULE=fpv.migrate; shift; fi
 set -a; . /etc/fpv/fpv.env; set +a
 export FPV_MIGRATIONS_DIR=/usr/lib/fpv-platform/database/migrations
 if [ "$(id -u)" -eq 0 ]; then
-    exec runuser -u fpv --preserve-environment -- "$VENV/bin/python" -m "$MODULE" "$@"
+    exec /usr/sbin/runuser -u fpv --preserve-environment -- "$VENV/bin/python" -m "$MODULE" "$@"
 fi
 exec "$VENV/bin/python" -m "$MODULE" "$@"

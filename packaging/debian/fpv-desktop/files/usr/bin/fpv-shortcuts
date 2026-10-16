@@ -35,7 +35,7 @@ USAGE
 # Через sudo — создавать ярлыки вызвавшему пользователю, а не root.
 if [ "$(id -u)" = 0 ]; then
   if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
-    exec runuser -u "$SUDO_USER" -- env FPV_SITE_URL="${FPV_SITE_URL:-$DEFAULT_SITE}" "$0" "$@"
+    exec /usr/sbin/runuser -u "$SUDO_USER" -- env FPV_SITE_URL="${FPV_SITE_URL:-$DEFAULT_SITE}" "$0" "$@"
   fi
   echo "fpv-shortcuts: запустите от своего пользователя, не от root:" >&2
   echo "  fpv-shortcuts            (в сеансе своего пользователя)" >&2

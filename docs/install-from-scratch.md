@@ -22,13 +22,15 @@
 | Пути к скриптам — **полные** (`/opt/fpv-src/...`) | относительный путь работает только из нужной папки: «No such file or directory» |
 | Файл `.desktop` не запускают через `./` | это не скрипт: «[Desktop: команда не найдена» |
 | Вместо `sudo -u` — `runuser -u` | в Debian с паролем root `sudo` по умолчанию не установлен |
+| Становиться root только через **`su -`** (с минусом) | `su` без минуса не загружает окружение root: в `PATH` нет `/usr/sbin`, и `runuser`, `usermod`, `update-ca-certificates` дают «команда не найдена» |
 
 Как стать root и вернуться обратно:
 
 ```bash
-su -          # ввести пароль root; приглашение станет root@...#
+su -          # ввести пароль root; приглашение станет root@...#  (обязательно с минусом)
 exit          # вернуться в vboxuser
 whoami        # проверить, кто вы сейчас
+echo $PATH    # у root должен быть /usr/sbin; если нет — exit и снова su -
 ```
 
 В инструкции перед каждым блоком указано: **[root]**, **[vboxuser]** или
@@ -173,8 +175,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-18_all.deb  fpv-drone-agent_0.1.0-18_all.deb
-# fpv-platform_0.1.0-18_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-19_all.deb  fpv-drone-agent_0.1.0-19_all.deb
+# fpv-platform_0.1.0-19_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -225,7 +227,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-18, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-19, источник file:/srv/packages
 ```
 
 ---
@@ -255,9 +257,10 @@ apt install -y fpv-platform fpv-drone-agent fpv-desktop
 («connection to server at 127.0.0.1, port 5432 failed»), а страница входа показывает
 `JSON.parse: unexpected character` или «Сервер приложения недоступен».
 
-**[root]**
+**[root]** (вошли через `su -`; проверка: `command -v runuser` → `/usr/sbin/runuser`)
 
 ```bash
+command -v runuser || echo "ОСТАНОВИТЕСЬ: выполните exit и войдите как root через su -"
 PW=$(openssl rand -hex 16)          # случайный пароль; хранится только в файле секрета
 runuser -u postgres -- psql -c "CREATE ROLE fpv_app LOGIN PASSWORD '$PW'"
 runuser -u postgres -- psql -c "CREATE DATABASE fpv OWNER fpv_app"
@@ -647,6 +650,7 @@ ls /var/lib/fpv-agent/videos            # тестовые ролики серв
 
 | Симптом | Причина | Решение |
 |---|---|---|
+| `runuser: команда не найдена`, `fpv-cli: … exec: runuser: not found` | root получен командой `su` без минуса — нет `/usr/sbin` в `PATH` | `exit`, затем `su -` и повторить шаг целиком (шаг 5 — с первой строки; пакет 0.1.0-19+ вызывает `/usr/sbin/runuser` сам) |
 | `sudo: команда не найдена` | в Debian с паролем root `sudo` не установлен | `su -` и команда от root, или `runuser -u ПОЛЬЗОВАТЕЛЬ -- команда`; либо `apt install sudo` |
 | `make-apt-repo.sh: No such file or directory` | скрипт запущен по относительному пути, или клонирована ветка `main`, или репозиторий `dir` | шаг 2 (два репозитория, ветка `claude/complex-system-development-ucubxt`) и полный путь `/opt/fpv-src/...` |
 | `cannot stat '/srv/packages/fpv-local.gpg'` | репозиторий не создан (предыдущая команда упала) | выполнить шаг 3.2 и проверить `ls /srv/packages` |
