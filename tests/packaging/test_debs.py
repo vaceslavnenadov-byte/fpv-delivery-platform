@@ -112,6 +112,18 @@ def test_nginx_site_is_rendered():
     assert "{{" not in conf and "root /usr/share/fpv-platform/frontend;" in conf and "http2 on;" in conf
 
 
+@pytest.mark.parametrize("path", [
+    PKG / "fpv-platform" / "files" / "etc" / "nginx" / "sites-available" / "fpv-platform.conf",
+    ROOT / "deploy" / "ansible" / "roles" / "fpv_application" / "templates" / "nginx-fpv.conf.j2",
+])
+def test_nginx_websocket_location_wins_over_api_regex(path):
+    # regex-блок /api/ перехватывает обычный префикс; без ^~ WebSocket уходит без Upgrade → 404
+    conf = path.read_text()
+    assert re.search(r"location ~ \^/\(api", conf)
+    block = conf.split("location ^~ /api/v1/ws {", 1)[1].split("\n    }", 1)[0] if "location ^~ /api/v1/ws {" in conf else ""
+    assert "proxy_set_header Upgrade $http_upgrade;" in block and "proxy_http_version 1.1;" in block
+
+
 def test_make_apt_repo_unsigned_and_index(tmp_path, debs):
     repo = tmp_path / "repo"
     r = subprocess.run(["bash", str(PKG / "make-apt-repo.sh"), str(repo), "--unsigned", *map(str, debs.values())],
