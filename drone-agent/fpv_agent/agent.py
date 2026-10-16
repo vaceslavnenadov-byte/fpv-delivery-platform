@@ -134,8 +134,12 @@ class ServiceModule:
                     self._last_inventory = now
                     if res.get("skipped"):
                         log.warning("источники видео пропущены сервером: %s", res["skipped"])
+                elif int(res["_status"]) >= 500:
+                    # сервер временно недоступен (перезапуск, 502/503) — повторить на следующем такте
+                    self._last_inventory = None
+                    log.warning("список источников видео не доставлен (сервер ответил %s), повтор", res["_status"])
                 else:
-                    self._last_inventory = now        # не повторять отказ каждую секунду
+                    self._last_inventory = now        # отказ по содержимому — не повторять каждую секунду
                     log.error("список источников видео отклонён: %s", res)
             for ev in self.adapter.pending_events():
                 self._send("POST", "/drone-link/v1/events", ev)

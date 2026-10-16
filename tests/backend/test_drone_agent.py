@@ -301,3 +301,27 @@ def test_inventory_sent_on_first_step_regardless_of_uptime(world, tmp_path, monk
     vm = VideoManager(tmp_path / "v", tmp_path / "none.conf", sys_v4l=tmp_path / "nosys", dev=tmp_path / "nodev")
     ServiceModule(SimulatedDrone(video=vm), client, tmp_path / "state").step()
     assert "/drone-link/v1/video/sources" in client.calls
+
+
+def test_inventory_retried_after_server_5xx(world, tmp_path):
+    """502 от nginx во время перезапуска API — список отправляется снова на следующем такте."""
+    client = InProcessClient(world.app, world.drone_key)
+    real = client.request
+    state = {"fail": True}
+
+    def flaky(method, path, body=None, **kw):
+        if path == "/drone-link/v1/video/sources" and state["fail"]:
+            state["fail"] = False
+            client.calls.append(path)
+            return {"_status": 502, "raw": "Bad Gateway"}
+        return real(method, path, body, **kw)
+
+    client.request = flaky
+    vm = VideoManager(tmp_path / "v", tmp_path / "none.conf", sys_v4l=tmp_path / "nosys", dev=tmp_path / "nodev")
+    agent = ServiceModule(SimulatedDrone(video=vm), client, tmp_path / "state")
+    agent.step()
+    assert agent._last_inventory is None
+    agent.step()
+    assert client.calls.count("/drone-link/v1/video/sources") == 2
+    conn = world.technician.get(f"/api/v1/drones/{world.drone_id}/connection").json()
+    assert [x["id"] for x in conn["video"]["sources"]] == ["test"]
