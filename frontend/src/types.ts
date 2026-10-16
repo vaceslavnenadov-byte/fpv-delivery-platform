@@ -9,6 +9,8 @@ export interface Me {
   operator_status: string | null;
   email?: string | null;
   phone?: string | null;
+  profile_status?: "pending" | "verified" | "rejected";
+  profile_review_notes?: string | null;
 }
 
 export interface Point {

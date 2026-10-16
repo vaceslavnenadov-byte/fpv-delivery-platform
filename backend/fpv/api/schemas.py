@@ -176,15 +176,26 @@ class UserStatusIn(StrictModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class RecruitUserIn(StrictModel):
+    username: str = Field(min_length=2, max_length=120)
+    roles: List[Literal["customer", "operator", "coordinator", "technician", "recruiter", "admin"]] = Field(
+        default_factory=list, max_length=6)
+
+
+class ProfileReviewIn(StrictModel):
+    approve: bool
+    notes: str = Field(default="", max_length=1000)
+
+
 class RoleGrantIn(StrictModel):
-    role: Literal["customer", "operator", "coordinator", "technician", "admin"]
+    role: Literal["customer", "operator", "coordinator", "technician", "recruiter", "admin"]
     grant: bool
 
 
 class DomainGroupIn(StrictModel):
     dn: str = Field(min_length=3, max_length=500)
     name: str = Field(min_length=2, max_length=128)
-    role: Optional[Literal["customer", "operator", "coordinator", "technician", "admin"]] = None
+    role: Optional[Literal["customer", "operator", "coordinator", "technician", "recruiter", "admin"]] = None
     description: str = Field(default="", max_length=500)
 
 
@@ -202,7 +213,7 @@ class DeviceIn(StrictModel):
 
 
 class DevicePolicyIn(StrictModel):
-    role: Optional[Literal["customer", "operator", "coordinator", "technician", "admin"]] = None
+    role: Optional[Literal["customer", "operator", "coordinator", "technician", "recruiter", "admin"]] = None
     domain_group: Optional[str] = Field(default=None, max_length=128)
     access_level: Literal["use", "admin"] = "use"
 

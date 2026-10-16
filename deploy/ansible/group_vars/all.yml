@@ -35,6 +35,7 @@ fpv_domain_groups:
   operators: FPV-Operators
   coordinators: FPV-Coordinators
   technicians: FPV-Technicians
+  recruiters: FPV-Recruiters
   admins: FPV-Admins
   linux_admins: FPV-Linux-Admins
   backup_operators: FPV-Backup-Operators

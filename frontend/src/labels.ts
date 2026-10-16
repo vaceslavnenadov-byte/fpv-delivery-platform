@@ -48,6 +48,7 @@ export const ROLE_LABELS: Record<string, string> = {
   operator: "Оператор",
   coordinator: "Координатор",
   technician: "Техник",
+  recruiter: "Рекрутер",
   admin: "Администратор",
 };
 

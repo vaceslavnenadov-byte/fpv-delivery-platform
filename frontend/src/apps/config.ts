@@ -1,5 +1,5 @@
 // Конфигурация отдельных клиентов по ролям. Каждый клиент собирается в свой бандл
-// (customer/, operator/, coordinator/, technician/, admin/) и содержит только свои страницы —
+// (customer/, operator/, coordinator/, technician/, recruiter/, admin/) и содержит только свои страницы —
 // код чужих ролей в браузер пользователя не попадает. Доступ всё равно проверяет сервер.
 
 export interface NavItem {
@@ -56,6 +56,16 @@ export const APPS: Record<string, AppConfig> = {
       { to: "/service", label: "Обслуживание" },
     ],
   },
+  recruiter: {
+    key: "recruiter", base: "/recruiter", title: "FPV Доставка — рекрутер", requiredPerm: "user.recruit",
+    hasOrders: false,
+    hasMonitor: false,
+    nav: [
+      { to: "/", label: "Пользователи и роли" },
+      { to: "/profiles", label: "Проверка профилей" },
+      { to: "/operators", label: "Допуск операторов" },
+    ],
+  },
   admin: {
     key: "admin", base: "/admin", title: "FPV Доставка — администратор", requiredPerm: "report.read",
     hasOrders: true,
@@ -76,7 +86,7 @@ export const APPS: Record<string, AppConfig> = {
 };
 
 // Порядок определяет, какой клиент открыть при входе, если ролей несколько.
-const HOME_ORDER = ["admin", "operator", "coordinator", "technician", "customer"];
+const HOME_ORDER = ["admin", "recruiter", "operator", "coordinator", "technician", "customer"];
 
 /** Куда направить вошедшего пользователя по его разрешениям; null — роль ещё не назначена. */
 export function roleHome(can: (perm: string) => boolean): string | null {
@@ -95,7 +105,7 @@ export function accessibleApps(can: (perm: string) => boolean): AppConfig[] {
  *  (защита от перенаправления на сторонние сайты). Иначе — null. */
 export function safeNext(next: string | null, can: (perm: string) => boolean): string | null {
   if (!next || !/^\/[A-Za-z0-9/_\-.?=&%]*$/.test(next) || next.startsWith("//")) return null;
-  const m = next.match(/^\/(customer|operator|coordinator|technician|admin)(\/|$)/);
+  const m = next.match(/^\/(customer|operator|coordinator|technician|recruiter|admin)(\/|$)/);
   if (!m) return null;
   return can(APPS[m[1]].requiredPerm) ? (m[2] ? next : `${next}/`) : null;
 }

@@ -10,6 +10,7 @@ describe("roleHome", () => {
     expect(roleHome(perms("order.read_own"))).toBe("/customer/");
     expect(roleHome(customerOperator)).toBe("/operator/");
     expect(roleHome(perms("report.read", "order.queue.read"))).toBe("/admin/");
+    expect(roleHome(perms("user.recruit", "order.read_own"))).toBe("/recruiter/");
   });
   it("без роли — null (остаётся на общем входе с профилем)", () => {
     expect(roleHome(perms())).toBeNull();
@@ -29,6 +30,8 @@ describe("safeNext", () => {
   });
   it("не ведёт в чужой клиент", () => {
     expect(safeNext("/admin/users", operator)).toBeNull();
+    expect(safeNext("/recruiter/profiles", operator)).toBeNull();
+    expect(safeNext("/recruiter/profiles", perms("user.recruit"))).toBe("/recruiter/profiles");
   });
   it.each([
     "https://evil.example/", "//evil.example/operator/", "/\\evil.example", "javascript:alert(1)",

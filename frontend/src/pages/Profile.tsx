@@ -4,6 +4,11 @@ import { useAuth } from "../auth";
 import { Alert, Card, KV, Tone } from "../components/ui";
 import { ROLE_LABELS } from "../labels";
 
+export const PROFILE_LABEL: Record<string, string> = {
+  pending: "на проверке", verified: "подтверждён", rejected: "возвращён на доработку",
+};
+export const PROFILE_TONE: Record<string, string> = { pending: "warn", verified: "ok", rejected: "danger" };
+
 export function ProfilePage() {
   const { me, refresh, can } = useAuth();
   const [name, setName] = useState(me?.display_name ?? "");
@@ -29,7 +34,7 @@ export function ProfilePage() {
     try {
       await api.post("/api/v1/me/operator-application", { license_number: license });
       await refresh();
-      setMsg({ tone: "ok", text: "Заявка на допуск оператора отправлена администратору" });
+      setMsg({ tone: "ok", text: "Заявка на допуск оператора отправлена на рассмотрение" });
     } catch (err) {
       setMsg({ tone: "danger", text: errorText(err) });
     }
@@ -39,6 +44,9 @@ export function ProfilePage() {
     <div className="stack">
       <h1>Профиль</h1>
       {!me.profile_completed && <Alert tone="info">Завершите регистрацию: проверьте имя и укажите контактный телефон.</Alert>}
+      {me.profile_status === "rejected" && (
+        <Alert tone="warn">Профиль возвращён на доработку: {me.profile_review_notes}. Исправьте данные и сохраните — профиль уйдёт на повторную проверку.</Alert>
+      )}
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
       <div className="grid2">
         <Card title="Учётная запись">
@@ -46,9 +54,11 @@ export function ProfilePage() {
             ["Доменное имя", me.username],
             ["Роли приложения", me.roles.map((r) => ROLE_LABELS[r] ?? r).join(", ")],
             ["Доменные группы", me.groups.join(", ") || "—"],
+            ["Проверка профиля", me.profile_completed && me.profile_status
+              ? <Tone tone={PROFILE_TONE[me.profile_status]}>{PROFILE_LABEL[me.profile_status]}</Tone> : "профиль не заполнен"],
             ["Допуск оператора", me.operator_status ? <Tone tone={me.operator_status === "approved" ? "ok" : "warn"}>{me.operator_status}</Tone> : "—"],
           ]} />
-          <p className="muted small">Роли назначаются через членство в доменных группах; права проверяются сервером при каждом запросе.</p>
+          <p className="muted small">Роли назначаются через членство в доменных группах или рекрутером; права проверяются сервером при каждом запросе.</p>
         </Card>
         <Card title="Контактные данные">
           <form className="form" onSubmit={save}>

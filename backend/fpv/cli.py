@@ -22,6 +22,7 @@ DEMO_USERS = {
     "operator2": ("Ольга Пилотова", ["FPV-Operators"]),
     "coordinator": ("Кирилл Координатов", ["FPV-Coordinators"]),
     "technician": ("Тимур Техников", ["FPV-Technicians"]),
+    "recruiter": ("Римма Рекрутова", ["FPV-Recruiters"]),
     "admin": ("Алла Администраторова", ["FPV-Admins"]),
 }
 GROUP_DN = "CN={},OU=FPV,OU=Groups,DC=fpv,DC=local"

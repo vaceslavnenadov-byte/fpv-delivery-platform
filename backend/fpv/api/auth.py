@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .. import clock, runtime
 from ..errors import Conflict
 from ..models import Notification, Operator, User
-from ..services import audit, notifications
+from ..services import audit, notifications, recruitment
 from ..services import identity as svc
 from ..services.identity import Principal
 from . import schemas, serialize
@@ -55,7 +55,8 @@ def logout(response: Response, p: Principal = Depends(current_principal), db: Se
 def me(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     user = db.get(User, p.user_id)
     data = principal_dict(p)
-    data.update({"email": user.email, "phone": user.phone, "last_login_at": serialize.ts(user.last_login_at)})
+    data.update({"email": user.email, "phone": user.phone, "last_login_at": serialize.ts(user.last_login_at),
+                 "profile_status": user.profile_status, "profile_review_notes": user.profile_review_notes})
     return data
 
 
@@ -69,10 +70,18 @@ def update_profile(body: schemas.ProfileIn, p: Principal = Depends(current_princ
     user.phone = body.phone
     if body.email:
         user.email = body.email
+    first = not user.profile_completed
+    changed = first or before != {"display_name": user.display_name, "phone": user.phone, "email": user.email}
     user.profile_completed = True
     user.updated_at = clock.now()
     audit.record(db, p.actor, "user.profile_updated", entity_type="user", entity_id=user.id,
                  details={"before": before, "after": body.model_dump()})
+    if changed:
+        # изменённый профиль заново проверяет рекрутер (или администратор, если рекрутеров нет)
+        user.profile_status = "pending"
+        user.profile_reviewed_by = user.profile_reviewed_at = None
+        notifications.create(db, [u for u in recruitment.recruiters(db) if u != user.id], "user.profile_review",
+                             f"Профиль на проверку: {user.display_name}", user.domain_username)
     db.commit()
     return {"ok": True}
 
@@ -94,7 +103,7 @@ def operator_application(body: schemas.OperatorApplyIn, p: Principal = Depends(c
     db.flush()
     audit.record(db, p.actor, "operator.applied", entity_type="user", entity_id=p.user_id,
                  details={"license_number": body.license_number})
-    notifications.create(db, notifications.users_with_role(db, "admin"), "operator.application",
+    notifications.create(db, recruitment.recruiters(db), "operator.application",
                          f"Заявка оператора: {p.display_name}")
     db.commit()
     return {"status": op.status}

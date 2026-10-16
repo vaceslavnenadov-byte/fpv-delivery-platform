@@ -501,3 +501,13 @@ label.check { flex-direction: row; align-items: center; }
 /* Претензии: открытая — с акцентной полосой; удовлетворённая координатором ждёт администратора */
 .dispute-card.open, .complaint.escalated { border-left: 4px solid var(--warn); }
 .dispute-card .actions { margin-top: 12px; }
+
+/* Рекрутер */
+.recruit-form { display: grid; grid-template-columns: minmax(200px, 320px) 1fr auto; gap: 12px; align-items: end; }
+.role-picks { display: flex; flex-wrap: wrap; gap: 4px 16px; border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; margin: 0; }
+.role-picks legend { padding: 0 4px; color: var(--muted); font-size: 0.85em; }
+.role-chips { display: flex; flex-wrap: wrap; align-items: center; margin-bottom: 4px; }
+.role-chips .chip.domain { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.role-chips .chip button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0 0 2px; font-size: 1.1em; line-height: 1; }
+.profile-review { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+@media (max-width: 760px) { .recruit-form { grid-template-columns: 1fr; } }

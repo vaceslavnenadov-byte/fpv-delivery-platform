@@ -46,6 +46,8 @@ USERS = {
     "coordinator3": ["FPV-Coordinators"],
     "technician": ["FPV-Technicians"],
     "technician2": ["FPV-Technicians"],
+    "recruiter": ["FPV-Recruiters"],
+    "newbie": [],
     "admin": ["FPV-Admins"],
     "norole": ["Domain Users"],
 }

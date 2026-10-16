@@ -175,8 +175,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-22_all.deb  fpv-drone-agent_0.1.0-22_all.deb
-# fpv-platform_0.1.0-22_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-23_all.deb  fpv-drone-agent_0.1.0-23_all.deb
+# fpv-platform_0.1.0-23_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -227,7 +227,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-22, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-23, источник file:/srv/packages
 ```
 
 ---
@@ -290,6 +290,7 @@ systemctl is-active fpv-api fpv-worker      # active  active
 | `FPV-Operators` | оператор |
 | `FPV-Coordinators` | наводчик / координатор |
 | `FPV-Technicians` | техник — ведёт свой парк дронов |
+| `FPV-Recruiters` | рекрутер — добавляет пользователей, выдаёт роли, проверяет профили |
 | `FPV-Admins` | администратор |
 
 ### Вариант Б — быстрый просмотр без домена (рекомендуется для первого запуска)
@@ -310,7 +311,7 @@ systemctl restart fpv-api fpv-worker
 ```
 
 Пользователи (пароль у всех `Test12345!`): `admin`, `customer`, `operator`, `operator2`,
-`coordinator`, `technician`.
+`coordinator`, `technician`, `recruiter`.
 
 ### Вариант А — настоящий домен Samba AD на этой же машине
 
@@ -342,7 +343,7 @@ samba-tool ou create "OU=FPV"
 samba-tool ou create "OU=Service,OU=FPV"
 samba-tool ou create "OU=Groups"
 samba-tool ou create "OU=FPV,OU=Groups"
-for g in FPV-Customers FPV-Operators FPV-Coordinators FPV-Technicians FPV-Admins; do
+for g in FPV-Customers FPV-Operators FPV-Coordinators FPV-Technicians FPV-Recruiters FPV-Admins; do
   samba-tool group add "$g" --groupou="OU=FPV,OU=Groups"
 done
 samba-tool user create svc-fpv-ldap 'Svc!Passw0rd123' --userou="OU=Service,OU=FPV"
@@ -360,6 +361,12 @@ samba-tool user create ivanov 'Passw0rd!123' --given-name=Иван --surname=И�
 samba-tool group addmembers FPV-Admins ivanov
 samba-tool user create petrov 'Passw0rd!123' --given-name=Пётр --surname=Петров
 samba-tool group addmembers FPV-Technicians petrov
+samba-tool user create sidorova 'Passw0rd!123' --given-name=Светлана --surname=Сидорова
+samba-tool group addmembers FPV-Recruiters sidorova
+
+# А.6. Новые сотрудники без доменной группы: только учётная запись в домене,
+#      роли в платформе выдаёт рекрутер (раздел 9.0)
+samba-tool user create novikov 'Passw0rd!123' --given-name=Иван --surname=Новиков
 ```
 
 Управление: `samba-tool user list`, `samba-tool group listmembers FPV-Technicians`,
@@ -430,6 +437,7 @@ Firefox при первом открытии предупредит о само�
 | Оператор | `https://fpv.dc.fpv.local/operator/` |
 | Координатор | `https://fpv.dc.fpv.local/coordinator/` |
 | Техник (парк дронов) | `https://fpv.dc.fpv.local/technician/` |
+| Рекрутер | `https://fpv.dc.fpv.local/recruiter/` |
 | Администратор | `https://fpv.dc.fpv.local/admin/` |
 
 Команда `fpv-shortcuts` из пакета `fpv-desktop` (установлен в шаге 4) **одной командой**
@@ -476,11 +484,26 @@ runuser -u vboxuser -- fpv-shortcuts            # [root] создать ярлы
 дроны не регистрирует: он выбирает дрон из парков, которые техники открыли для заказов.
 Маршрут заказа: **А** — база парка → **Б** — где забрать груз → **В** — получатель.
 
+### 9.0. Пользователи и роли (рекрутер)
+
+Рекрутер (группа `FPV-Recruiters`, клиент `/recruiter/`) ведёт кадровую часть; у администратора
+все эти права остаются.
+
+* **recruiter** → «Пользователи и роли» → «Добавить пользователя»: доменный логин (например,
+  `novikov` из шага А.6) и роли (заказчик, оператор, координатор, техник) → **«Добавить в систему»**.
+  Учётная запись должна уже быть в домене; без роли в платформу войти нельзя.
+* Там же — выдать роль («+ выдать роль…») или снять выданную вручную («×»). Роли из доменных
+  групп меняются в домене (`samba-tool group addmembers/removemembers`). Роли администратора и
+  рекрутера выдаёт только администратор.
+* **recruiter** → «Проверка профилей»: пользователь заполнил профиль → **«✓ Подтвердить»** или
+  **«Вернуть на доработку»** с причиной (пользователь видит её в профиле). Изменённый профиль снова
+  уходит на проверку.
+
 ### 9.1. Допуск оператора
 
 **operator** → «Профиль» → заполнить профиль и отправить **заявку на допуск оператора** (номер
-свидетельства). **admin** → «Пользователи и роли» → «Заявки операторов» → **«Допустить»**. До допуска
-оператор не видит очередь заказов. То же — для `operator2`.
+свидетельства). **recruiter** → «Допуск операторов» → **«Допустить»** (или **admin** → «Пользователи
+и роли» → «Заявки операторов»). До допуска оператор не видит очередь заказов. То же — для `operator2`.
 
 ### 9.2. Карта района
 
@@ -637,7 +660,15 @@ FPV_AGENT_VIDEO_FPS=15
    принятия заказа и до подтверждения получения.
    Переключатель темы (☀ светлая / ☾ тёмная / A как в системе) — в верхней панели любого клиента
    и на странице входа; выбор запоминается в браузере.
-6. После завершения: подтверждение получения заказчиком, баллы оператору (временное окно — 30,
+6. **Претензия.** Если заказчик нажал «Груз не получен» или «Открыть спор», заказ переходит в
+   «Передан на рассмотрение спора». **coordinator** этого заказа → карточка заказа → блок
+   «⚖ Претензия заказчика»:
+   * **«Отклонить претензию»** (с причиной) — спор закрывается, заказ идёт дальше (на проверку
+     администратора или в прежний итоговый статус);
+   * **«Удовлетворить претензию»** (с обоснованием) — претензия передаётся администратору: ему
+     приходит уведомление, в «Жалобы и споры» она стоит первой с пометкой решения координатора;
+     окончательное решение и штраф по баллам — за **admin**.
+7. После завершения: подтверждение получения заказчиком, баллы оператору (временное окно — 30,
    результат — 70, один раз).
 
 ---

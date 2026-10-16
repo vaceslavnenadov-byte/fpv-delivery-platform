@@ -14,7 +14,7 @@ if [ -r "$CONF" ]; then
   conf_site="$(sed -n 's/^[[:space:]]*FPV_SITE_URL=["]\{0,1\}\([^"[:space:]]*\)["]\{0,1\}[[:space:]]*$/\1/p' "$CONF" | tail -n 1)"
   if [ -n "$conf_site" ]; then DEFAULT_SITE="$conf_site"; fi
 fi
-ALL="entrance customer operator coordinator technician admin"
+ALL="entrance customer operator coordinator technician recruiter admin"
 
 usage() {
   cat <<USAGE
@@ -25,7 +25,7 @@ fpv-shortcuts — ярлыки запуска клиентов FPV Достав�
   fpv-shortcuts --list                    показать, что будет создано
   fpv-shortcuts --help
 
-РОЛЬ: вход customer operator coordinator technician admin
+РОЛЬ: вход customer operator coordinator technician recruiter admin
 Адрес сайта по умолчанию: $DEFAULT_SITE (из $CONF)
 Можно задать переменной FPV_SITE_URL или параметром --url.
 Запуск от своего пользователя (не root); через sudo ярлыки создаются вызвавшему пользователю.
@@ -55,7 +55,7 @@ while [ $# -gt 0 ]; do
     --list|-l) ACTION=list; shift;;
     --help|-h) usage; exit 0;;
     вход) ROLES="$ROLES entrance"; shift;;
-    entrance|customer|operator|coordinator|technician|admin) ROLES="$ROLES $1"; shift;;
+    entrance|customer|operator|coordinator|technician|recruiter|admin) ROLES="$ROLES $1"; shift;;
     *) echo "fpv-shortcuts: неизвестный аргумент: $1" >&2; usage >&2; exit 2;;
   esac
 done
@@ -79,6 +79,7 @@ label() {
     operator)    echo "FPV Доставка — оператор";;
     coordinator) echo "FPV Доставка — координатор";;
     technician)  echo "FPV Доставка — техник";;
+    recruiter)   echo "FPV Доставка — рекрутер";;
     admin)       echo "FPV Доставка — администратор";;
   esac
 }

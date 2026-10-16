@@ -172,7 +172,7 @@ def test_shortcuts_command(tmp_path):
     conf.write_text('# адрес сайта\nFPV_SITE_URL="https://fpv.example.local:8443"\n')
     r, home = _shortcuts(tmp_path, "--list", conf=conf)
     assert r.returncode == 0 and "https://fpv.example.local:8443/operator/" in r.stdout
-    assert r.stdout.count("→") == 6                       # вход + пять клиентов
+    assert r.stdout.count("→") == 7                       # вход + шесть клиентов
     r, home = _shortcuts(tmp_path, "operator", "вход", conf=conf)
     assert r.returncode == 0, r.stderr
     desk = (home / "Desktop" / "fpv-operator.desktop").read_text()

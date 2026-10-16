@@ -10,7 +10,7 @@ const appFallback: Plugin = {
   name: "fpv-app-fallback",
   configureServer(server) {
     server.middlewares.use((req, _res, next) => {
-      const m = req.url && req.url.match(/^\/(customer|operator|coordinator|technician|admin)(\/|$)/);
+      const m = req.url && req.url.match(/^\/(customer|operator|coordinator|technician|recruiter|admin)(\/|$)/);
       if (m && req.headers.accept?.includes("text/html") && !/\.[a-z0-9]+(\?|$)/i.test(req.url!)) {
         req.url = `/${m[1]}/index.html`;
       }
@@ -43,6 +43,7 @@ export default defineConfig({
         page("operator", "operator/index.html"),
         page("coordinator", "coordinator/index.html"),
         page("technician", "technician/index.html"),
+        page("recruiter", "recruiter/index.html"),
         page("admin", "admin/index.html"),
       ]),
     },
