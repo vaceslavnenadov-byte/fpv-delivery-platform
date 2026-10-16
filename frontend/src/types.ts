@@ -156,6 +156,7 @@ export interface Order {
   coordinator?: UserBrief | null;
   drone?: Drone | null;
   video?: Video | null;
+  dispute?: Complaint | null;
 }
 
 export interface Telemetry {
@@ -282,4 +283,23 @@ export interface DroneConnection {
   };
   has_key: boolean;
   published: boolean;
+}
+
+/** Претензия (спор по доставке) или апелляция оценки. */
+export interface Complaint {
+  id: number;
+  order_id: string;
+  kind: "dispute" | "score_appeal";
+  status: "open" | "upheld" | "dismissed";
+  description: string;
+  resolution: string | null;
+  points_adjustment: number | null;
+  author: UserBrief | null;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: UserBrief | null;
+  coordinator_verdict: "upheld" | "dismissed" | null;
+  coordinator_comment: string | null;
+  coordinator: UserBrief | null;
+  coordinator_at: string | null;
 }

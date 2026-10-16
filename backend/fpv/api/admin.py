@@ -224,11 +224,7 @@ def audit_verify(p: Principal = Depends(current_principal), db: Session = Depend
 def complaint_list(status: Optional[str] = None, p: Principal = Depends(current_principal),
                    db: Session = Depends(get_db)):
     rows = complaints.list_complaints(db, p, status)
-    return {"items": [{"id": c.id, "order_id": str(c.order_id), "kind": c.kind, "status": c.status,
-                       "description": c.description, "resolution": c.resolution,
-                       "points_adjustment": c.points_adjustment, "author": serialize.user_brief(db, c.author_id),
-                       "created_at": serialize.ts(c.created_at), "resolved_at": serialize.ts(c.resolved_at)}
-                      for c in rows]}
+    return {"items": [serialize.complaint(db, c) for c in rows]}
 
 
 @router.post("/complaints/{complaint_id}/resolve")

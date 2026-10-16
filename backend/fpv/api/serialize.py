@@ -91,7 +91,19 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
     data["drone"] = drone(d) if d else None
     ev = db.execute(select(VideoEvidence).where(VideoEvidence.order_id == o.id)).scalar_one_or_none()
     data["video"] = video(ev, p) if ev else None
+    from ..services import complaints
+    c = complaints.latest_dispute(db, o.id)
+    data["dispute"] = complaint(db, c) if c else None
     return data
+
+
+def complaint(db: Session, c: Any) -> Dict[str, Any]:
+    return {"id": c.id, "order_id": str(c.order_id), "kind": c.kind, "status": c.status,
+            "description": c.description, "resolution": c.resolution, "points_adjustment": c.points_adjustment,
+            "author": user_brief(db, c.author_id), "created_at": ts(c.created_at),
+            "resolved_at": ts(c.resolved_at), "resolved_by": user_brief(db, c.resolved_by),
+            "coordinator_verdict": c.coordinator_verdict, "coordinator_comment": c.coordinator_comment,
+            "coordinator": user_brief(db, c.coordinator_id), "coordinator_at": ts(c.coordinator_at)}
 
 
 def video(ev: VideoEvidence, p: Optional[Principal] = None) -> Dict[str, Any]:

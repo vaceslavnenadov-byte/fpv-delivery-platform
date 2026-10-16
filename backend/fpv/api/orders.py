@@ -234,6 +234,15 @@ def dispute(order_id: uuid.UUID, body: schemas.DisputeIn, p: Principal = Depends
     return {"complaint_id": c.id}
 
 
+@router.post("/{order_id}/dispute/review")
+def dispute_review(order_id: uuid.UUID, body: schemas.DisputeReviewIn, p: Principal = Depends(current_principal),
+                   db: Session = Depends(get_db)):
+    """Координатор заказа удовлетворяет (передаёт администратору) или отклоняет претензию."""
+    c = complaint_svc.coordinator_review(db, p, order_id, upheld=body.upheld, comment=body.comment)
+    db.commit()
+    return {"complaint_id": c.id, "status": c.status, "coordinator_verdict": c.coordinator_verdict}
+
+
 @router.post("/{order_id}/appeal", status_code=201)
 def appeal(order_id: uuid.UUID, body: schemas.DisputeIn, p: Principal = Depends(current_principal),
            db: Session = Depends(get_db)):

@@ -12,7 +12,7 @@ import { Timeline } from "../components/Timeline";
 import { Alert, Badge, Card, KV, Pending, Tone } from "../components/ui";
 import { CARGO_TYPES, fmtDate, fmtDistance } from "../labels";
 import { useLive } from "../realtime";
-import type { HistoryItem, Note, Order, Score, Telemetry, UserBrief } from "../types";
+import type { Complaint, HistoryItem, Note, Order, Score, Telemetry, UserBrief } from "../types";
 
 interface Confirmation { kind: string; decision: string; comment: string; report: Record<string, string>; actor: UserBrief | null; created_at: string }
 
@@ -107,6 +107,13 @@ export function OrderDetailPage() {
         )}
       </div>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+
+      {o.dispute && (
+        <DisputeCard d={o.dispute} busy={busy}
+                     canReview={can("complaint.review") && o.coordinator_id === me?.id && o.status === "disputed"}
+                     onReview={(upheld, comment) => act("dispute/review", { upheld, comment },
+                       upheld ? "Претензия удовлетворена и передана администратору" : "Претензия отклонена", false)} />
+      )}
 
       {isCustomer && can("video.live") && CUSTOMER_STREAM_STATUSES.includes(o.status) && (
         <Card title="📡 Трансляция с дрона">
@@ -333,15 +340,57 @@ export function OrderDetailPage() {
   );
 }
 
-function ReasonAction({ label, onSubmit, busy, required, danger, minLength = 3 }: {
+const DISPUTE_STATUS: Record<Complaint["status"], [string, "warn" | "ok" | "muted"]> = {
+  open: ["на рассмотрении", "warn"], upheld: ["удовлетворена", "ok"], dismissed: ["отклонена", "muted"],
+};
+
+/** Претензия по заказу. Координатор заказа рассматривает её первым: «Отклонить» закрывает спор,
+ *  «Удовлетворить» передаёт претензию администратору — окончательное решение и баллы за ним. */
+function DisputeCard({ d, canReview, busy, onReview }: {
+  d: Complaint; canReview: boolean; busy: boolean; onReview: (upheld: boolean, comment: string) => void;
+}) {
+  const [label, tone] = DISPUTE_STATUS[d.status];
+  const awaitingCoordinator = d.status === "open" && !d.coordinator_verdict;
+  return (
+    <Card title="⚖ Претензия заказчика" className={d.status === "open" ? "dispute-card open" : "dispute-card"}>
+      <KV items={[
+        ["Статус", <Tone tone={tone}>{label}{d.status === "open" && (awaitingCoordinator
+          ? " — у координатора" : " — у администратора")}</Tone>],
+        ["Подана", `${d.author?.display_name ?? "—"}, ${fmtDate(d.created_at)}`],
+        ["Суть претензии", d.description],
+        ["Решение координатора", d.coordinator_verdict
+          ? <><Tone tone={d.coordinator_verdict === "upheld" ? "ok" : "muted"}>
+              {d.coordinator_verdict === "upheld" ? "удовлетворить" : "отклонить"}</Tone>
+              {" "}— {d.coordinator_comment} <span className="muted small">({d.coordinator?.display_name}, {fmtDate(d.coordinator_at)})</span></>
+          : "—"],
+        ["Окончательное решение", d.status !== "open" ? `${d.resolution ?? ""}${d.points_adjustment != null ? ` (${d.points_adjustment} б.)` : ""}` : "—"],
+      ]} />
+      {canReview && awaitingCoordinator && (
+        <div className="actions">
+          <ReasonAction label="Удовлетворить претензию" busy={busy} required minLength={5}
+                        placeholder="Обоснование — увидит администратор"
+                        onSubmit={(comment) => onReview(true, comment)} />
+          <ReasonAction label="Отклонить претензию" busy={busy} required danger minLength={5}
+                        placeholder="Причина отклонения — увидит заказчик"
+                        onSubmit={(comment) => onReview(false, comment)} />
+          <p className="muted small">Удовлетворённая претензия передаётся администратору (ему приходит уведомление) —
+            окончательное решение и корректировку баллов принимает он. Отклонение закрывает спор.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ReasonAction({ label, onSubmit, busy, required, danger, minLength = 3, placeholder = "Причина / комментарий" }: {
   label: string; onSubmit: (reason: string) => void; busy: boolean; required?: boolean; danger?: boolean; minLength?: number;
+  placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   if (!open) return <button className={`btn ${danger ? "danger" : ""}`} onClick={() => setOpen(true)}>{label}</button>;
   return (
     <form className="inline-form" onSubmit={(e) => { e.preventDefault(); onSubmit(text); setOpen(false); setText(""); }}>
-      <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Причина / комментарий"
+      <input value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} aria-label={placeholder}
              required={required} minLength={required ? minLength : undefined} autoFocus />
       <button className={`btn ${danger ? "danger" : "primary"}`} disabled={busy}>{label}</button>
       <button type="button" className="btn ghost" onClick={() => setOpen(false)}>Отмена</button>

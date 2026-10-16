@@ -497,3 +497,7 @@ label.check { flex-direction: row; align-items: center; }
 .order-chat .mon-btn { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; height: 40px; min-width: 40px; cursor: pointer; }
 .order-chat .mon-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .order-chat .mon-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Претензии: открытая — с акцентной полосой; удовлетворённая координатором ждёт администратора */
+.dispute-card.open, .complaint.escalated { border-left: 4px solid var(--warn); }
+.dispute-card .actions { margin-top: 12px; }

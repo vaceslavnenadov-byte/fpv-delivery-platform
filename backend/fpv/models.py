@@ -422,6 +422,10 @@ class Complaint(Base):
     points_adjustment: Mapped[Optional[int]] = mapped_column(Integer)
     resolved_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
     resolved_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    coordinator_verdict: Mapped[Optional[str]] = mapped_column(Text)
+    coordinator_comment: Mapped[Optional[str]] = mapped_column(Text)
+    coordinator_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    coordinator_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 

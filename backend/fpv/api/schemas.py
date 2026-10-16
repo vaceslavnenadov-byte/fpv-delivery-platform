@@ -155,6 +155,11 @@ class AssignCoordinatorIn(StrictModel):
     coordinator_id: uuid.UUID
 
 
+class DisputeReviewIn(StrictModel):
+    upheld: bool
+    comment: str = Field(min_length=5, max_length=4000)
+
+
 class ResolveComplaintIn(StrictModel):
     upheld: bool
     resolution: str = Field(min_length=5, max_length=4000)

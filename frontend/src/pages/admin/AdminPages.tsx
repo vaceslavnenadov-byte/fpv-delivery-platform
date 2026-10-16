@@ -5,7 +5,7 @@ import { Alert, Badge, Card, Empty, KV, Pending, Stat, Tone } from "../../compon
 import { ORDER_STATUS, ROLE_LABELS, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
 import { invalidateMaps } from "../../maps";
-import type { Drone, Fleet, MapLayer, Order, Video } from "../../types";
+import type { Complaint, Drone, Fleet, MapLayer, Order, Video } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
 import { DroneService } from "../../components/DroneService";
 
@@ -169,11 +169,6 @@ export function AdminDronesPage() {
 
 // --- Жалобы ------------------------------------------------------------------
 
-interface Complaint {
-  id: number; order_id: string; kind: string; status: string; description: string; resolution: string | null;
-  points_adjustment: number | null; author: { display_name: string } | null; created_at: string;
-}
-
 export function AdminComplaintsPage() {
   const [status, setStatus] = useState("open");
   const list = useLive(() => api.get<{ items: Complaint[] }>(`/api/v1/admin/complaints${status ? `?status=${status}` : ""}`), [status],
@@ -204,12 +199,19 @@ function ComplaintItem({ c, onDone, setMsg }: { c: Complaint; onDone: () => void
     upheld, resolution, points_adjustment: points ? Number(points) : null,
   }), "Решение сохранено и записано в журнал аудита", onDone);
   return (
-    <article className="complaint">
+    <article className={`complaint ${c.status === "open" && c.coordinator_verdict === "upheld" ? "escalated" : ""}`}>
       <div className="row between">
         <strong>{c.kind === "dispute" ? "Спор по доставке" : "Апелляция оценки"} #{c.id}</strong>
         <span className="muted small">{c.author?.display_name} · {fmtDate(c.created_at)} · <Link to={`/orders/${c.order_id}`}>заказ</Link></span>
       </div>
       <p>{c.description}</p>
+      {c.coordinator_verdict && (
+        <p className="small">
+          <Tone tone={c.coordinator_verdict === "upheld" ? "warn" : "muted"}>
+            Координатор {c.coordinator_verdict === "upheld" ? "удовлетворил претензию — нужно ваше решение" : "отклонил претензию"}
+          </Tone>{" "}{c.coordinator_comment} <span className="muted">({c.coordinator?.display_name}, {fmtDate(c.coordinator_at)})</span>
+        </p>
+      )}
       {c.status === "open" ? (
         <div className="form row">
           <input className="grow" placeholder="Решение и обоснование (обязательно)" value={resolution} onChange={(e) => setResolution(e.target.value)} />
