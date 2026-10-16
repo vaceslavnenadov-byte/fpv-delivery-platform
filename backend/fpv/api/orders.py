@@ -94,11 +94,13 @@ def order_telemetry(order_id: uuid.UUID, limit: int = Query(300, ge=1, le=5000),
 @router.get("/{order_id}/notes")
 def order_notes(order_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     order = svc.visible_order(db, p, order_id)
-    if p.user_id == order.customer_id and not p.has("order.read_all"):
-        raise NotFound("Нет данных")
-    rows = db.execute(select(OrderNote).where(OrderNote.order_id == order.id).order_by(OrderNote.id)).scalars()
+    stmt = select(OrderNote).where(OrderNote.order_id == order.id)
+    if chat.is_customer(p, order):
+        stmt = stmt.where(OrderNote.kind == "chat")        # заказчику — только «Связь по заказу»
+    rows = db.execute(stmt.order_by(OrderNote.id)).scalars()
     return {"items": [{"id": n.id, "kind": n.kind, "severity": n.severity, "body": n.body,
-                       "author": serialize.user_brief(db, n.author_id), "created_at": serialize.ts(n.created_at),
+                       "author": serialize.user_brief(db, n.author_id),
+                       "author_role": chat.role_in_order(order, n.author_id), "created_at": serialize.ts(n.created_at),
                        "attachment_url": f"/api/v1/orders/{order.id}/notes/{n.id}/attachment"
                        if n.attachment_key else None}
                       for n in rows]}

@@ -178,3 +178,32 @@ def tech_ready_revoke(order_id: uuid.UUID, body: schemas.RevokeIn, p: Principal 
     data = serialize.order(db, order, p)
     db.commit()
     return data
+
+
+# --- видеостена координатора: назначенные ему заказы (до coordinator_max_orders) ---
+
+@router.get("/api/v1/coordinator/wall")
+def coordinator_wall(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    from ..models import Order, TelemetryRecord
+    from ..services import coordination, drones as drone_svc
+    p.require("order.note.write")
+    settings = runtime.settings()
+    statuses = coordination.ACTIVE + ("awaiting_delivery_confirmation",)
+    orders = list(db.execute(select(Order).where(Order.coordinator_id == p.user_id, Order.status.in_(statuses))
+                             .order_by(Order.accepted_at)).unique().scalars())
+    orders.sort(key=lambda o: o.status != "in_progress")     # в полёте — первыми
+    items = []
+    for o in orders[:settings.coordinator_max_orders]:
+        d = db.get(Drone, o.drone_id)
+        t = None
+        if o.started_at is not None:
+            t = db.execute(select(TelemetryRecord).where(TelemetryRecord.order_id == o.id)
+                           .order_by(TelemetryRecord.recorded_at.desc()).limit(1)).scalar_one_or_none()
+        items.append({**serialize.order(db, o, p, brief=True),
+                      "drone": {"registration_number": d.registration_number if d else None,
+                                "link_status": drone_svc.compute_link_status(settings, d) if d else "offline",
+                                "battery_pct": d.battery_pct if d else None},
+                      "telemetry": serialize.telemetry(t) if t else None})
+    active = sum(1 for o in orders if o.status in coordination.ACTIVE)
+    return {"items": items, "load": active, "capacity": settings.coordinator_max_orders,
+            "total": len(orders)}

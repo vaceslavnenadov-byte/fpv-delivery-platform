@@ -447,6 +447,10 @@ def accept(db: Session, p: Principal, order_id: uuid.UUID, expected_version: Opt
                       created_at=clock.now()))
     db.flush()
     transition(db, order, "accepted", p.actor, reason="Заказ принят оператором")
+    # Координатор назначается автоматически — с наименьшей нагрузкой (services/coordination.py).
+    from . import coordination
+    from .. import runtime
+    coordination.auto_assign(db, runtime.settings(), order)
     return order
 
 

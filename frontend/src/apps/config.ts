@@ -41,7 +41,10 @@ export const APPS: Record<string, AppConfig> = {
     key: "coordinator", base: "/coordinator", title: "FPV Доставка — координатор", requiredPerm: "order.note.write",
     hasOrders: true,
     hasMonitor: true,
-    nav: [{ to: "/", label: "Назначенные заказы" }],
+    nav: [
+      { to: "/", label: "Видеостена" },
+      { to: "/orders", label: "Назначенные заказы" },
+    ],
   },
   technician: {
     key: "technician", base: "/technician", title: "FPV Доставка — техник", requiredPerm: "drone.health.write",

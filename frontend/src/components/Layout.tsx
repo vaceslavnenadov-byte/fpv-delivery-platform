@@ -5,6 +5,7 @@ import { accessibleApps, type AppConfig } from "../apps/config";
 import { useAuth } from "../auth";
 import { ROLE_LABELS, fmtDate } from "../labels";
 import { realtime, useLive, useRealtimeStatus } from "../realtime";
+import { ThemeSwitch } from "../theme";
 import type { Notification } from "../types";
 
 // Каркас клиента: боковое меню только своей роли, шапка, уведомления.
@@ -56,6 +57,7 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
             <span className={`dot ${online ? "ok" : "off"}`} /> {online ? "Обновления в реальном времени" : "Переподключение…"}
           </div>
           <div className="topbar-right">
+            <ThemeSwitch />
             <button className="btn ghost" onClick={() => setPanel((v) => !v)} aria-expanded={panel}>
               Уведомления {notes.data && notes.data.unread > 0 && <span className="counter">{notes.data.unread}</span>}
             </button>

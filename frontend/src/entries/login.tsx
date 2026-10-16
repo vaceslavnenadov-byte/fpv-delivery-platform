@@ -7,6 +7,7 @@ import { Pending } from "../components/ui";
 import { LoginPage } from "../pages/Login";
 import { ProfilePage } from "../pages/Profile";
 import "../styles.css";
+import { applyTheme } from "../theme";
 
 // Общий вход (адрес /). После входа пользователь переходит в клиент своей роли;
 // пользователь без назначенной роли остаётся здесь и заполняет профиль.
@@ -42,6 +43,7 @@ function Landing() {
 }
 
 document.title = "FPV Доставка — вход";
+applyTheme();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>

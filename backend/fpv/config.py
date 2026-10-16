@@ -129,6 +129,7 @@ class Settings:
     link_degraded_s: int = 10
     link_loss_abort_s: int = 120
     receipt_timeout_h: int = 24
+    coordinator_max_orders: int = 9          # заказов на координатора (видеостена 3×3)
     dispute_window_days: int = 7
 
     # --- видео ---
@@ -238,6 +239,7 @@ def load_settings() -> Settings:
         link_degraded_s=_int("LINK_DEGRADED_S", d.link_degraded_s),
         link_loss_abort_s=_int("LINK_LOSS_ABORT_S", d.link_loss_abort_s),
         receipt_timeout_h=_int("RECEIPT_TIMEOUT_H", d.receipt_timeout_h),
+        coordinator_max_orders=_int("COORDINATOR_MAX_ORDERS", d.coordinator_max_orders),
         dispute_window_days=_int("DISPUTE_WINDOW_DAYS", d.dispute_window_days),
         video_buffer_seconds=_int("VIDEO_BUFFER_SECONDS", d.video_buffer_seconds),
         video_spool_dir=_str("VIDEO_SPOOL_DIR", d.video_spool_dir),

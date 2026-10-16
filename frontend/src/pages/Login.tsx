@@ -1,3 +1,4 @@
+import { ThemeSwitch } from "../theme";
 import { useState, type FormEvent } from "react";
 import { errorText } from "../api";
 import { useAuth } from "../auth";
@@ -28,7 +29,7 @@ export function LoginPage() {
   return (
     <div className="login-wrap">
       <form className="card login" onSubmit={submit}>
-        <div className="brand big"><span className="brand-mark">◆</span> FPV Доставка</div>
+        <div className="row between"><div className="brand big"><span className="brand-mark">◆</span> FPV Доставка</div><ThemeSwitch /></div>
         <p className="muted">Гражданская доставка с использованием дронов. Вход — доменная учётная запись организации.</p>
         <label>Имя пользователя домена
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username"

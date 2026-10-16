@@ -6,10 +6,12 @@ import { Gate } from "../apps/shell";
 import { AuthProvider } from "../auth";
 import { setAppBase } from "../base";
 import "../styles.css";
+import { applyTheme } from "../theme";
 
 /** Монтирует клиент роли: общий вход при отсутствии сессии, затем маршруты роли. */
 export function mountApp(app: AppConfig, routes: ReactElement): void {
   document.title = app.title;
+  applyTheme();
   setAppBase(app.base);
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>

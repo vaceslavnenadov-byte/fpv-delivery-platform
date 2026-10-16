@@ -42,6 +42,8 @@ USERS = {
     "operator": ["FPV-Operators"],
     "operator2": ["FPV-Operators"],
     "coordinator": ["FPV-Coordinators"],
+    "coordinator2": ["FPV-Coordinators"],
+    "coordinator3": ["FPV-Coordinators"],
     "technician": ["FPV-Technicians"],
     "technician2": ["FPV-Technicians"],
     "admin": ["FPV-Admins"],

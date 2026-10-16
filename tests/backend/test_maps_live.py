@@ -173,14 +173,16 @@ def test_live_access_restricted(world, fake_clock, tmp_path, api):
     world.drone.segment(0, _ts_segments(tmp_path, 1)[0])
     url = f"/api/v1/orders/{o['id']}/live"
     assert world.technician.post(url, json={}).status_code == 403        # нет разрешения video.live
-    assert world.coordinator.post(url, json={}).status_code == 404       # не назначен на заказ
-    assert world.coordinator.get(url + "/playlist.m3u8").status_code == 404
+    coord2 = api("coordinator2")                                         # вошёл после назначения
+    assert coord2.post(url, json={}).status_code == 404                  # не назначен на заказ
+    assert coord2.get(url + "/playlist.m3u8").status_code == 404
     other = api("customer2")
     assert other.post(url, json={}).status_code == 404                   # чужой заказ
     r = world.admin.post(f"/api/v1/orders/{o['id']}/coordinator",
-                         json={"coordinator_id": world.coordinator.user["id"]})
+                         json={"coordinator_id": coord2.user["id"]})       # ручное переназначение
     assert r.status_code == 200, r.text
-    assert world.coordinator.post(url, json={}).status_code == 200       # после назначения
+    assert coord2.post(url, json={}).status_code == 200                  # после назначения
+    assert world.coordinator.post(url, json={}).status_code == 404       # прежний — без доступа
     assert world.customer.get(url + "/..%2F..%2Fring.ts").status_code in (404, 422)
 
 

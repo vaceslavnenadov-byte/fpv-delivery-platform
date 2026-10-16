@@ -26,14 +26,16 @@ interface Props {
   children?: ReactNode;         // наложение поверх видео (только для hud)
   source?: "drone" | "customer";  // камера дрона или камера заказчика
   baseUrl?: string;             // другой адрес трансляции (проверка видео техником до заказа)
+  initialMode?: Mode;           // «frames» — для видеостены (9 потоков сразу)
 }
 
-export function LiveVideo({ orderId, variant = "card", autoStart = false, children, source = "drone", baseUrl }: Props) {
+export function LiveVideo({ orderId, variant = "card", autoStart = false, children, source = "drone", baseUrl,
+                           initialMode }: Props) {
   const canVideo = useRef(h264Supported()).current;
   const video = useRef<HTMLVideoElement>(null);
   const hls = useRef<Hls | null>(null);
   const timer = useRef<number | undefined>(undefined);
-  const [mode, setMode] = useState<Mode>(canVideo ? "video" : "frames");
+  const [mode, setMode] = useState<Mode>(canVideo ? initialMode ?? "video" : "frames");
   const [state, setState] = useState<State>("idle");
   const [frameUrl, setFrameUrl] = useState("");
   const [error, setError] = useState("");

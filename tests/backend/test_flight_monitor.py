@@ -43,13 +43,14 @@ def test_operator_and_coordinator_chat(world):
         assert c.execute(text("SELECT count(*) FROM audit_logs WHERE action = 'order.chat.message'")).scalar() == 2
 
 
-def test_chat_access(world):
+def test_chat_access(world, api):
     o = world.started_order()
+    other = api("coordinator2")               # вошёл после назначения — заказ не его
     url = f"/api/v1/orders/{o['id']}/chat"
-    assert world.customer.post(url, json={"body": "Где груз?"}).status_code == 403      # нет order.chat
+    assert world.customer.post(url, json={"body": "Где груз?"}).status_code == 201      # «Связь по заказу»
     assert world.technician.post(url, json={"body": "x"}).status_code == 403
-    assert world.coordinator.post(url, json={"body": "x"}).status_code == 404          # не назначен
-    assert world.customer.get(f"/api/v1/orders/{o['id']}/notes").status_code == 404   # заказчик не видит
+    assert other.post(url, json={"body": "x"}).status_code == 404                      # не назначен
+    assert world.coordinator.post(url, json={"body": "x"}).status_code == 201          # назначен автоматически
     assert world.operator.post(url, json={"body": ""}).status_code == 422
     assert world.operator.post(url, json={"body": "x" * 2001}).status_code == 422
     assert world.admin.post(url, json={"body": "Контроль администратора"}).status_code == 201
@@ -66,7 +67,7 @@ def test_frame_attached_from_live_stream(world, fake_clock, tmp_path):
     img = world.operator.get(note["attachment_url"])
     assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg" and img.content[:3] == b"\xff\xd8\xff"
     assert world.admin.get(note["attachment_url"]).status_code == 200
-    assert world.customer.get(note["attachment_url"]).status_code == 404
+    assert world.customer.get(note["attachment_url"]).status_code == 200    # участник «Связи по заказу»
     with dbmod.get_engine().connect() as c:
         key, sha = c.execute(text("SELECT attachment_key, attachment_sha256 FROM order_notes "
                                   "WHERE id = :i"), {"i": note["id"]}).one()
@@ -96,3 +97,26 @@ def test_extended_telemetry_whitelisted(world):
 def test_telemetry_extra_limited(world, extra):
     world.started_order()
     assert world.drone.telemetry(extra=extra).status_code == 422
+
+
+def test_order_chat_with_customer(world, fake_clock, tmp_path):
+    o = world.placed_order()
+    url = f"/api/v1/orders/{o['id']}/chat"
+    assert world.customer.post(url, json={"body": "Заранее"}).status_code == 403          # до принятия оператором
+    world.operator.post(f"/api/v1/orders/{o['id']}/accept", json={})
+    assert world.customer.post(url, json={"body": "Груз у охраны"}).status_code == 201
+    assert world.operator.post(url, json={"body": "Принято"}).status_code == 201
+    # Служебная запись координатора заказчику не видна.
+    r = world.coordinator.post(f"/api/v1/orders/{o['id']}/notes",
+                               json={"kind": "incident", "body": "Внутренний инцидент", "severity": "warning"})
+    assert r.status_code == 201, r.text
+    mine = world.customer.get(f"/api/v1/orders/{o['id']}/notes").json()["items"]
+    assert [n["body"] for n in mine] == ["Груз у охраны", "Принято"]
+    assert [n["author_role"] for n in mine] == ["customer", "operator"]
+    staff = world.coordinator.get(f"/api/v1/orders/{o['id']}/notes").json()["items"]
+    assert "Внутренний инцидент" in [n["body"] for n in staff]
+    # Кадр с камеры прикладывает только исполнитель.
+    assert world.customer.post(url, json={"body": "кадр", "attach_frame": True}).status_code == 403
+    # Уведомления о сообщении заказчика получают оператор и координатор.
+    notes = world.operator.get("/api/v1/me/notifications").json()["items"]
+    assert any("сообщение от" in n["title"] for n in notes)

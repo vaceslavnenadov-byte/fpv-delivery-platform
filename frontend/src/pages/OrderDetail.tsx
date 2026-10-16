@@ -5,6 +5,7 @@ import { appUrl } from "../base";
 import { useAuth } from "../auth";
 import { CUSTOMER_STREAM_STATUSES, CustomerCameraPublisher, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
+import { OrderChat } from "../components/OrderChat";
 import { RouteMap } from "../components/RouteMap";
 import { ScoreCard } from "../components/ScoreCard";
 import { Timeline } from "../components/Timeline";
@@ -119,6 +120,11 @@ export function OrderDetailPage() {
               страницу обновлять не нужно. Сейчас: {o.status_label}.</p>
           )}
         </Card>
+      )}
+
+      {!["draft", "pending_confirmation", "awaiting_operator"].includes(o.status) && can("order.chat") &&
+        (isCustomer || o.operator_id === me?.id || o.coordinator_id === me?.id || can("order.read_all")) && (
+        <OrderChat order={o} flying={o.status === "in_progress"} />
       )}
 
       <div className="grid2">

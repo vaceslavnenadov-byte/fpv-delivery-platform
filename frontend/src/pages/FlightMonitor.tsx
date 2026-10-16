@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
 import { appUrl } from "../base";
 import { useAuth } from "../auth";
 import { CUSTOMER_STREAM_STATUSES, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
+import { OrderChat } from "../components/OrderChat";
 import { RouteMap } from "../components/RouteMap";
 import { VideoSourceDialog } from "../components/VideoSourceDialog";
 import { CARGO_TYPES, ORDER_STATUS } from "../labels";
 import { useLive } from "../realtime";
-import type { Note, Order, Point, Telemetry, TelemetryExtra } from "../types";
+import type { Order, Point, Telemetry, TelemetryExtra } from "../types";
 
 /* Монитор полёта — отдельное окно оператора (и назначенного координатора, администратора).
  * Только отображение: видео с камеры, телеметрия, маршрут, переписка. Команды управления полётом
@@ -122,7 +123,6 @@ export function FlightMonitorPage() {
     setMainSource(mainCustomer ? "drone" : "customer");
     setSideTab("customer");
   };
-  const canChat = can("order.chat") && (o.operator_id === me?.id || o.coordinator_id === me?.id || can("order.read_all"));
 
   return (
     <div className="monitor">
@@ -227,7 +227,7 @@ export function FlightMonitorPage() {
         ) : <p className="mon-muted">Маршрут не рассчитан</p>}
       </section>
 
-      <Chat order={o} canWrite={canChat} flying={flying} />
+      <OrderChat order={o} variant="monitor" flying={flying} />
 
       <section className="mon-bottom">
         <div className="mon-panel">
@@ -362,73 +362,6 @@ function Attitude({ heading, pitch, roll }: { heading: number | null; pitch: num
       </g>
       <path d="M0 -58 L4 -52 H-4 Z" className="att-ptr" />
     </svg>
-  );
-}
-
-const NOTE_LABEL: Record<string, string> = {
-  remark: "Замечание", message_to_operator: "Сообщение оператору", incident: "Инцидент", deviation: "Отклонение",
-};
-
-function Chat({ order, canWrite, flying }: { order: Order; canWrite: boolean; flying: boolean }) {
-  const { me } = useAuth();
-  const notes = useLive(() => api.get<{ items: Note[] }>(`/api/v1/orders/${order.id}/notes`), [order.id],
-    (m) => m.kind === "order.note_added" && m.data.order_id === order.id);
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const list = useRef<HTMLDivElement>(null);
-  const items = notes.data?.items ?? [];
-  useEffect(() => {
-    list.current?.scrollTo({ top: list.current.scrollHeight });
-  }, [items.length]);
-
-  async function send(e: FormEvent | null, attachFrame = false) {
-    e?.preventDefault();
-    const body = text.trim() || (attachFrame ? "Кадр с камеры" : "");
-    if (!body) return;
-    setBusy(true);
-    setError("");
-    try {
-      await api.post(`/api/v1/orders/${order.id}/chat`, { body, attach_frame: attachFrame });
-      setText("");
-      notes.reload();
-    } catch (err) {
-      setError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const peer = order.operator_id === me?.id ? "координатором" : "оператором";
-  return (
-    <section className="mon-panel mon-chat">
-      <div className="mon-panel-head"><span>💬 Связь с {peer}</span>
-        <small><span className={`dot ${order.coordinator_id ? "ok" : "idle"}`} />{order.coordinator_id ? order.coordinator?.display_name : "координатор не назначен"}</small></div>
-      <div className="mon-chat-list" ref={list}>
-        {notes.error ? <p className="mon-muted">{errorText(notes.error)}</p> : items.length === 0 && <p className="mon-muted">Сообщений нет</p>}
-        {items.map((n) => {
-          const mine = n.author?.id === me?.id;
-          return (
-            <div key={n.id} className={`mon-msg ${mine ? "mine" : ""} sev-${n.severity}`}>
-              <div className="mon-msg-head">{mine ? "Вы" : n.author?.display_name ?? "—"}
-                {n.kind !== "chat" && <em> · {NOTE_LABEL[n.kind] ?? n.kind}</em>}
-                <time>{new Date(n.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div>
-              <div className="mon-msg-body">{n.body}</div>
-              {n.attachment_url && <a href={n.attachment_url} target="_blank" rel="noreferrer"><img src={n.attachment_url} alt="Кадр с камеры дрона" /></a>}
-            </div>
-          );
-        })}
-      </div>
-      {canWrite ? (
-        <form className="mon-chat-form" onSubmit={(e) => send(e)}>
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Написать сообщение…" maxLength={2000} disabled={busy} />
-          <button type="button" className="mon-btn" title="Отправить кадр с камеры" disabled={busy || !flying}
-                  onClick={() => send(null, true)}>📷</button>
-          <button className="mon-btn primary" title="Отправить" disabled={busy || !text.trim()}>➤</button>
-        </form>
-      ) : <small className="mon-muted">Переписка доступна назначенным оператору и координатору.</small>}
-      {error && <small className="mon-tone-bad">{error}</small>}
-    </section>
   );
 }
 
