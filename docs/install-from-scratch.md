@@ -576,9 +576,13 @@ journalctl -u fpv-agent -n 20 --no-pager # без 401 и ошибок SSL
 cp /home/vboxuser/Видео/flight.mp4 /var/lib/fpv-agent/videos/flight.mp4
 chmod 644 /var/lib/fpv-agent/videos/flight.mp4
 
-# RTSP-камера; проверка адреса до добавления — один кадр в файл
-ffmpeg -rtsp_transport tcp -i 'rtsp://user:password@192.168.1.10:554/stream1' -frames:v 1 -y /tmp/rtsp-test.jpg
-echo 'nose=rtsp://user:password@192.168.1.10:554/stream1' >> /etc/fpv-agent/cameras.conf
+# RTSP-камера — ТОЛЬКО если она у вас есть; ЛОГИН, ПАРОЛЬ, АДРЕС, ПУТЬ — свои значения.
+# Сначала проверка адреса — один кадр в файл (без ошибок появится /tmp/rtsp-test.jpg):
+ffmpeg -rtsp_transport tcp -i 'rtsp://ЛОГИН:ПАРОЛЬ@АДРЕС:554/ПУТЬ' -frames:v 1 -y /tmp/rtsp-test.jpg
+# Добавить один раз (повторный запуск строку не продублирует):
+grep -q '^cam1=' /etc/fpv-agent/cameras.conf || \
+  echo 'cam1=rtsp://ЛОГИН:ПАРОЛЬ@АДРЕС:554/ПУТЬ' >> /etc/fpv-agent/cameras.conf
+grep -v '^#' /etc/fpv-agent/cameras.conf    # по одной строке на камеру, имена не повторяются
 
 # USB-камера (шаг 1.5): проверка и источник по умолчанию
 v4l2-ctl --list-devices
