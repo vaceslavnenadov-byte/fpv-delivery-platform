@@ -262,14 +262,27 @@ def test_operator_selects_video_source_end_to_end(world, tmp_path):
     assert any(e["action"] == "drone.video_source.selected" for e in log.get("items", log if isinstance(log, list) else []))
 
 
-def test_drone_link_rejects_bad_source_list(world):
-    bad = [{"sources": [{"id": "usb:../x", "kind": "usb", "label": ""}]},
-           {"sources": [{"id": "file:a.mp4", "kind": "usb", "label": ""}]},
-           {"sources": [{"id": "test", "kind": "test"}], "active": "usb:video0"},
-           {"sources": [{"id": "test", "kind": "test"}] * 2}]
-    for body in bad:
-        r = world.drone.client.post("/drone-link/v1/video/sources", json=body, headers=world.drone.headers)
-        assert r.status_code == 422, body
+def test_drone_link_skips_bad_sources_keeps_good(world):
+    body = {"sources": [{"id": "usb:../x", "kind": "usb", "label": ""},
+                        {"id": "file:a.mp4", "kind": "usb", "label": ""},
+                        {"id": "rtsp:nose", "kind": "rtsp", "label": "RTSP: nose"},
+                        {"id": "rtsp:nose", "kind": "rtsp", "label": "повтор"},
+                        {"id": "test", "kind": "test", "label": "Тестовая таблица"}],
+            "active": "usb:video0"}
+    r = world.drone.client.post("/drone-link/v1/video/sources", json=body, headers=world.drone.headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["accepted"] == 2 and len(r.json()["skipped"]) == 3 and r.json()["active"] is None
+    conn = world.technician.get(f"/api/v1/drones/{world.drone_id}/connection").json()
+    assert [s["id"] for s in conn["video"]["sources"]] == ["rtsp:nose", "test"]
+    r = world.drone.client.post("/drone-link/v1/video/sources", json={"sources": "x"}, headers=world.drone.headers)
+    assert r.status_code == 422
+
+
+def test_cameras_conf_duplicate_names(tmp_path):
+    cams = tmp_path / "cameras.conf"
+    cams.write_text("nose=rtsp://10.0.0.1/a\nnose=rtsp://10.0.0.2/b\n")
+    found = discover(tmp_path / "novideos", cams, tmp_path / "nosys", tmp_path / "nodev")
+    assert [s.id for s in found] == ["rtsp:nose", "test"] and found[0].target.endswith("/a")
 
 
 @pytest.mark.parametrize("args", [["--video-device", "/dev/sda"], ["--video-device", "/dev/video0;rm"],
@@ -278,3 +291,13 @@ def test_drone_link_rejects_bad_source_list(world):
 def test_agent_rejects_bad_video_args(args, monkeypatch):
     monkeypatch.setenv("FPV_DRONE_KEY", "x")
     assert agent_main(["--server", "http://127.0.0.1:9", *args]) == 2
+
+
+def test_inventory_sent_on_first_step_regardless_of_uptime(world, tmp_path, monkeypatch):
+    """Сразу после загрузки ОС time.monotonic() мал — первая отправка списка не должна от него зависеть."""
+    import fpv_agent.agent as agent_mod
+    monkeypatch.setattr(agent_mod.time, "monotonic", lambda: 12.0)
+    client = InProcessClient(world.app, world.drone_key)
+    vm = VideoManager(tmp_path / "v", tmp_path / "none.conf", sys_v4l=tmp_path / "nosys", dev=tmp_path / "nodev")
+    ServiceModule(SimulatedDrone(video=vm), client, tmp_path / "state").step()
+    assert "/drone-link/v1/video/sources" in client.calls

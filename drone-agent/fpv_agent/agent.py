@@ -87,7 +87,7 @@ class ServiceModule:
         self.online = True
         self._last_check = 0.0
         self._last_mission = 0.0
-        self._last_inventory = 0.0
+        self._last_inventory: Optional[float] = None    # None — список ещё не отправлен
 
     def _load_seq(self) -> int:
         try:
@@ -124,13 +124,18 @@ class ServiceModule:
                 self.mission = MissionInfo.from_api(info)
                 self.adapter.on_mission_update(self.mission)
             # Список источников видео: при изменении и не реже раза в 5 минут.
-            inv = self.adapter.video_inventory(force=now - self._last_inventory > 300)
+            # (время monotonic отсчитывается от загрузки ОС: первая отправка не должна от него зависеть)
+            inv = self.adapter.video_inventory(
+                force=self._last_inventory is None or now - self._last_inventory > 300)
             if inv is not None:
-                self._last_inventory = 0.0      # при обрыве связи — повторить на следующем такте
+                self._last_inventory = None     # при обрыве связи — повторить на следующем такте
                 res = self._send("POST", "/drone-link/v1/video/sources", inv)
                 if not res.get("_status"):
                     self._last_inventory = now
+                    if res.get("skipped"):
+                        log.warning("источники видео пропущены сервером: %s", res["skipped"])
                 else:
+                    self._last_inventory = now        # не повторять отказ каждую секунду
                     log.error("список источников видео отклонён: %s", res)
             for ev in self.adapter.pending_events():
                 self._send("POST", "/drone-link/v1/events", ev)

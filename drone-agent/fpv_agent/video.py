@@ -69,6 +69,9 @@ def discover(video_dir: Path, cameras_file: Path, sys_v4l: Path = Path("/sys/cla
         if not line or line.startswith("#") or "=" not in line:
             continue
         name, url = (x.strip() for x in line.split("=", 1))
+        if any(s.id == f"rtsp:{name}" for s in out):
+            log.warning("cameras.conf: повтор имени %r — используется первая строка", name[:40])
+            continue
         if NAME_RE.match(name) and RTSP_RE.match(url):
             out.append(Source(f"rtsp:{name}", "rtsp", f"RTSP: {name}", url))
         else:

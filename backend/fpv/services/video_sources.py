@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -28,19 +28,22 @@ MAX_SOURCES = 64
 SELECT_STATUSES = ("accepted", "awaiting_readiness", "ready", "in_progress")
 
 
-def _clean(sources: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def _clean(sources: List[Dict[str, Any]]) -> Tuple[List[Dict[str, str]], List[str]]:
+    """Допустимые источники и список пропущенных (неверный формат, повтор). Одна плохая запись
+    не должна скрывать остальные источники от оператора и техника."""
     if not isinstance(sources, list) or len(sources) > MAX_SOURCES:
         raise ValidationFailed("Недопустимый список источников видео")
-    out, seen = [], set()
+    out, seen, skipped = [], set(), []
     for s in sources:
         sid = str(s.get("id", "")) if isinstance(s, dict) else ""
         kind = str(s.get("kind", "")) if isinstance(s, dict) else ""
         label = str(s.get("label", ""))[:120] if isinstance(s, dict) else ""
         if not ID_RE.match(sid) or kind not in KINDS or not sid.startswith(kind) or sid in seen:
-            raise ValidationFailed(f"Недопустимый источник видео: {sid[:100]!r}")
+            skipped.append(sid[:100])
+            continue
         seen.add(sid)
         out.append({"id": sid, "kind": kind, "label": label or sid})
-    return out
+    return out, skipped
 
 
 def _participants(order: Order) -> list:
@@ -49,10 +52,10 @@ def _participants(order: Order) -> list:
 
 def report(db: Session, drone: Drone, sources: List[Dict[str, Any]], active: Any) -> Dict[str, Any]:
     """Сервисный модуль сообщает доступные источники и активный."""
-    cleaned = _clean(sources)
+    cleaned, skipped = _clean(sources)
     active_id = str(active) if active else None
     if active_id is not None and active_id not in {s["id"] for s in cleaned}:
-        raise ValidationFailed("Активный источник отсутствует в списке")
+        active_id = None                       # активный не прошёл проверку — показываем без отметки
     changed = cleaned != (drone.video_sources or []) or active_id != drone.video_source_active
     drone.video_sources = cleaned
     drone.video_source_active = active_id
@@ -61,7 +64,8 @@ def report(db: Session, drone: Drone, sources: List[Dict[str, Any]], active: Any
         order = current_order(db, drone, statuses=SELECT_STATUSES)
         events.notify(db, "video_source", {"drone_id": drone.id, "order_id": order.id if order else None},
                       users=_participants(order) if order else [], roles=["admin"])
-    return {"selected": drone.video_source_selected, "active": active_id}
+    return {"selected": drone.video_source_selected, "active": active_id, "accepted": len(cleaned),
+            "skipped": skipped}
 
 
 def _order_drone(db: Session, p: Principal, order_id: uuid.UUID) -> tuple:

@@ -67,7 +67,8 @@ export function VideoSourceDialog({ orderId, onClose }: { orderId: string; onClo
         <>
           {d.sources.length === 0 && (
             <p className="mon-muted">Сервисный модуль дрона ещё не сообщил список источников
-              {d.link_status !== "online" ? " (дрон не на связи)" : ""}.</p>
+              {d.link_status !== "online" ? " (дрон не на связи)" : ""}. Видео идёт из источника по умолчанию;
+              если список не появится в течение минуты — сообщите технику парка (журнал: journalctl -u fpv-agent).</p>
           )}
           {GROUPS.map((g) => {
             const items = d.sources.filter((s) => s.kind === g.kind);

@@ -175,8 +175,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-19_all.deb  fpv-drone-agent_0.1.0-19_all.deb
-# fpv-platform_0.1.0-19_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-20_all.deb  fpv-drone-agent_0.1.0-20_all.deb
+# fpv-platform_0.1.0-20_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -227,7 +227,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-19, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-20, источник file:/srv/packages
 ```
 
 ---
@@ -689,6 +689,7 @@ ls /var/lib/fpv-agent/videos            # тестовые ролики серв
 | `list webcams`: `Video Input Devices: 0` | Windows не даёт камеру VirtualBox | шаг 1.5: доступ к камере в параметрах Windows, закрыть другие программы |
 | `VBoxManage.exe` «не распознано как имя командлета» | PowerShell открыт не в папке VirtualBox | полный путь, как в шаге 1.5 (`$vb = "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe"`) |
 | В окне ⚙ нет USB-камеры | камера не подключена или не проброшена в ВМ | `v4l2-ctl --list-devices`; шаг 1.5; подождать 30 с или `systemctl restart fpv-agent` |
+| В окне ⚙ или в «Подключении» нет списка источников, а видео идёт | до 0.1.0-20: модуль не отправлял список, если служба запущена в первые 5 минут после загрузки ОС; сервер отклонял весь список из‑за одной неверной записи (например, имя камеры дважды в `cameras.conf`) | обновить пакеты (шаг 14), `systemctl restart fpv-agent`; проверить `journalctl -u fpv-agent \| grep -i источник`; убрать повторы в `/etc/fpv-agent/cameras.conf` |
 | В окне ⚙ нет ролика | неподходящее имя файла (пробелы, кириллица) или расширение | переименовать, например `flight-1.mp4` |
 | Выбран RTSP, видео нет; агент: `видео rtsp:… остановилось` | камера недоступна, неверный адрес или пароль | проверка адреса командой `ffmpeg … -frames:v 1` из §10.1 |
 | Агент: `видео usb:video0 остановилось: … Permission denied` / `Device or resource busy` | нет доступа к камере или её занял браузер | служба в группе `video` (пакет 0.1.0-14+); закрыть камеру в браузере на этой же машине |
