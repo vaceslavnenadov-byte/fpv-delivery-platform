@@ -131,9 +131,9 @@ export function LiveVideo({ orderId, variant = "card", autoStart = false, childr
   const button = active ? <button className="btn" onClick={stop}>Остановить</button>
     : <button className="btn primary" onClick={() => start()}>Смотреть трансляцию</button>;
   const media = <>
-    <video ref={video} muted playsInline controls={variant === "card"} hidden={!active || mode !== "video"} aria-label="Трансляция с дрона" />
+    <video ref={video} muted playsInline controls={variant === "card"} hidden={!active || mode !== "video"} aria-label={source === "customer" ? "Трансляция с камеры заказчика" : "Трансляция с дрона"} />
     {active && mode === "frames" && frameUrl && (
-      <img className="live-frame" src={frameUrl} alt="Кадр трансляции с дрона"
+      <img className="live-frame" src={frameUrl} alt={source === "customer" ? "Кадр с камеры заказчика" : "Кадр трансляции с дрона"}
            onLoad={() => setState("playing")} onError={() => setState("waiting")} />
     )}
   </>;
@@ -154,7 +154,7 @@ export function LiveVideo({ orderId, variant = "card", autoStart = false, childr
       <div className="row between">
         <div className="row">
           {badge}
-          {!active && <span className="muted small">Видео с камеры дрона в реальном времени.</span>}
+          {!active && <span className="muted small">{source === "customer" ? "Видео с камеры заказчика" : "Видео с камеры дрона"} в реальном времени.</span>}
         </div>
         <div className="row">{modeSelect}{button}</div>
       </div>

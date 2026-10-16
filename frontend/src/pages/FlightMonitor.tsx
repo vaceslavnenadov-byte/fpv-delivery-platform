@@ -62,6 +62,8 @@ export function FlightMonitorPage() {
   const { me, can } = useAuth();
   const now = useNow();
   const [sideTab, setSideTab] = useState<"map" | "customer">("map");
+  // Источник главного окна: камера дрона (по умолчанию) или камера заказчика; второй уходит в правую панель.
+  const [mainSource, setMainSource] = useState<"drone" | "customer">("drone");
   const order = useLive(() => api.get<Order>(`/api/v1/orders/${orderId}`), [orderId],
     (m) => m.data.order_id === orderId && m.kind !== "telemetry");
   const telemetry = useLive(
@@ -110,6 +112,13 @@ export function FlightMonitorPage() {
   if (battery != null && battery < 30) warnings.push(`Низкий заряд батареи: ${battery}%`);
   if (last && last.gnss_fix === false) warnings.push("Нет спутникового решения (GNSS)");
   const customerCam = can("video.live") && o.customer_id !== me?.id && CUSTOMER_STREAM_STATUSES.includes(o.status);
+  // Поменять окна местами можно только в полёте: до начала задания главное окно занято подготовкой.
+  const canSwap = flying && customerCam;
+  const mainCustomer = canSwap && mainSource === "customer";
+  const swap = () => {
+    setMainSource(mainCustomer ? "drone" : "customer");
+    setSideTab("customer");
+  };
   const canChat = can("order.chat") && (o.operator_id === me?.id || o.coordinator_id === me?.id || can("order.read_all"));
 
   return (
@@ -150,7 +159,11 @@ export function FlightMonitorPage() {
       </header>
 
       <section className="mon-video">
-        {flying ? (
+        {mainCustomer ? (
+          <CustomerCameraViewer orderId={o.id} main>
+            <div className="mon-source customer">📹 КАМЕРА ЗАКАЗЧИКА — не камера дрона</div>
+          </CustomerCameraViewer>
+        ) : flying ? (
           <LiveVideo key={o.id} orderId={o.id} variant="hud" autoStart>
             <Hud last={last} extra={x} maxAlt={route?.max_altitude_m ?? 120} flightMs={flightMs} age={age} />
           </LiveVideo>
@@ -167,6 +180,12 @@ export function FlightMonitorPage() {
                 : `Заказ: ${ORDER_STATUS[o.status]?.label ?? o.status}. Трансляция не ведётся.`}
           </div></div>
         )}
+        {canSwap && (
+          <button className="mon-btn mon-swap" onClick={swap}
+                  title="Поменять местами главное окно и правую панель">
+            ⇄ {mainCustomer ? "Камера дрона в главное окно" : "Камера заказчика в главное окно"}
+          </button>
+        )}
         {warnings.length > 0 && <div className="mon-warn">{warnings.map((w) => <div key={w}>⚠ {w}</div>)}</div>}
       </section>
 
@@ -176,12 +195,14 @@ export function FlightMonitorPage() {
             <button role="tab" aria-selected={sideTab === "map"} className={sideTab === "map" ? "active" : ""} onClick={() => setSideTab("map")}>🗺 Карта маршрута</button>
             {customerCam && (
               <button role="tab" aria-selected={sideTab === "customer"} className={sideTab === "customer" ? "active" : ""} onClick={() => setSideTab("customer")}>
-                📹 Камера заказчика
+                {mainCustomer ? "📡 Камера дрона" : "📹 Камера заказчика"}
               </button>
             )}
           </div>
         </div>
-        {sideTab === "customer" && customerCam ? (
+        {sideTab === "customer" && mainCustomer ? (
+          <div className="mon-cam"><LiveVideo key={`${o.id}-side`} orderId={o.id} autoStart /></div>
+        ) : sideTab === "customer" && customerCam ? (
           <div className="mon-cam"><CustomerCameraViewer orderId={o.id} variant="hud" /></div>
         ) : route ? (
           <div className="mon-map-body">

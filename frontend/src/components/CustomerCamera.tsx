@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, api, errorText } from "../api";
 import { useLive } from "../realtime";
 import { LiveVideo } from "./LiveVideo";
@@ -182,7 +182,9 @@ export function CustomerCameraPublisher({ orderId }: { orderId: string }) {
 }
 
 /** Просмотр трансляции заказчика (оператор, координатор, администратор). */
-export function CustomerCameraViewer({ orderId, variant = "card" }: { orderId: string; variant?: "card" | "hud" }) {
+export function CustomerCameraViewer({ orderId, variant = "card", main = false, children }: {
+  orderId: string; variant?: "card" | "hud"; main?: boolean; children?: ReactNode;
+}) {
   const st = useLive(() => api.get<{ active: boolean }>(`/api/v1/orders/${orderId}/customer-stream`), [orderId],
     (m) => m.kind === "customer_stream" && m.data.order_id === orderId);
   useEffect(() => {      // резервная проверка: трансляция могла прекратиться без сигнала
@@ -191,6 +193,12 @@ export function CustomerCameraViewer({ orderId, variant = "card" }: { orderId: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (st.error) return <p className="muted">{errorText(st.error)}</p>;
+  // main — в главном окне монитора полёта (вместо камеры дрона), с наложением-подписью источника
+  if (main) {
+    return st.data?.active
+      ? <LiveVideo key={`${orderId}-customer-main`} orderId={orderId} source="customer" variant="hud" autoStart>{children}</LiveVideo>
+      : <div className="live-hud">{children}<div className="live-hud-idle">Заказчик сейчас не транслирует камеру.</div></div>;
+  }
   if (!st.data?.active) return <p className={variant === "hud" ? "mon-muted" : "muted"}>Заказчик сейчас не транслирует камеру.</p>;
   return <LiveVideo key={`${orderId}-customer`} orderId={orderId} source="customer" variant="card" autoStart={variant === "hud"} />;
 }
