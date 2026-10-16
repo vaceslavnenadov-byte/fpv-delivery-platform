@@ -9,7 +9,7 @@ configure)
     install -d -o root -g fpv-agent -m 0750 /etc/fpv-agent
     # RTSP-камеры дрона (адреса могут содержать пароли — файл читает только служба)
     if [ ! -e /etc/fpv-agent/cameras.conf ]; then
-        install -o root -g fpv-agent -m 0640 /usr/share/doc/fpv-drone-agent/cameras.conf.example /etc/fpv-agent/cameras.conf
+        install -o root -g fpv-agent -m 0640 /usr/share/fpv-drone-agent/cameras.conf.example /etc/fpv-agent/cameras.conf
     fi
     # Папка тестовых роликов; если пуста и есть ffmpeg — создаётся пример (20 с)
     install -d -o root -g fpv-agent -m 0755 /var/lib/fpv-agent/videos
