@@ -10,11 +10,13 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
 from .adapters import SimulatedDrone, SimulatorScenario
 from .agent import ServerClient, ServiceModule
+from .camera import CameraSource
 
 
 def _read_key() -> str:
@@ -42,9 +44,20 @@ def main(argv=None) -> int:
     ap.add_argument("--duration", type=float, help="ограничить время работы, с")
     ap.add_argument("--auto-complete", action="store_true",
                     help="отправлять событие завершения при прибытии в точку Б")
+    ap.add_argument("--video-device", default=os.environ.get("FPV_AGENT_VIDEO_DEVICE", ""),
+                    help="камера дрона (например /dev/video0); пусто — тестовая таблица")
+    ap.add_argument("--video-size", default=os.environ.get("FPV_AGENT_VIDEO_SIZE", "640x480"))
+    ap.add_argument("--video-fps", type=int, default=int(os.environ.get("FPV_AGENT_VIDEO_FPS", "15") or 15))
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    adapter = SimulatedDrone(SimulatorScenario.preset(args.scenario), serial=args.serial)
+    if args.video_device and not re.fullmatch(r"/dev/video\d+|/dev/v4l/by-(id|path)/[\w.:-]+", args.video_device):
+        print("ОШИБКА: --video-device: ожидается /dev/videoN или /dev/v4l/by-id/...", file=sys.stderr)
+        return 2
+    if not re.fullmatch(r"\d{2,4}x\d{2,4}", args.video_size) or not 1 <= args.video_fps <= 60:
+        print("ОШИБКА: --video-size ШИРИНАxВЫСОТА, --video-fps 1..60", file=sys.stderr)
+        return 2
+    camera = CameraSource(args.video_device, args.video_size, args.video_fps) if args.video_device else None
+    adapter = SimulatedDrone(SimulatorScenario.preset(args.scenario), serial=args.serial, camera=camera)
     client = ServerClient(args.server, _read_key(), ca_file=args.ca_file)
     ServiceModule(adapter, client, Path(args.state_dir), auto_complete=args.auto_complete).run(args.duration)
     return 0

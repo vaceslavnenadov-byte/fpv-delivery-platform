@@ -5,3 +5,8 @@ FPV_AGENT_SCENARIO=normal
 FPV_DRONE_KEY_FILE=/etc/fpv-agent/key
 # Сертификат УЦ для проверки сервера (пусто — системное хранилище)
 FPV_AGENT_CA_FILE=/etc/ssl/certs/ca-certificates.crt
+# Камера дрона (только видео): /dev/video0 или /dev/v4l/by-id/...; пусто — тестовая таблица.
+# Видео с неё идёт в платформу как видео дрона: главное окно монитора, телеметрия, видеоподтверждение.
+FPV_AGENT_VIDEO_DEVICE=
+FPV_AGENT_VIDEO_SIZE=640x480
+FPV_AGENT_VIDEO_FPS=15

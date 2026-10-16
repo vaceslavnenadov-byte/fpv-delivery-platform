@@ -117,3 +117,55 @@ def test_agent_rejects_plain_http_to_remote_server():
     from fpv_agent.agent import ServerClient
     with pytest.raises(ValueError):
         ServerClient("http://fpv.example.org", "k")
+
+
+# --- камера дрона (--video-device) ---
+
+from fpv_agent.camera import CameraSource  # noqa: E402
+from fpv_agent.__main__ import main as agent_main  # noqa: E402
+
+
+class _TestPatternCamera(CameraSource):
+    """Та же цепочка сегментирования, но вход — тестовый источник вместо /dev/videoN."""
+
+    def command(self, out_dir):
+        cmd = super().command(out_dir)
+        i = cmd.index("-f")
+        return cmd[:i] + ["-re", "-f", "lavfi", "-i", f"testsrc=size={self.size}:rate={self.fps}"] + cmd[cmd.index(self.device) + 1:]
+
+
+@pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="нет ffmpeg")
+def test_camera_segments_used_as_drone_video(tmp_path):
+    import time
+    dev = tmp_path / "video0"
+    dev.touch()                                   # устройство «существует»
+    cam = _TestPatternCamera(str(dev), "320x240", 10)
+    drone = SimulatedDrone(SimulatorScenario(), camera=cam)
+    assert drone.read_video_segment() is None     # вне задания камера не открывается
+    assert not cam.running
+    drone.mission_started = drone.clock()
+    got = []
+    deadline = time.monotonic() + 15
+    while len(got) < 2 and time.monotonic() < deadline:
+        seg = drone.read_video_segment()
+        if seg:
+            got.append(seg)
+        time.sleep(0.2)
+    assert cam.running and len(got) >= 2
+    assert all(s[0] == 0x47 for s in got)         # MPEG-TS (sync byte), как у видео дрона
+    assert drone.read_telemetry()["extra"]["video_resolution"] == "320x240"
+    drone.disconnect()
+    assert not cam.running
+
+
+def test_camera_missing_device_gives_no_video(tmp_path):
+    cam = CameraSource(str(tmp_path / "nope"))
+    assert cam.read_segment() is None and not cam.running
+
+
+@pytest.mark.parametrize("args", [["--video-device", "/dev/sda"], ["--video-device", "/dev/video0;rm"],
+                                  ["--video-device", "/dev/video0", "--video-size", "big"],
+                                  ["--video-device", "/dev/video0", "--video-fps", "0"]])
+def test_agent_rejects_bad_video_args(args, monkeypatch):
+    monkeypatch.setenv("FPV_DRONE_KEY", "x")
+    assert agent_main(["--server", "http://127.0.0.1:9", *args]) == 2

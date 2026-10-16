@@ -15,4 +15,8 @@ export FPV_DRONE_KEY_FILE=/etc/fpv-agent/key   # права 600, ключ вып
 python -m fpv_agent --server https://fpv.dc.local --scenario normal --ca-file /etc/fpv-agent/ca.pem
 ```
 
+Камера дрона: `--video-device /dev/video0` (или `FPV_AGENT_VIDEO_DEVICE`) — видео с камеры
+вместо тестовой таблицы, `--video-size 640x480`, `--video-fps 15`. Камера только читается
+(ffmpeg, V4L2) и открывается лишь на время задания; см. `fpv_agent/camera.py`.
+
 Подключение реального оборудования — отдельный этап, см. `docs/hardware-integration-plan.md`.

@@ -3,7 +3,9 @@
 Имитирует: подключение, готовность, телеметрию, качество связи, полёт по
 маршруту задания (как модель, а не управление), видеопоток, ошибки, потерю
 и восстановление соединения. Через симулятор невозможно управлять реальным
-оборудованием: он не открывает никаких аппаратных интерфейсов.
+оборудованием. Единственный аппаратный интерфейс, который он может открыть, — камера
+(--video-device, только чтение видео): тогда в платформу идёт видео с этой камеры
+вместо тестовой таблицы.
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..camera import CameraSource
 from .base import DroneAdapter, MissionInfo
 
 HOME = {"lat": 55.7500, "lon": 37.6000}
@@ -54,7 +57,8 @@ class SimulatorScenario:
 
 class SimulatedDrone(DroneAdapter):
     def __init__(self, scenario: Optional[SimulatorScenario] = None, serial: str = "SIM-0001",
-                 rng: Optional[random.Random] = None, clock=time.monotonic) -> None:
+                 rng: Optional[random.Random] = None, clock=time.monotonic,
+                 camera: Optional[CameraSource] = None) -> None:
         self.scenario = scenario or SimulatorScenario()
         self.serial = serial
         self.rng = rng or random.Random(42)
@@ -71,6 +75,7 @@ class SimulatedDrone(DroneAdapter):
         self._error_sent = False
         self._ffmpeg = shutil.which("ffmpeg")
         self._video_seq = 0
+        self.camera = camera        # камера дрона; без неё — тестовая таблица ffmpeg
         self.heading = 0.0
         self.cruise_alt = 80.0
         self._wp_index = 0
@@ -82,6 +87,8 @@ class SimulatedDrone(DroneAdapter):
 
     def disconnect(self) -> None:
         self.connected = False
+        if self.camera:
+            self.camera.stop()
 
     def _elapsed(self) -> float:
         return self.clock() - self.mission_started if self.mission_started else 0.0
@@ -109,6 +116,8 @@ class SimulatedDrone(DroneAdapter):
             self.mission_started = None
             self.phase = "landed"
             self.alt = 0.0
+            if self.camera:
+                self.camera.stop()      # камера занята только во время задания
 
     def _waypoints(self) -> List[Dict[str, float]]:
         m = self.mission
@@ -187,7 +196,8 @@ class SimulatedDrone(DroneAdapter):
                           "flight_mode": "auto" if self.mission_started else "manual",
                           "waypoint_index": min(self._wp_index + 1, total) if total else 0,
                           "waypoint_total": total,
-                          "video_resolution": "320x240", "video_fps": 10}}
+                          "video_resolution": self.camera.size if self.camera else "320x240",
+                          "video_fps": self.camera.fps if self.camera else 10}}
 
     def self_check(self) -> Dict[str, Any]:
         if self.scenario.self_check_fail:
@@ -200,6 +210,8 @@ class SimulatedDrone(DroneAdapter):
         if not self.scenario.video_enabled or self.mission_started is None:
             return None
         self._video_seq += 1
+        if self.camera:
+            return self.camera.read_segment()
         if self._ffmpeg:
             return self._ffmpeg_segment()
         # Без ffmpeg — синтетические байты в контейнере-заглушке (для проверки буфера и хранения).

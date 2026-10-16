@@ -7,6 +7,8 @@ ConditionPathExists=/etc/fpv-agent/key
 [Service]
 User=fpv-agent
 Group=fpv-agent
+# доступ к камере дрона (/dev/video*) — только чтение видео
+SupplementaryGroups=video
 ExecStart=/usr/bin/fpv-agent
 Restart=always
 RestartSec=5

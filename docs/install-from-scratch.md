@@ -63,8 +63,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-13_all.deb  fpv-drone-agent_0.1.0-13_all.deb
-# fpv-platform_0.1.0-13_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-14_all.deb  fpv-drone-agent_0.1.0-14_all.deb
+# fpv-platform_0.1.0-14_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -112,7 +112,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-13, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-14, источник file:/srv/packages
 ```
 
 ---
@@ -385,6 +385,27 @@ journalctl -u fpv-agent -n 20 --no-pager # без 401 и ошибок SSL
 `normal`, `fast`, `link-loss`, `link-blip`, `critical-error`, `no-video`, `faulty`;
 после изменения — `systemctl restart fpv-agent`.
 
+### 10.1. Камера дрона (по желанию)
+
+По умолчанию симулятор передаёт тестовую таблицу. Если к машине, где работает `fpv-agent`,
+подключена камера (на стенде — веб-камера, проброшенная в ВМ: VirtualBox «Устройства» → «Веб-камеры», нужен Extension Pack), видео с неё идёт в
+платформу **как видео дрона**: главное окно монитора полёта с телеметрией поверх, трансляция
+в карточке заказа, видеоподтверждение доставки.
+
+**[root]**
+
+```bash
+ls -l /dev/video* /dev/v4l/by-id/ 2>/dev/null     # какие камеры есть
+sed -i 's#^FPV_AGENT_VIDEO_DEVICE=.*#FPV_AGENT_VIDEO_DEVICE=/dev/video0#' /etc/default/fpv-agent
+grep ^FPV_AGENT_VIDEO /etc/default/fpv-agent       # если строк нет — дописать их (пакет до 0.1.0-14)
+systemctl restart fpv-agent
+journalctl -u fpv-agent -n 20 --no-pager           # после начала задания: «захват видео с /dev/video0»
+```
+
+Камера открывается только на время выполнения задания. Модуль камеру только читает;
+команд дрону через неё не передаётся. Чтобы вернуть тестовую таблицу — оставить
+`FPV_AGENT_VIDEO_DEVICE=` пустым и перезапустить службу.
+
 Проверка: в карточке дрона статус связи `online`; у администратора — «Мониторинг» →
 «Подключённые дроны».
 
@@ -460,6 +481,9 @@ fpv-migrate --check                     # все миграции примене
 | Оператор не видит очередь заказов | оператор не допущен администратором | шаг 9.4 |
 | Кнопки «Выпустить ключ» нет | дрон не подтверждён администратором | шаг 9.2 |
 | Заказ: «Нет связи с сервисным модулем дрона (offline)» | не запущен симулятор или неверный ключ | шаг 10; `journalctl -u fpv-agent` |
+| Агент: `камера /dev/video0 не найдена` | камера не подключена или не проброшена в ВМ | `ls /dev/video*`; VirtualBox — «Устройства» → «Веб-камеры» |
+| Агент: `захват с /dev/video0 завершился: … Permission denied` / `Device or resource busy` | нет доступа к камере или её занял браузер | пакет 0.1.0-14+ (служба в группе `video`); закрыть «Включить камеру» в браузере на этой же машине |
+| Агент: захват завершился `… Invalid argument` | камера не поддерживает заданный размер | `FPV_AGENT_VIDEO_SIZE=640x480` или `1280x720` в `/etc/default/fpv-agent` |
 | Агент: `файл ключа доступен другим пользователям` | права ключа не 600 | `chmod 600 /etc/fpv-agent/key` |
 | Агент: `CERTIFICATE_VERIFY_FAILED` | сертификат сайта не добавлен в доверенные | шаг 7.3 |
 | Агент: `401` | ключ перевыпущен или вставлен с ошибкой | выпустить ключ заново, повторить шаг 10 |
