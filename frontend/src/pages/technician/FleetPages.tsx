@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import { api, errorText } from "../../api";
 import { DroneConnection } from "../../components/DroneConnection";
 import { OrderTable } from "../../components/OrderTable";
+import { PointPicker } from "../../components/PointPicker";
 import { RouteMap } from "../../components/RouteMap";
 import { Alert, Badge, Card, Empty, KV, Pending, Tone } from "../../components/ui";
 import { CARGO_TYPES, fmtDate } from "../../labels";
@@ -30,7 +31,7 @@ export function FleetPage() {
           ))}
         </div>
       )}
-      {current ? <FleetDrones fleet={current} /> : <Empty>У вас ещё нет парка — создайте его ниже.</Empty>}
+      {current ? <FleetDrones key={current.id} fleet={current} onChanged={() => fleets.reload()} /> : <Empty>У вас ещё нет парка — создайте его ниже.</Empty>}
       <FleetForm onCreated={(f) => { fleets.reload(); setActive(f.id); }} first={list.length === 0} />
     </div>
   );
@@ -57,20 +58,62 @@ function FleetForm({ onCreated, first }: { onCreated: (f: Fleet) => void; first:
   }
   return (
     <Card title={first ? "Создать парк" : "Новый парк"}>
-      <form className="form grid4" onSubmit={submit}>
-        <label>Название<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
-        <label className="span2">Адрес базы (точка А)<input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} required minLength={3} /></label>
-        <span />
-        <label>Широта базы<input type="number" step="0.0001" value={f.lat} onChange={(e) => setF({ ...f, lat: Number(e.target.value) })} /></label>
-        <label>Долгота базы<input type="number" step="0.0001" value={f.lon} onChange={(e) => setF({ ...f, lon: Number(e.target.value) })} /></label>
-        <div className="row"><button className="btn primary" disabled={busy}>Создать парк</button></div>
+      <form className="stack" onSubmit={submit}>
+        <PointPicker value={{ lat: f.lat, lon: f.lon }} onChange={(p) => setF({ ...f, lat: p.lat, lon: p.lon })} />
+        <div className="form grid4">
+          <label>Название<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
+          <label className="span2">Адрес базы (точка А)<input value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} required minLength={3} /></label>
+          <span />
+          <label>Широта базы<input type="number" step="0.000001" value={f.lat} onChange={(e) => setF({ ...f, lat: Number(e.target.value) })} /></label>
+          <label>Долгота базы<input type="number" step="0.000001" value={f.lon} onChange={(e) => setF({ ...f, lon: Number(e.target.value) })} /></label>
+          <div className="row"><button className="btn primary" disabled={busy}>Создать парк</button></div>
+        </div>
       </form>
       <Alert>{error}</Alert>
     </Card>
   );
 }
 
-function FleetDrones({ fleet }: { fleet: Fleet }) {
+/** Перенос базы парка (точка А) — щелчком по карте или координатами. Действует для новых заказов. */
+function BaseEditor({ fleet, onSaved }: { fleet: Fleet; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [p, setP] = useState({ lat: fleet.base.lat, lon: fleet.base.lon, address: fleet.base.address ?? "" });
+  const [error, setError] = useState("");
+  async function save() {
+    setError("");
+    try {
+      await api.patch(`/api/v1/fleets/${fleet.id}`, { base: p });
+      setOpen(false);
+      onSaved();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+  if (!open) {
+    return <div className="row"><button className="btn small" onClick={() => {
+      setP({ lat: fleet.base.lat, lon: fleet.base.lon, address: fleet.base.address ?? "" });
+      setOpen(true);
+    }}>📍 Изменить базу (точку А)</button></div>;
+  }
+  return (
+    <div className="stack base-editor">
+      <PointPicker value={p} onChange={(v) => setP({ ...p, lat: v.lat, lon: v.lon })} />
+      <div className="form grid4">
+        <label className="span2">Адрес базы<input value={p.address} onChange={(e) => setP({ ...p, address: e.target.value })} minLength={3} /></label>
+        <label>Широта<input type="number" step="0.000001" value={p.lat} onChange={(e) => setP({ ...p, lat: Number(e.target.value) })} /></label>
+        <label>Долгота<input type="number" step="0.000001" value={p.lon} onChange={(e) => setP({ ...p, lon: Number(e.target.value) })} /></label>
+      </div>
+      <div className="row">
+        <button className="btn primary small" onClick={save}>Сохранить базу</button>
+        <button className="btn ghost small" onClick={() => setOpen(false)}>Отмена</button>
+        <span className="small muted">Новая база действует для новых заказов; у оформленных маршрут не меняется.</span>
+      </div>
+      <Alert>{error}</Alert>
+    </div>
+  );
+}
+
+function FleetDrones({ fleet, onChanged }: { fleet: Fleet; onChanged: () => void }) {
   const data = useLive(() => api.get<{ fleet: Fleet; items: Drone[] }>(`/api/v1/fleets/${fleet.id}/drones`), [fleet.id],
     (m) => m.kind === "drone.updated");
   const [selected, setSelected] = useState<string | null>(null);
@@ -91,6 +134,7 @@ function FleetDrones({ fleet }: { fleet: Fleet }) {
   return (
     <>
       <Card title={`Парк «${fleet.name}»`} actions={<span className="small muted">База (А): {fleet.base.address}</span>}>
+        <BaseEditor fleet={fleet} onSaved={onChanged} />
         {!data.data ? <Pending /> : items.length === 0 ? <Empty>В парке нет дронов</Empty> : (
           <div className="table-wrap">
             <table className="table">

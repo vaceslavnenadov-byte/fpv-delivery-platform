@@ -122,3 +122,17 @@ def test_admin_moves_drone_without_fleet_into_fleet(world):
     assert r.status_code == 200 and r.json()["fleet_id"] == world.fleet_id and r.json()["published"] is False
     assert world.technician.post(f"/api/v1/drones/{world.drone_id}/publish", json={"published": True}).status_code == 200
     assert world.customer.post("/api/v1/orders", json=world.order_payload()).status_code == 201
+
+
+def test_fleet_base_move_and_service_area(world):
+    url = f"/api/v1/fleets/{world.fleet_id}"
+    far = {"lat": 59.93, "lon": 30.31, "address": "Вне зоны обслуживания"}
+    r = world.technician.patch(url, json={"base": far})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "base_outside_area"
+    assert world.technician.post("/api/v1/fleets", json={"name": "Далеко", "base": far}).status_code == 422
+    old = world.create_order()["route"]["base"]
+    new = {"lat": 55.7480, "lon": 37.5950, "address": "Новая база, ул. Полевая, 7"}
+    r = world.technician.patch(url, json={"base": new})
+    assert r.status_code == 200 and r.json()["base"]["lat"] == new["lat"]
+    assert world.create_order()["route"]["base"]["address"] == new["address"]   # новые заказы — от новой базы
+    assert old["address"] != new["address"]

@@ -63,8 +63,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-17_all.deb  fpv-drone-agent_0.1.0-17_all.deb
-# fpv-platform_0.1.0-17_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-18_all.deb  fpv-drone-agent_0.1.0-18_all.deb
+# fpv-platform_0.1.0-18_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -112,7 +112,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-17, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-18, источник file:/srv/packages
 ```
 
 ---
@@ -354,7 +354,8 @@ sudo -u vboxuser fpv-shortcuts                  # создать ярлыки э
 Дроны заводит и подключает **техник** — администратор своего парка дронов. Заказчик дроны
 не регистрирует: он выбирает дрон из парков, которые техники открыли для заказов.
 
-1. **technician** → «Мой парк» → **создать парк**: название и база (адрес и координаты).
+1. **technician** → «Мой парк» → **создать парк**: название и база — щелчок по карте района
+   (карту загружает администратор, шаг 9.8) или координаты, плюс адрес.
    База — точка **А** маршрута: дрон вылетает с неё, забирает груз в точке **Б** и доставляет в **В**.
 2. **technician** → «Мой парк» → «Завести дрон в парк» (серийный номер, например `SIM-0001`;
    учётный номер `RU-SIM-1`). Статус: «ожидает подтверждения».
@@ -544,7 +545,7 @@ fpv-migrate --check                     # все миграции примене
 
 ## 14. Обновление и повторная установка
 
-При обновлении до 0.1.0-17 (парки дронов, `docs/fleets.md`): дроны, которые заказчики
+При обновлении до 0.1.0-17 и новее (парки дронов, `docs/fleets.md`): дроны, которые заказчики
 зарегистрировали раньше, остаются без парка. Техник создаёт парк (§9.1), администратор →
 «Дроны» → колонка «Парк» переводит в него дрон, техник выполняет §9.4–9.6. Ключ дрона
 можно оставить прежний или выпустить новый (тогда обновить `/etc/fpv-agent/key`).

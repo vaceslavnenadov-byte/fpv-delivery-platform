@@ -404,3 +404,9 @@ label.check { flex-direction: row; align-items: center; }
 .mon-vs-item.checked { background: var(--m-panel2); }
 .mon-vs-item em { margin-left: auto; font-style: normal; font-size: 0.8rem; }
 .mon-vs-group:disabled .mon-vs-item { cursor: default; opacity: 0.85; }
+
+/* Выбор точки на карте (база парка) */
+.point-picker { max-width: 640px; }
+.point-picker svg { cursor: crosshair; }
+.point-picker figcaption { gap: 8px; }
+.base-editor { border: 1px dashed var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
