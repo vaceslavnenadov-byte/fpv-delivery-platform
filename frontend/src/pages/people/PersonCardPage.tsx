@@ -110,7 +110,7 @@ function ProfileCard({ c, canEdit, canGroup, units, busy, onSave }: {
   const [f, setF] = useState({ ...Object.fromEntries(Object.entries(c.profile).map(([k, v]) => [k, v ?? ""])) } as Record<string, string>);
   const [unit, setUnit] = useState(c.org_unit?.id ?? "");
   const fields: [string, string][] = [["last_name", "Фамилия"], ["first_name", "Имя"], ["middle_name", "Отчество"],
-    ["position_title", "Должность в организации"], ["phone", "Телефон"], ["email", "Почта"], ["profile_notes", "Примечание"]];
+    ["nickname", "Никнейм"], ["position_title", "Должность в организации"], ["location", "Местоположение"], ["phone", "Телефон"], ["email", "Почта"], ["profile_notes", "Примечание"]];
   function save(e: FormEvent) {
     e.preventDefault();
     void onSave(f, "Анкета сохранена");

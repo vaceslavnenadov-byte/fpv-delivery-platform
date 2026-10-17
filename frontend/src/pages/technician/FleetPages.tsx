@@ -3,12 +3,14 @@ import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { api, errorText } from "../../api";
 import { DroneConnection } from "../../components/DroneConnection";
+import { OrderCargoCards } from "../../components/OrderCargo";
 import { OrderTable } from "../../components/OrderTable";
 import { PointPicker } from "../../components/PointPicker";
 import { RouteMap } from "../../components/RouteMap";
 import { Alert, Badge, Card, Empty, KV, Pending, Tone } from "../../components/ui";
-import { CARGO_TYPES, fmtDate } from "../../labels";
+import { cargoName, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
+import { loadDroneModels } from "../../catalogs";
 import type { Zone } from "../../serviceArea";
 import type { Drone, Fleet, Order } from "../../types";
 
@@ -195,16 +197,35 @@ function FleetDrones({ fleet, onChanged }: { fleet: Fleet; onChanged: () => void
   );
 }
 
+const MANUAL = "manual";
+
 function RegisterDrone({ fleetId, onDone }: { fleetId: string; onDone: () => void }) {
-  const empty = { serial_number: "", registration_number: "", manufacturer: "", model: "", max_payload_g: 1500, max_range_m: 20000 };
+  const models = useLive(loadDroneModels, []);
+  const empty = { serial_number: "", registration_number: "", manufacturer: "", model: "", max_payload_g: 1500, max_range_m: 20000,
+                  link_type: "", construction: "", engine_type: "" };
   const [f, setF] = useState(empty);
+  // Конфигурация из справочника «Типы БПЛА» подставляет параметры; «Ввести вручную» — техник вводит сам,
+  // в справочник такие параметры не попадают.
+  const [config, setConfig] = useState("");
   const [msg, setMsg] = useState<{ tone: string; text: string } | null>(null);
+  const chosen = (models.data ?? []).find((m) => m.id === config);
+  function pick(id: string) {
+    setConfig(id);
+    const m = (models.data ?? []).find((x) => x.id === id);
+    if (m) {
+      setF((s) => ({ ...s, manufacturer: m.manufacturer, model: m.model, max_payload_g: m.max_payload_g, max_range_m: m.max_range_m,
+                     link_type: m.link_type, construction: m.construction, engine_type: m.engine_type }));
+    } else if (id === MANUAL) {
+      setF((s) => ({ ...empty, serial_number: s.serial_number, registration_number: s.registration_number }));
+    }
+  }
   async function submit(e: FormEvent) {
     e.preventDefault();
     setMsg(null);
     try {
-      await api.post("/api/v1/drones", { ...f, fleet_id: fleetId });
+      await api.post("/api/v1/drones", { ...f, fleet_id: fleetId, drone_model_id: chosen ? chosen.id : null });
       setF(empty);
+      setConfig("");
       setMsg({ tone: "ok", text: "Дрон заведён в парк. Ожидается подтверждение регистрации администратором." });
       onDone();
     } catch (err) {
@@ -213,17 +234,32 @@ function RegisterDrone({ fleetId, onDone }: { fleetId: string; onDone: () => voi
   }
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) =>
     setF({ ...f, [k]: typeof f[k] === "number" ? Number(e.target.value) : e.target.value });
+  const locked = !!chosen;
   return (
     <Card title="Завести дрон в парк">
       <form className="form grid4" onSubmit={submit}>
+        <label className="span2">Выберите конфигурацию
+          <select value={config} onChange={(e) => pick(e.target.value)} required aria-label="Выберите конфигурацию">
+            <option value="" disabled>— выберите тип БПЛА —</option>
+            {(models.data ?? []).map((m) => <option key={m.id} value={m.id}>{m.manufacturer} {m.model}</option>)}
+            <option value={MANUAL}>Ввести вручную</option>
+          </select>
+        </label>
         <label>Серийный номер<input value={f.serial_number} onChange={set("serial_number")} required placeholder="SIM-0002" /></label>
         <label>Учётный номер<input value={f.registration_number} onChange={set("registration_number")} required placeholder="RU-SIM-2" /></label>
-        <label>Производитель<input value={f.manufacturer} onChange={set("manufacturer")} required minLength={2} /></label>
-        <label>Модель<input value={f.model} onChange={set("model")} required /></label>
-        <label>Грузоподъёмность, г<input type="number" min={50} value={f.max_payload_g} onChange={set("max_payload_g")} /></label>
-        <label>Дальность, м<input type="number" min={500} value={f.max_range_m} onChange={set("max_range_m")} /></label>
-        <div className="row"><button className="btn primary">Завести дрон</button></div>
+        {config && <>
+          <label>Производитель<input value={f.manufacturer} onChange={set("manufacturer")} required minLength={2} readOnly={locked} /></label>
+          <label>Модель<input value={f.model} onChange={set("model")} required readOnly={locked} /></label>
+          <label>Грузоподъёмность, г<input type="number" min={50} value={f.max_payload_g} onChange={set("max_payload_g")} readOnly={locked} /></label>
+          <label>Дальность, м<input type="number" min={500} value={f.max_range_m} onChange={set("max_range_m")} readOnly={locked} /></label>
+          <label>Тип связи{!locked && <span className="small muted"> (необязательно)</span>}<input value={f.link_type} onChange={set("link_type")} readOnly={locked} /></label>
+          <label>Конструкция{!locked && <span className="small muted"> (необязательно)</span>}<input value={f.construction} onChange={set("construction")} readOnly={locked} /></label>
+          <label>Тип двигателя{!locked && <span className="small muted"> (необязательно)</span>}<input value={f.engine_type} onChange={set("engine_type")} readOnly={locked} /></label>
+        </>}
+        <div className="row"><button className="btn primary" disabled={!config}>Завести дрон</button></div>
       </form>
+      {locked && <p className="small muted">Параметры взяты из справочника «Типы БПЛА». Серийный и учётный номера введите сами.</p>}
+      {config === MANUAL && <p className="small muted">Параметры, введённые вручную, сохраняются только у этого дрона и в справочник не попадают.</p>}
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
     </Card>
   );
@@ -295,7 +331,8 @@ export function TechOrderPage() {
         <Card title="Заказ и готовность">
           <KV items={[
             ["Дрон", o.drone ? `${o.drone.registration_number} — ${o.drone.model}` : "—"],
-            ["Груз", `${CARGO_TYPES[o.cargo_type] ?? o.cargo_type}, ${o.cargo_weight_g} г`],
+            ["Груз", (o.cargo_items?.length ?? 1) > 1 ? `${o.cargo_items!.length} груза(ов), всего ${o.cargo_weight_g} г`
+              : `${cargoName(o)}, ${o.cargo_weight_g} г`],
             ["А — база", o.route?.base?.address ?? "—"],
             ["Б — забор груза", o.route?.origin.address],
             ...((o.route?.stops ?? []).map((x, i) => [`${i + 1} — промежуточная точка`, x.note ? `${x.address} — ${x.note}` : x.address]) as [string, string][]),
@@ -320,9 +357,10 @@ export function TechOrderPage() {
           )}
           <Alert>{error}</Alert>
           <p className="muted small">Проверяется: регистрация и исправность дрона, свежая диагностика, связь, телеметрия,
-            заряд, грузоподъёмность и дальность (А→Б→В и возврат на базу), видео проверено за последние 12 ч.</p>
+            заряд и дальность (А→Б→В и возврат на базу), видео проверено за последние 12 ч.</p>
         </Card>
       </div>
+      <OrderCargoCards o={o} />
       {o.drone && <><h2>Подключение дрона</h2><DroneConnection droneId={o.drone.id} /></>}
     </div>
   );

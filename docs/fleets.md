@@ -118,3 +118,27 @@ API: `GET /api/v1/service-zones` (администратору — все зон
 `PUT`/`DELETE /api/v1/admin/service-zones/{id}/technicians/{user_id}`; разрешение `platform.settings`.
 Аудит: `service_zone.created|updated|deleted|technician_assigned|technician_removed`.
 Тесты: `tests/backend/test_zones.py`.
+
+## Справочник «Типы БПЛА» и архив БПЛА (0.1.0-31)
+
+* **Типы БПЛА** (`drone_models`, ведёт администратор, разрешение `catalog.manage`): модель,
+  производитель, тип связи, конструкция, тип двигателя, дальность, грузоподъёмность. При заведении
+  дрона техник передаёт `drone_model_id` — параметры копируются из справочника в дрон (ввод клиента
+  для этих полей игнорируется); без `drone_model_id` — «Ввести вручную», параметры сохраняются только у
+  дрона. Изменение и удаление типа не меняет заведённые дроны (ссылка обнуляется).
+* **Архив** (`drones.archived_at|archived_by|archive_reason|archive_comment`, разрешение
+  `drone.archive`, только дроны своего парка): `POST /api/v1/drones/{id}/archive`
+  `{"reason": "broken|lost|repair|returned|worn_out|dismantled|obsolete|peripherals|other", "comment": "…"}`
+  (для `other` комментарий обязателен; дрон с незавершённым заказом — 409 `drone_busy`), возврат —
+  `DELETE /api/v1/drones/{id}/archive` (статус «Требует проверки»). Архивный дрон снимается с
+  публикации, не показывается в `GET /api/v1/fleets/{id}/drones`, `available-drones` и счётчике парка,
+  не проходит проверку допуска и не открывается для заказов. Список — `GET /api/v1/drone-archive`.
+* **Отчёт о техсостоянии**: `GET /api/v1/tech-report` — все дроны техника (работоспособные первыми,
+  архивные в конце) с датой последнего полёта и сведениями профиля (группа, подгруппы, имя). PDF
+  формирует браузер (pdfmake, загружается только по кнопке) и сохраняет в папку загрузок.
+* Грузоподъёмность дрона при проверках заказа (заказчик, техник, оператор) пока не учитывается: в
+  заказе может быть несколько грузов (`order_cargo_items`), масса каждого ограничена справочником
+  «Типы грузов» (`cargo_types`).
+
+Аудит: `drone.archived|unarchived`, `catalog.cargo_created|cargo_updated|cargo_deleted`,
+`catalog.drone_model_created|drone_model_updated|drone_model_deleted`. Тесты: `tests/backend/test_catalogs.py`.

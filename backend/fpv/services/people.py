@@ -31,7 +31,8 @@ from .identity import Principal, revoke_user_sessions
 USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,63}$")
 STATUS_LABEL = {"active": "активна", "suspended": "приостановлена", "banned": "забанена",
                 "disabled": "отключена", "deleted": "удалена"}
-PROFILE_FIELDS = ("last_name", "first_name", "middle_name", "position_title", "profile_notes", "phone", "email")
+PROFILE_FIELDS = ("last_name", "first_name", "middle_name", "position_title", "profile_notes", "phone", "email",
+                  "nickname", "location")
 
 
 def _can_list(p: Principal) -> None:
@@ -123,6 +124,15 @@ def card(db: Session, p: Principal, user_id: uuid.UUID) -> Dict[str, Any]:
         "profile_status": u.profile_status, "profile_completed": u.profile_completed,
         "operator": {"status": op.status, "license_number": op.license_number} if op else None,
     }
+
+
+def report_identity(db: Session, user_id: uuid.UUID) -> Dict[str, Any]:
+    """Сведения профиля для шапки отчётов и раздела «Профиль»."""
+    u = _user(db, user_id)
+    groups = org_units.chain(db, u.org_unit_id)
+    return {"display_name": u.display_name, "first_name": u.first_name, "last_name": u.last_name,
+            "middle_name": u.middle_name, "nickname": u.nickname, "position_title": u.position_title,
+            "location": u.location, "group": groups[0] if groups else None, "subgroups": groups[1:]}
 
 
 def _check_org_unit(db: Session, unit_id: Optional[uuid.UUID]) -> Optional[uuid.UUID]:

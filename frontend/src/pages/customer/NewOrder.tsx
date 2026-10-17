@@ -6,7 +6,7 @@ import { MapSourcePicker, preferredMapSource } from "../../components/MapSourceP
 import { LOCAL } from "../../tiles";
 import { RouteMap } from "../../components/RouteMap";
 import { Alert, Card, Pending } from "../../components/ui";
-import { CARGO_TYPES } from "../../labels";
+import { loadCargoTypes } from "../../catalogs";
 import { useLive } from "../../realtime";
 import type { AvailableDrone, Order, Stop } from "../../types";
 
@@ -18,6 +18,17 @@ const PRESETS = [
 ];
 
 const MAX_STOPS = 5;
+const MAX_CARGO = 10;
+
+interface CargoDraft {
+  cargo_type: string;
+  description: string;
+  weight_g: number;
+  length_mm: number;
+  width_mm: number;
+  height_mm: number;
+}
+const newCargo = (type = ""): CargoDraft => ({ cargo_type: type, description: "", weight_g: 300, length_mm: 300, width_mm: 220, height_mm: 30 });
 const mapAddress = (lat: number, lon: number) => `Точка на карте (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
 const isAutoAddress = (a: string) => !a.trim() || PRESETS.some((x) => x.name === a) || a.startsWith("Точка на карте");
 
@@ -33,8 +44,7 @@ export function NewOrderPage() {
     (m) => m.kind === "drone.updated");
   const now = new Date();
   const [f, setF] = useState({
-    drone_id: "", cargo_type: "documents", cargo_description: "", cargo_weight_g: 300,
-    cargo_length_mm: 300, cargo_width_mm: 220, cargo_height_mm: 30,
+    drone_id: "",
     origin_address: PRESETS[0].name, origin_lat: PRESETS[0].lat, origin_lon: PRESETS[0].lon,
     dest_address: PRESETS[1].name, dest_lat: PRESETS[1].lat, dest_lon: PRESETS[1].lon,
     recipient_name: "", recipient_phone: "",
@@ -42,6 +52,18 @@ export function NewOrderPage() {
     window_end: localInput(new Date(now.getTime() + 120 * 60000)),
   });
   const [order, setOrder] = useState<Order | null>(null);
+  // Грузы заказа — один дрон везёт все; тип груза — из справочника администратора.
+  const cargoTypes = useLive(loadCargoTypes, []);
+  const [cargo, setCargo] = useState<CargoDraft[]>([newCargo()]);
+  const types = cargoTypes.data ?? [];
+  const typeOf = (code: string) => types.find((c) => c.code === code) ?? types[0];
+  const editCargo = (i: number, patch: Partial<CargoDraft>) => {
+    idemKey.current = newIdempotencyKey();
+    setCargo((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  };
+  const addCargo = () => { idemKey.current = newIdempotencyKey(); setCargo((list) => [...list, newCargo()]); };
+  const removeCargo = (i: number) => { idemKey.current = newIdempotencyKey(); setCargo((list) => list.filter((_, j) => j !== i)); };
+  const totalWeight = cargo.reduce((n, c) => n + (Number(c.weight_g) || 0), 0);
   const [activePin, setActivePin] = useState("origin");
   // Карта, на которой заказчик прокладывает маршрут; онлайн-карта сохраняется в заказе и по
   // умолчанию показывается оператору и координатору.
@@ -110,9 +132,8 @@ export function NewOrderPage() {
     setError("");
     try {
       const body = {
-        drone_id: chosen?.id, cargo_type: f.cargo_type, cargo_description: f.cargo_description,
-        cargo_weight_g: f.cargo_weight_g, cargo_length_mm: f.cargo_length_mm, cargo_width_mm: f.cargo_width_mm,
-        cargo_height_mm: f.cargo_height_mm,
+        drone_id: chosen?.id,
+        cargo_items: cargo.map((c) => ({ ...c, cargo_type: c.cargo_type || typeOf("")?.code })),
         origin: { lat: f.origin_lat, lon: f.origin_lon, address: f.origin_address },
         destination: { lat: f.dest_lat, lon: f.dest_lon, address: f.dest_address },
         map_provider_id: mapSource && mapSource !== LOCAL ? mapSource : null,
@@ -185,7 +206,7 @@ export function NewOrderPage() {
       {usable.length === 0 && <Alert tone="warn">Сейчас нет свободных дронов: техники парков ещё не открыли дроны для заказов или все заняты.</Alert>}
       <form className="stack" onSubmit={create}>
         <div className="grid2">
-          <Card title="Груз">
+          <Card title="Дрон и грузы">
             <div className="form grid2">
               <label className="span2">Дрон (из открытых парков)
                 <select value={chosen?.id ?? ""} onChange={set("drone_id")} required>
@@ -201,17 +222,39 @@ export function NewOrderPage() {
                   ))}
                 </select>
               </label>
-              <label>Тип груза
-                <select value={f.cargo_type} onChange={set("cargo_type")}>
-                  {Object.entries(CARGO_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </label>
-              <label className="span2">Описание груза<textarea value={f.cargo_description} onChange={set("cargo_description")} required minLength={3} /></label>
-              <label>Масса, г<input type="number" min={1} value={f.cargo_weight_g} onChange={set("cargo_weight_g")} /></label>
-              <div className="row">
-                <label>Д, мм<input type="number" min={1} value={f.cargo_length_mm} onChange={set("cargo_length_mm")} /></label>
-                <label>Ш, мм<input type="number" min={1} value={f.cargo_width_mm} onChange={set("cargo_width_mm")} /></label>
-                <label>В, мм<input type="number" min={1} value={f.cargo_height_mm} onChange={set("cargo_height_mm")} /></label>
+            </div>
+            <div className="stack">
+              {cargo.map((c, i) => {
+                const t = typeOf(c.cargo_type);
+                return (
+                  <div key={i} className="cargo-item form grid2">
+                    <div className="span2 row between">
+                      <strong>Груз {i + 1}</strong>
+                      {cargo.length > 1 && <button type="button" className="btn small ghost" onClick={() => removeCargo(i)}
+                        aria-label={`Удалить груз ${i + 1}`}>✕ Удалить</button>}
+                    </div>
+                    <label>Тип груза
+                      <select value={t?.code ?? ""} onChange={(e) => editCargo(i, { cargo_type: e.target.value })} required
+                              aria-label={`Тип груза ${i + 1}`}>
+                        {types.map((x) => <option key={x.code} value={x.code}>{x.name}{x.category ? ` (${x.category})` : ""}</option>)}
+                      </select>
+                    </label>
+                    <label>Масса, г{t && <span className="small muted"> (не более {t.max_weight_g})</span>}
+                      <input type="number" min={1} max={t?.max_weight_g} value={c.weight_g}
+                             onChange={(e) => editCargo(i, { weight_g: Number(e.target.value) })} aria-label={`Масса груза ${i + 1}`} /></label>
+                    <label className="span2">Описание груза<textarea value={c.description} required minLength={3}
+                      onChange={(e) => editCargo(i, { description: e.target.value })} aria-label={`Описание груза ${i + 1}`} /></label>
+                    <div className="row span2">
+                      <label>Д, мм<input type="number" min={1} value={c.length_mm} onChange={(e) => editCargo(i, { length_mm: Number(e.target.value) })} /></label>
+                      <label>Ш, мм<input type="number" min={1} value={c.width_mm} onChange={(e) => editCargo(i, { width_mm: Number(e.target.value) })} /></label>
+                      <label>В, мм<input type="number" min={1} value={c.height_mm} onChange={(e) => editCargo(i, { height_mm: Number(e.target.value) })} /></label>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="row between">
+                <button type="button" className="btn small" onClick={addCargo} disabled={cargo.length >= MAX_CARGO}>+ Добавить груз</button>
+                <span className="small muted">Грузов: {cargo.length}, общая масса {totalWeight} г — все грузы везёт один дрон.</span>
               </div>
             </div>
           </Card>

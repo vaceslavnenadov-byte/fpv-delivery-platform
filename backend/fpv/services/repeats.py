@@ -99,6 +99,8 @@ def _clone(db: Session, settings: Settings, p: orders.Principal, src: Order) -> 
                 created_at=now, updated_at=now)
     db.add(new)
     db.flush()
+    orders.save_cargo_items(db, new, [{f: (i.description if f == "description" else getattr(i, f))
+                                       for f in orders.CARGO_FIELDS} for i in orders.cargo_items(db, src)])
     r = src.route
     db.add(Route(order_id=new.id, origin_lat=r.origin_lat, origin_lon=r.origin_lon, origin_address=r.origin_address,
                  dest_lat=r.dest_lat, dest_lon=r.dest_lon, dest_address=r.dest_address, distance_m=r.distance_m,

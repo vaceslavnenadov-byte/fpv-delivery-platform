@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { RepeatBadges } from "./RepeatBadges";
 import { Badge, Empty } from "./ui";
-import { CARGO_TYPES, fmtDate, fmtDistance } from "../labels";
+import { cargoName, fmtDate, fmtDistance } from "../labels";
 import type { Order } from "../types";
 
 export function OrderTable({ orders, showCustomer = false }: { orders: Order[]; showCustomer?: boolean }) {
@@ -20,7 +20,7 @@ export function OrderTable({ orders, showCustomer = false }: { orders: Order[]; 
                 {o.status === "in_progress" && (
                   <> <Link to={`/orders/${o.id}`} className="live-badge" title="Смотреть трансляцию с дрона">● В ЭФИРЕ</Link></>
                 )}</td>
-              <td>{CARGO_TYPES[o.cargo_type] ?? o.cargo_type}, {o.cargo_weight_g} г</td>
+              <td>{cargoName(o)}, {o.cargo_weight_g} г</td>
               <td className="small">{o.route?.origin.address} → {o.route?.destination.address}<br />
                 <span className="muted">{fmtDistance(o.route?.distance_m)}</span></td>
               <td className="small">{fmtDate(o.window_start)} — {fmtDate(o.window_end)}</td>

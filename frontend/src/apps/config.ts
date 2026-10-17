@@ -54,6 +54,8 @@ export const APPS: Record<string, AppConfig> = {
       { to: "/", label: "Мой парк" },
       { to: "/orders", label: "Заказы на дронах парка" },
       { to: "/service", label: "Обслуживание" },
+      { to: "/archive", label: "Архив БПЛА" },
+      { to: "/tech-report", label: "Отчёт о ТехСостоянии" },
     ],
   },
   recruiter: {
@@ -80,8 +82,12 @@ export const APPS: Record<string, AppConfig> = {
       { to: "/support-admin", label: "Обращения в ТП" },
       { to: "/people", label: "Пользователи" },
       { to: "/org-units", label: "Группы пользователей" },
+      { to: "/profiles", label: "Проверка профилей" },
+      { to: "/operators", label: "Допуск операторов" },
       { to: "/users", label: "Домен, операторы, устройства" },
       { to: "/scoring", label: "Правила баллов" },
+      { to: "/cargo-types", label: "Типы грузов" },
+      { to: "/drone-models", label: "Типы БПЛА" },
       { to: "/maps", label: "Карты" },
       { to: "/service-zones", label: "Зоны обслуживания" },
       { to: "/audit", label: "Журнал аудита" },
@@ -99,6 +105,13 @@ export function roleHome(can: (perm: string) => boolean): string | null {
     if (can(APPS[key].requiredPerm)) return `${APPS[key].base}/`;
   }
   return null;
+}
+
+/** Приостановленная учётная запись: прав роли нет, но раздел своей роли открывается с профилем и
+ *  техподдержкой («Новое обращение», «Мои обращения»). */
+export function suspendedApp(roles: string[]): AppConfig {
+  const key = HOME_ORDER.find((k) => roles.includes(k)) ?? "customer";
+  return APPS[key];
 }
 
 /** Клиенты, доступные пользователю (для перехода между разделами при нескольких ролях). */

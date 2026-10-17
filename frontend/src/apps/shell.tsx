@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
-import { Outlet } from "react-router";
+import { Link, Outlet, useLocation } from "react-router";
 import type { AppConfig } from "./config";
-import { roleHome } from "./config";
+import { roleHome, suspendedApp } from "./config";
 import { useAuth } from "../auth";
 import { Layout } from "../components/Layout";
 import { Pending } from "../components/ui";
@@ -42,7 +42,28 @@ function WrongApp({ app }: { app: AppConfig }) {
 
 /** Макет роли как layout-route: проверка роли, затем боковое меню и содержимое (Outlet). */
 export function ShellOutlet({ app }: { app: AppConfig }) {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
+  const { pathname } = useLocation();
+  if (me?.account_status === "suspended") {
+    // Приостановлен: в разделе своей роли доступны только профиль и техподдержка.
+    if (suspendedApp(me.roles).key !== app.key) return <WrongApp app={app} />;
+    const allowed = pathname.startsWith("/support") || pathname.startsWith("/profile");
+    return <Layout app={app}>{allowed ? <Outlet /> : <SuspendedNotice />}</Layout>;
+  }
   if (!can(app.requiredPerm)) return <WrongApp app={app} />;
   return <Layout app={app}><Outlet /></Layout>;
+}
+
+function SuspendedNotice() {
+  return (
+    <div className="card stack">
+      <h1>Учётная запись приостановлена</h1>
+      <p>Должностные разделы временно недоступны. Вы можете написать в техподдержку или посмотреть свои обращения.</p>
+      <div className="row">
+        <Link className="btn primary" to="/support/new">Новое обращение</Link>
+        <Link className="btn" to="/support">Мои обращения</Link>
+        <Link className="btn ghost" to="/profile">Профиль</Link>
+      </div>
+    </div>
+  );
 }

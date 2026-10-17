@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { api } from "../../api";
-import { Badge, Card, Empty, Pending } from "../../components/ui";
+import { Badge, Card, Empty, Pending, Tone } from "../../components/ui";
 import { HEALTH_STATUS } from "../../labels";
 import { useLive } from "../../realtime";
 import type { Drone } from "../../types";
@@ -11,7 +12,8 @@ export function TechnicianPage() {
   const [filter, setFilter] = useState("");
   const list = useLive(() => api.get<{ items: Drone[] }>(`/api/v1/drones?scope=all${filter ? `&health_status=${filter}` : ""}`),
     [filter], (m) => m.kind.startsWith("drone."));
-  const [selected, setSelected] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [selected, setSelected] = useState<string | null>(params.get("drone"));
   return (
     <div className="stack">
       <h1>Обслуживание дронов</h1>
@@ -27,7 +29,7 @@ export function TechnicianPage() {
               <tbody>{list.data.items.map((d) => (
                 <tr key={d.id} className={selected === d.id ? "selected" : ""} onClick={() => setSelected(d.id)}>
                   <td><button className="link" onClick={() => setSelected(d.id)}>{d.registration_number}</button></td>
-                  <td>{d.manufacturer} {d.model}</td>
+                  <td>{d.manufacturer} {d.model} {d.archived && <Tone tone="muted">в архиве</Tone>}</td>
                   <td><Badge kind="drone" value={d.status} /></td>
                   <td><Badge kind="health" value={d.health_status} /></td>
                   <td><Badge kind="link" value={d.link_status} /></td>

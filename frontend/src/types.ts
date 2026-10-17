@@ -12,6 +12,10 @@ export interface Me {
   profile_status?: "pending" | "verified" | "rejected";
   account_status?: "active" | "suspended";
   profile_review_notes?: string | null;
+  profile?: {
+    first_name: string | null; last_name: string | null; middle_name: string | null; nickname: string | null;
+    position_title: string | null; location: string | null; group: string | null; subgroups: string[];
+  };
 }
 
 export interface Point {
@@ -81,6 +85,14 @@ export interface Drone {
   fleet_id?: string | null;
   published?: boolean;
   video_checked_at?: string | null;
+  drone_model_id?: string | null;
+  link_type?: string | null;
+  construction?: string | null;
+  engine_type?: string | null;
+  archived?: boolean;
+  archived_at?: string | null;
+  archive_reason?: string | null;
+  archive_comment?: string | null;
   health_checks?: HealthCheck[];
   maintenance?: Maintenance[];
   readiness?: { ready: boolean; reasons: string[] };
@@ -130,6 +142,15 @@ export interface UserBrief {
   username: string;
 }
 
+export interface CargoItem {
+  position: number;
+  cargo_type: string;
+  cargo_type_name: string;
+  description: string;
+  weight_g: number;
+  dims_mm: number[];
+}
+
 export interface Order {
   id: string;
   number: number;
@@ -140,6 +161,8 @@ export interface Order {
   cargo_description: string;
   cargo_weight_g: number;
   cargo_dims_mm: number[];
+  cargo_type_name?: string;
+  cargo_items?: CargoItem[];
   window_start: string;
   window_end: string;
   quote_amount: string | null;

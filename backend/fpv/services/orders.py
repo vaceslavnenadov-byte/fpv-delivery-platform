@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from .. import clock
 from ..config import Settings
 from ..errors import Conflict, Forbidden, NotFound, ValidationFailed
-from ..models import (Assignment, Complaint, DeliveryConfirmation, Drone, Fleet, Order, OrderNote,
+from ..models import (Assignment, Complaint, DeliveryConfirmation, Drone, Fleet, Order, OrderCargoItem, OrderNote,
                       OrderStatusHistory, Role, Route, User, UserRole)
 from . import audit, drones, events, geo
 from .identity import Principal
@@ -173,15 +173,23 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
         checks.append({"code": code, "ok": bool(ok), "message": message})
 
     r = order.route
-    text_blob = f"{order.cargo_type} {order.cargo_description}".lower()
-    check("cargo_type", order.cargo_type in settings.allowed_cargo_types,
-          "Тип груза разрешён" if order.cargo_type in settings.allowed_cargo_types else "Тип груза не разрешён")
+    from . import catalogs
+    items = cargo_items(db, order)
+    types = {c.code: c for c in catalogs.cargo_types(db)}
+    unknown = [i.cargo_type for i in items if i.cargo_type not in types]
+    check("cargo_type", not unknown, "Типы грузов разрешены" if not unknown
+          else "Тип груза не разрешён (нет в справочнике «Типы грузов»)")
+    text_blob = " ".join(f"{i.cargo_type} {i.description}" for i in items).lower()
     bad = [k for k in settings.prohibited_keywords if k.lower() in text_blob]
     check("cargo_prohibited", not bad, "Запрещённые категории не обнаружены" if not bad
           else "Описание груза содержит признаки запрещённой категории")
-    check("cargo_weight", order.cargo_weight_g <= settings.max_cargo_weight_g,
-          f"Масса груза не более {settings.max_cargo_weight_g} г")
-    max_dim = max(order.cargo_length_mm, order.cargo_width_mm, order.cargo_height_mm)
+    heavy = [f"«{types[i.cargo_type].name}» — не более {types[i.cargo_type].max_weight_g} г" for i in items
+             if i.cargo_type in types and i.weight_g > types[i.cargo_type].max_weight_g]
+    heavy += [f"не более {settings.max_cargo_weight_g} г на один груз" for i in items
+              if i.weight_g > settings.max_cargo_weight_g][:1]
+    check("cargo_weight", not heavy, "Масса каждого груза не превышает допустимую для его типа" if not heavy
+          else "Масса груза превышает допустимую: " + "; ".join(heavy))
+    max_dim = max(max(i.length_mm, i.width_mm, i.height_mm) for i in items)
     check("cargo_dimensions", max_dim <= settings.max_cargo_dim_mm,
           f"Габариты не более {settings.max_cargo_dim_mm} мм по любой стороне")
     points = route_points(r)
@@ -207,7 +215,7 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
         (order.window_end - order.window_start) >= dt.timedelta(minutes=settings.min_window_minutes)
     check("time_window", window_ok,
           f"Временное окно в будущем и не короче {settings.min_window_minutes} мин")
-    ok_drone, reasons = drones.readiness(db, settings, drone, cargo_weight_g=order.cargo_weight_g,
+    ok_drone, reasons = drones.readiness(db, settings, drone,
                                          distance_m=route_range_m(r), require_online=False)
     check("drone", ok_drone, "Дрон допущен к эксплуатации" if ok_drone else "; ".join(reasons))
     busy = db.execute(select(Order.id).where(Order.drone_id == drone.id, Order.id != order.id,
@@ -248,15 +256,14 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
             map_providers.get_active(db, provider_id)
         except NotFound as exc:
             raise ValidationFailed("Выбранная карта недоступна — выберите другую", code="map_provider_invalid") from exc
+    items = normalize_cargo(db, data)
     order = Order(customer_id=p.user_id, drone_id=drone.id, status="draft", map_provider_id=provider_id,
-                  cargo_type=data["cargo_type"], cargo_description=data["cargo_description"],
-                  cargo_weight_g=data["cargo_weight_g"], cargo_length_mm=data["cargo_length_mm"],
-                  cargo_width_mm=data["cargo_width_mm"], cargo_height_mm=data["cargo_height_mm"],
-                  recipient_name=data["recipient_name"], recipient_phone=data["recipient_phone"],
+                  **cargo_summary(items), recipient_name=data["recipient_name"], recipient_phone=data["recipient_phone"],
                   window_start=data["window_start"], window_end=data["window_end"],
                   created_at=clock.now(), updated_at=clock.now())
     db.add(order)
     db.flush()
+    save_cargo_items(db, order, items)
     db.add(Route(order_id=order.id, origin_lat=o["lat"], origin_lon=o["lon"], origin_address=o["address"],
                  dest_lat=d["lat"], dest_lon=d["lon"], dest_address=d["address"], distance_m=distance,
                  checkpoints=build_checkpoints(base, o, d, stops), stops=stops,
@@ -269,6 +276,58 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     audit.record(db, p.actor, "order.created", entity_type="order", entity_id=order.id,
                  details={"drone_id": drone.id, "distance_m": distance, "stops": len(stops)})
     return order
+
+
+CARGO_FIELDS = ("cargo_type", "description", "weight_g", "length_mm", "width_mm", "height_mm")
+
+
+def normalize_cargo(db: Session, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Грузы заказа: список cargo_items либо (по-старому) один груз из полей cargo_*."""
+    items = data.get("cargo_items") or []
+    if not items:
+        if not data.get("cargo_type"):
+            raise ValidationFailed("Добавьте хотя бы один груз", code="cargo_required")
+        items = [{"cargo_type": data["cargo_type"], "description": data["cargo_description"],
+                  "weight_g": data["cargo_weight_g"], "length_mm": data["cargo_length_mm"],
+                  "width_mm": data["cargo_width_mm"], "height_mm": data["cargo_height_mm"]}]
+    from . import catalogs
+    out = []
+    for it in items:
+        c = catalogs.cargo_by_code(db, it["cargo_type"])
+        if c is None or c.deleted_at is not None:
+            raise ValidationFailed("Выберите тип груза из списка", code="cargo_type_invalid")
+        out.append({f: (it[f].strip() if isinstance(it[f], str) else it[f]) for f in CARGO_FIELDS})
+    return out
+
+
+def cargo_summary(items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Сводка в полях заказа: масса — сумма, габариты — наибольшие, тип — первого груза."""
+    first = items[0]
+    desc = first["description"] if len(items) == 1 else \
+        "; ".join(f"{n}) {i['description']}" for n, i in enumerate(items, start=1))
+    return {"cargo_type": first["cargo_type"], "cargo_description": desc[:1000],
+            "cargo_weight_g": sum(i["weight_g"] for i in items),
+            "cargo_length_mm": max(i["length_mm"] for i in items),
+            "cargo_width_mm": max(i["width_mm"] for i in items),
+            "cargo_height_mm": max(i["height_mm"] for i in items)}
+
+
+def save_cargo_items(db: Session, order: Order, items: List[Dict[str, Any]]) -> None:
+    for n, it in enumerate(items, start=1):
+        db.add(OrderCargoItem(order_id=order.id, position=n, **{f: it[f] for f in CARGO_FIELDS}))
+    db.flush()
+
+
+def cargo_items(db: Session, order: Order) -> List[OrderCargoItem]:
+    rows = list(db.execute(select(OrderCargoItem).where(OrderCargoItem.order_id == order.id)
+                           .order_by(OrderCargoItem.position)).scalars())
+    if rows:
+        return rows
+    # заказ без списка грузов — один груз из сводных полей
+    return [OrderCargoItem(order_id=order.id, position=1, cargo_type=order.cargo_type,
+                           description=order.cargo_description, weight_g=order.cargo_weight_g,
+                           length_mm=order.cargo_length_mm, width_mm=order.cargo_width_mm,
+                           height_mm=order.cargo_height_mm)]
 
 
 def build_checkpoints(base: Optional[Dict[str, Any]], o: Dict[str, Any], d: Dict[str, Any],
@@ -341,7 +400,7 @@ def confirm(db: Session, settings: Settings, p: Principal, order_id: uuid.UUID,
     if order.status != "pending_confirmation":
         raise Conflict("Заказ не ожидает подтверждения", code="invalid_transition")
     drone = drones.get_drone(db, order.drone_id)
-    ok, reasons = drones.readiness(db, settings, drone, cargo_weight_g=order.cargo_weight_g, require_online=False)
+    ok, reasons = drones.readiness(db, settings, drone, require_online=False)
     if not ok:
         raise ValidationFailed("Дрон больше не допущен к выполнению: " + "; ".join(reasons), code="drone_not_ready")
     transition(db, order, "awaiting_operator", p.actor, reason="Заказчик подтвердил условия")
@@ -516,7 +575,7 @@ def decline(db: Session, p: Principal, order_id: uuid.UUID, reason: str,
 
 def operator_readiness(db: Session, settings: Settings, order: Order, drone: Drone) -> Tuple[bool, List[str]]:
     """Готовность к началу задания: допуск дрона и подтверждение техника парка."""
-    ok, reasons = drones.readiness(db, settings, drone, cargo_weight_g=order.cargo_weight_g,
+    ok, reasons = drones.readiness(db, settings, drone,
                                    distance_m=route_range_m(order.route))
     if order.tech_ready_at is None:
         reasons.append("Техник парка ещё не подтвердил готовность дрона к этому заказу"

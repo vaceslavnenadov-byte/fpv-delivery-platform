@@ -4,7 +4,8 @@ import { Link } from "react-router";
 import { openFlightMonitor } from "../OrderDetail";
 import { api, errorText, newIdempotencyKey } from "../../api";
 import { Alert, Badge, Card, Empty, Pending, Stat } from "../../components/ui";
-import { CARGO_TYPES, fmtDate, fmtDistance } from "../../labels";
+import { cargoName, fmtDate, fmtDistance } from "../../labels";
+import { loadCargoTypes } from "../../catalogs";
 import { useLive } from "../../realtime";
 import type { Order } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
@@ -12,6 +13,7 @@ import { OrderTable } from "../../components/OrderTable";
 export function OperatorQueuePage() {
   const [maxDist, setMaxDist] = useState("");
   const [cargo, setCargo] = useState("");
+  const cargoTypes = useLive(loadCargoTypes, []);
   const [msg, setMsg] = useState<{ tone: string; text: string } | null>(null);
   const params = new URLSearchParams();
   if (maxDist) params.set("max_distance_m", String(Number(maxDist) * 1000));
@@ -49,7 +51,7 @@ export function OperatorQueuePage() {
           <label>Тип груза
             <select value={cargo} onChange={(e) => setCargo(e.target.value)}>
               <option value="">Любой</option>
-              {Object.entries(CARGO_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {(cargoTypes.data ?? []).map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
             </select>
           </label>
         </div>
@@ -60,7 +62,7 @@ export function OperatorQueuePage() {
             {q.data.items.map((o) => (
               <article key={o.id} className="order-card">
                 <div className="row between"><Link to={`/orders/${o.id}`}><strong>№{o.number}</strong></Link> <RepeatBadges o={o} /><Badge kind="order" value={o.status} /></div>
-                <div>{CARGO_TYPES[o.cargo_type] ?? o.cargo_type}, {o.cargo_weight_g} г — {o.cargo_description}</div>
+                <div>{cargoName(o)}, {o.cargo_weight_g} г — {o.cargo_description}</div>
                 <div className="small">{o.route?.base
                   ? <>А (база): {o.route.base.address}<br />Б (забор): {o.route.origin.address}<br />В: {o.route.destination.address}</>
                   : <>А: {o.route?.origin.address}<br />Б: {o.route?.destination.address}</>}</div>

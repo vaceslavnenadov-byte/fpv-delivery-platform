@@ -1,0 +1,54 @@
+import { Card, KV } from "./ui";
+import { cargoName } from "../labels";
+import type { Drone, Order } from "../types";
+
+/** Грузы заказа: тип, описание, масса и габариты каждого груза. */
+export function CargoItems({ o }: { o: Order }) {
+  const items = o.cargo_items?.length ? o.cargo_items : [{
+    position: 1, cargo_type: o.cargo_type, cargo_type_name: cargoName(o), description: o.cargo_description,
+    weight_g: o.cargo_weight_g, dims_mm: o.cargo_dims_mm,
+  }];
+  return (
+    <div className="table-wrap">
+      <table className="table compact cargo-table">
+        <thead><tr><th>№</th><th>Тип груза</th><th>Описание</th><th className="num">Масса, г</th><th>Габариты, мм</th></tr></thead>
+        <tbody>
+          {items.map((i) => (
+            <tr key={i.position}><td>{i.position}</td><td>{i.cargo_type_name}</td><td>{i.description}</td>
+              <td className="num">{i.weight_g}</td><td>{i.dims_mm.join("×")}</td></tr>
+          ))}
+          {items.length > 1 && (
+            <tr className="total"><td /><td colSpan={2}><strong>Итого: {items.length} груза(ов)</strong></td>
+              <td className="num"><strong>{o.cargo_weight_g}</strong></td><td /></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Параметры дрона заказа (из справочника «Типы БПЛА» или введённые техником). */
+export function DroneParams({ d }: { d: Drone }) {
+  return (
+    <KV items={[
+      ["Модель", d.model],
+      ["Производитель", d.manufacturer],
+      ["Учётный номер", d.registration_number],
+      ["Серийный номер", d.serial_number],
+      ["Тип связи", d.link_type || "—"],
+      ["Конструкция", d.construction || "—"],
+      ["Тип двигателя", d.engine_type || "—"],
+      ["Дальность", `${(d.max_range_m / 1000).toFixed(1)} км`],
+      ["Грузоподъёмность", `${d.max_payload_g} г`],
+    ]} />
+  );
+}
+
+export function OrderCargoCards({ o }: { o: Order }) {
+  return (
+    <div className="grid2">
+      <Card title={`Груз${(o.cargo_items?.length ?? 1) > 1 ? `ы (${o.cargo_items!.length})` : ""}`}><CargoItems o={o} /></Card>
+      {o.drone && <Card title="Параметры дрона"><DroneParams d={o.drone} /></Card>}
+    </div>
+  );
+}

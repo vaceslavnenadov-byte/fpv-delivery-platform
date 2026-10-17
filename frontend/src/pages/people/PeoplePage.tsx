@@ -93,7 +93,7 @@ function NewPerson({ units, roles }: { units: { id: string; parent_id: string | 
           <label>Отчество<input value={f.middle_name} onChange={set("middle_name")} maxLength={80} /></label>
           <label>Должность в организации<input value={f.position_title} onChange={set("position_title")} maxLength={160} placeholder="например, диспетчер" /></label>
           <label>Логин<input value={f.username} onChange={set("username")} required minLength={3} maxLength={64} autoComplete="off"
-                             pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{2,63}" title="латинские буквы, цифры, точка, дефис, подчёркивание" /></label>
+                             pattern="[a-zA-Z0-9][a-zA-Z0-9._\-]{2,63}" title="латинские буквы, цифры, точка, дефис, подчёркивание" /></label>
           <label>Пароль<input type="password" value={f.password} onChange={set("password")} required minLength={10} autoComplete="new-password"
                               title="не короче 10 символов, буквы и цифры" /></label>
           <label>Почта<input type="email" value={f.email} onChange={set("email")} maxLength={200} /></label>

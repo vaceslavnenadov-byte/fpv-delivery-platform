@@ -41,6 +41,16 @@ def paths(db: Session) -> Dict[uuid.UUID, str]:
     return out
 
 
+def chain(db: Session, unit_id: Optional[uuid.UUID]) -> List[str]:
+    """Названия групп от верхней до группы пользователя: [группа, подгруппа, …]."""
+    units = {u.id: u for u in _all(db)}
+    out: List[str] = []
+    while unit_id is not None and unit_id in units and len(out) < 50:
+        out.insert(0, units[unit_id].name)
+        unit_id = units[unit_id].parent_id
+    return out
+
+
 def descendants(db: Session, unit_id: uuid.UUID) -> Set[uuid.UUID]:
     children: Dict[Optional[uuid.UUID], List[uuid.UUID]] = {}
     for u in _all(db):

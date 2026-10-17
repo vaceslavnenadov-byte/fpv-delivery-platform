@@ -9,7 +9,7 @@ import { LiveVideo } from "../components/LiveVideo";
 import { OrderChat } from "../components/OrderChat";
 import { RouteMap } from "../components/RouteMap";
 import { VideoSourceDialog } from "../components/VideoSourceDialog";
-import { CARGO_TYPES, ORDER_STATUS } from "../labels";
+import { cargoName, ORDER_STATUS } from "../labels";
 import { useLive } from "../realtime";
 import type { Order, Point, Telemetry, TelemetryExtra } from "../types";
 
@@ -132,7 +132,7 @@ export function FlightMonitorPage() {
           <span className="mon-drone-icon" aria-hidden>✣</span>
           <div>
             <div className="mon-title">{o.drone ? `${o.drone.model} ${o.drone.registration_number}` : "Дрон"}</div>
-            <div className="mon-sub">Заказ №{o.number} · {CARGO_TYPES[o.cargo_type] ?? o.cargo_type} <RepeatBadges o={o} /></div>
+            <div className="mon-sub">Заказ №{o.number} · {cargoName(o)} <RepeatBadges o={o} /></div>
           </div>
         </div>
         <div className="mon-stat">
@@ -256,7 +256,7 @@ export function FlightMonitorPage() {
           <div className="mon-panel-head"><span>Полезная нагрузка</span></div>
           <div className="mon-kv">
             <div><small>Груз</small><b>📦 {o.cargo_weight_g} г</b></div>
-            <div><small>Тип</small><b>{CARGO_TYPES[o.cargo_type] ?? o.cargo_type}</b></div>
+            <div><small>Тип</small><b>{cargoName(o)}</b></div>
             <div><small>Статус</small><b><span className={`dot ${flying ? "ok" : "idle"}`} />{flying ? "В пути" : ORDER_STATUS[o.status]?.label}</b></div>
           </div>
         </div>

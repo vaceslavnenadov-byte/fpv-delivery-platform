@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router";
-import { roleHome, safeNext } from "../apps/config";
+import { roleHome, safeNext, suspendedApp } from "../apps/config";
 import { AuthProvider, useAuth } from "../auth";
 import { Pending } from "../components/ui";
 import { LoginPage } from "../pages/Login";
@@ -15,7 +15,9 @@ function Landing() {
   const { me, loading, logout } = useAuth();
   const can = (p: string) => !!me?.permissions.includes(p);
   // Возврат туда, откуда пришёл пользователь (только внутри доступного ему клиента).
-  const home = me ? safeNext(new URLSearchParams(window.location.search).get("next"), can) ?? roleHome(can) : null;
+  const home = !me ? null
+    : me.account_status === "suspended" ? `${suspendedApp(me.roles).base}/support`
+    : safeNext(new URLSearchParams(window.location.search).get("next"), can) ?? roleHome(can);
 
   useEffect(() => {
     if (home) window.location.replace(home);

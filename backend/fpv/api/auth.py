@@ -58,6 +58,8 @@ def me(p: Principal = Depends(current_principal), db: Session = Depends(get_db))
     data = principal_dict(p)
     data.update({"email": user.email, "phone": user.phone, "last_login_at": serialize.ts(user.last_login_at),
                  "profile_status": user.profile_status, "profile_review_notes": user.profile_review_notes})
+    from ..services import people
+    data["profile"] = people.report_identity(db, user.id)
     return data
 
 
@@ -71,6 +73,9 @@ def update_profile(body: schemas.ProfileIn, p: Principal = Depends(current_princ
     user.phone = body.phone
     if body.email:
         user.email = body.email
+    # никнейм и местоположение не требуют повторной проверки профиля
+    user.nickname = (body.nickname or "").strip() or None
+    user.location = (body.location or "").strip() or None
     first = not user.profile_completed
     changed = first or before != {"display_name": user.display_name, "phone": user.phone, "email": user.email}
     user.profile_completed = True

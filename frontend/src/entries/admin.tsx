@@ -5,6 +5,8 @@ import { ShellOutlet } from "../apps/shell";
 import { Alert } from "../components/ui";
 import { OrderDetailPage } from "../pages/OrderDetail";
 import { ZonesPage } from "../pages/admin/ZonesPage";
+import { CargoTypesPage, DroneModelsPage } from "../pages/admin/CatalogPages";
+import { RecruiterOperatorsPage, RecruiterProfilesPage } from "../pages/recruiter/RecruiterPages";
 import { OrgUnitsPage } from "../pages/people/OrgUnitsPage";
 import { PeoplePage } from "../pages/people/PeoplePage";
 import { PersonCardPage } from "../pages/people/PersonCardPage";
@@ -30,6 +32,10 @@ mountApp(APPS.admin, (
       <Route path="/people" element={<PeoplePage />} />
       <Route path="/people/:id" element={<PersonCardPage />} />
       <Route path="/org-units" element={<OrgUnitsPage />} />
+      <Route path="/profiles" element={<RecruiterProfilesPage />} />
+      <Route path="/operators" element={<RecruiterOperatorsPage />} />
+      <Route path="/cargo-types" element={<CargoTypesPage />} />
+      <Route path="/drone-models" element={<DroneModelsPage />} />
       <Route path="/audit" element={<AdminAuditPage />} />
       <Route path="/monitoring" element={<AdminMonitoringPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />

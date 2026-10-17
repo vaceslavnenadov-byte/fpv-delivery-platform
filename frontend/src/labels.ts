@@ -43,6 +43,23 @@ export const CARGO_TYPES: Record<string, string> = {
   spare_parts: "Запчасти",
 };
 
+/** Название типа груза заказа (из справочника «Типы грузов»). */
+export function cargoName(o: { cargo_type: string; cargo_type_name?: string }): string {
+  return o.cargo_type_name ?? CARGO_TYPES[o.cargo_type] ?? o.cargo_type;
+}
+
+export const ARCHIVE_REASONS: Record<string, string> = {
+  broken: "Сломан",
+  lost: "Утерян",
+  repair: "В ремонте",
+  returned: "Возвращён производителю",
+  worn_out: "Отработал",
+  dismantled: "Разобран",
+  obsolete: "Устарел",
+  peripherals: "Поломка/отсутствие периферийного оборудования",
+  other: "Другое",
+};
+
 export const ROLE_LABELS: Record<string, string> = {
   customer: "Заказчик",
   operator: "Оператор",

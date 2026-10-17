@@ -57,12 +57,24 @@ def register(db: Session, p: Principal, data: Dict[str, Any]) -> Drone:
     for field in ("serial_number", "registration_number"):
         if db.execute(select(Drone.id).where(getattr(Drone, field) == data[field])).first():
             raise Conflict("Дрон с таким серийным или учётным номером уже зарегистрирован", code="drone_exists")
+    data = dict(data)
+    if data.get("drone_model_id"):
+        # Конфигурация из справочника «Типы БПЛА»: параметры берутся из справочника.
+        from ..models import DroneModel
+        m = db.get(DroneModel, data["drone_model_id"])
+        if m is None:
+            raise ValidationFailed("Выбранная конфигурация БПЛА не найдена", code="drone_model_not_found")
+        for f in ("model", "manufacturer", "link_type", "construction", "engine_type", "max_range_m", "max_payload_g"):
+            data[f] = getattr(m, f)
+    else:
+        data["drone_model_id"] = None       # введено вручную — в справочник не попадает
+    extra = {f: ((data.get(f) or "").strip() or None) for f in ("link_type", "construction", "engine_type")}
     drone = Drone(owner_id=p.user_id, serial_number=data["serial_number"],
                   registration_number=data["registration_number"], manufacturer=data["manufacturer"],
                   model=data["model"], adapter_kind=data.get("adapter_kind", "simulator"),
                   max_payload_g=data["max_payload_g"], max_range_m=data["max_range_m"],
                   status="pending_approval", health_status="requires_check", link_status="offline",
-                  fleet_id=fleet_id)
+                  fleet_id=fleet_id, drone_model_id=data["drone_model_id"], **extra)
     db.add(drone)
     db.flush()
     audit.record(db, p.actor, "drone.registered", entity_type="drone", entity_id=drone.id,
@@ -222,8 +234,13 @@ def compute_link_status(settings: Settings, drone: Drone, now: Optional[dt.datet
 
 def readiness(db: Session, settings: Settings, drone: Drone, *, cargo_weight_g: Optional[int] = None,
               distance_m: Optional[int] = None, require_online: bool = True) -> Tuple[bool, List[str]]:
-    """Проверка допуска дрона к заданию. Возвращает (готов, список причин отказа)."""
+    """Проверка допуска дрона к заданию. Возвращает (готов, список причин отказа).
+
+    Грузоподъёмность дрона при проверках заказа пока не учитывается (cargo_weight_g не передаётся):
+    в заказе может быть несколько грузов, ограничения задаются справочником «Типы грузов»."""
     reasons: List[str] = []
+    if drone.archived_at is not None:
+        reasons.append("Дрон перенесён в архив БПЛА")
     if drone.status != "active":
         reasons.append("Регистрация дрона не подтверждена или дрон заблокирован")
     if drone.health_status != "serviceable":

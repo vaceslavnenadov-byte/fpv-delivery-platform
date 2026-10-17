@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, errorText } from "../api";
 import { useAuth } from "../auth";
 import { useLive } from "../realtime";
+import { ChatImage } from "./ui";
 import type { Note, Order } from "../types";
 
 const NOTE_LABEL: Record<string, string> = {
@@ -77,7 +78,7 @@ export function OrderChat({ order, variant = "card", flying = false }: {
                 {n.kind !== "chat" && <em> · {NOTE_LABEL[n.kind] ?? n.kind}</em>}
                 <time>{new Date(n.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div>
               <div className="mon-msg-body">{n.body}</div>
-              {n.attachment_url && <a href={n.attachment_url} target="_blank" rel="noreferrer"><img src={n.attachment_url} alt="Кадр с камеры дрона" /></a>}
+              {n.attachment_url && <ChatImage src={n.attachment_url} alt="Кадр с камеры дрона" />}
             </div>
           );
         })}

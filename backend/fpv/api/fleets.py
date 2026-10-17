@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .. import runtime
+from .. import clock, runtime
 from ..errors import ServiceUnavailable
 from ..models import Drone, Fleet
 from ..services import orders as orders_svc
@@ -30,7 +30,8 @@ def fleet_json(f: Fleet, drone_count: int = 0) -> dict:
 @router.get("/api/v1/fleets")
 def list_fleets(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     items = fleets.list_fleets(db, p)
-    counts = dict(db.execute(select(Drone.fleet_id, func.count()).where(Drone.fleet_id.in_([f.id for f in items]))
+    counts = dict(db.execute(select(Drone.fleet_id, func.count()).where(Drone.fleet_id.in_([f.id for f in items]),
+                                                                       Drone.archived_at.is_(None))
                              .group_by(Drone.fleet_id)).all()) if items else {}
     return {"items": [fleet_json(f, counts.get(f.id, 0)) for f in items]}
 
@@ -54,8 +55,10 @@ def update_fleet(fleet_id: uuid.UUID, body: schemas.FleetUpdateIn, p: Principal 
 
 @router.get("/api/v1/fleets/{fleet_id}/drones")
 def fleet_drones(fleet_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    """Дроны парка («Мой парк»); перенесённые в архив — в разделе «Архив БПЛА»."""
     fleet = fleets.own_fleet(db, p, fleet_id)
-    rows = db.execute(select(Drone).where(Drone.fleet_id == fleet.id).order_by(Drone.created_at)).scalars()
+    rows = db.execute(select(Drone).where(Drone.fleet_id == fleet.id, Drone.archived_at.is_(None))
+                      .order_by(Drone.created_at)).scalars()
     return {"fleet": fleet_json(fleet), "items": [serialize.drone(d) for d in rows]}
 
 
@@ -74,6 +77,48 @@ def available_drones(p: Principal = Depends(current_principal), db: Session = De
         "fleet": {"id": str(f.id), "name": f.name, "zone_id": str(f.zone_id) if f.zone_id else None,
                   "base": {"lat": f.base_lat, "lon": f.base_lon, "address": f.base_address}},
     } for d, f, busy in fleets.available_drones(db, p)]}
+
+
+# --- архив БПЛА и отчёт о техсостоянии ---
+
+def _archive_row(d: Drone, f: Fleet, last=None) -> dict:
+    return {**serialize.drone(d), "fleet_name": f.name, "last_flight_at": serialize.ts(last)}
+
+
+@router.get("/api/v1/drone-archive")
+def drone_archive(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    return {"items": [_archive_row(d, f) for d, f in fleets.technician_drones(db, p, archived=True)],
+            "reasons": fleets.ARCHIVE_REASONS}
+
+
+@router.post("/api/v1/drones/{drone_id}/archive")
+def archive(drone_id: uuid.UUID, body: schemas.ArchiveIn, p: Principal = Depends(current_principal),
+            db: Session = Depends(get_db)):
+    drone = fleets.archive_drone(db, p, drone_id, body.reason, body.comment)
+    data = serialize.drone(drone)
+    db.commit()
+    return data
+
+
+@router.delete("/api/v1/drones/{drone_id}/archive")
+def unarchive(drone_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    drone = fleets.unarchive_drone(db, p, drone_id)
+    data = serialize.drone(drone)
+    db.commit()
+    return data
+
+
+@router.get("/api/v1/tech-report")
+def tech_report(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    """Отчёт о техсостоянии всех дронов техника: сначала работоспособные, архивные — в конце."""
+    rows = fleets.technician_drones(db, p)
+    last = fleets.last_flights(db, [d.id for d, _ in rows])
+    order = {"serviceable": 0, "requires_check": 1, "grounded": 2}
+    rows.sort(key=lambda r: (r[0].archived_at is not None, order.get(r[0].health_status, 3),
+                             r[0].registration_number))
+    from ..services import people
+    return {"items": [_archive_row(d, f, last.get(d.id)) for d, f in rows], "reasons": fleets.ARCHIVE_REASONS,
+            "technician": people.report_identity(db, p.user_id), "generated_at": serialize.ts(clock.now())}
 
 
 # --- дрон парка: публикация, перевод в парк, подключение, проверка видео ---

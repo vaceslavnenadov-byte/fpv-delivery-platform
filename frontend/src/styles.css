@@ -614,3 +614,28 @@ label.check { flex-direction: row; align-items: center; }
 .support-people { list-style: none; padding: 0; margin: 0 0 10px; display: flex; flex-direction: column; gap: 6px; }
 .sidebar { display: flex; flex-direction: column; }
 .sidebar nav { flex: 1; display: flex; flex-direction: column; }
+
+/* всплывающие окна, просмотр картинок, сортируемые таблицы */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(15, 20, 30, 0.55); display: flex; align-items: center;
+  justify-content: center; z-index: 1000; padding: 16px; }
+.modal { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; margin: 0; }
+.modal.wide { width: min(820px, 100%); }
+.modal-body { display: flex; flex-direction: column; gap: 10px; }
+.modal-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px; }
+.btn.ok-fill { background: var(--ok); border-color: var(--ok); color: #fff; }
+.btn.ok-fill:hover { filter: brightness(1.1); color: #fff; }
+.btn.danger-fill { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.danger-fill:hover { filter: brightness(1.1); color: #fff; }
+.modal-foot .spacer { flex: 1; }
+.img-thumb { border: 0; padding: 0; background: none; cursor: zoom-in; display: inline-block; }
+.lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); z-index: 1100; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; padding: 16px; }
+.lightbox img { max-width: 100%; max-height: calc(100vh - 100px); object-fit: contain; border-radius: 6px; }
+.table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.table th.sortable:hover { color: var(--accent-ink); }
+.cargo-item { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.table tr.clickable { cursor: pointer; }
+.table tr.total td { border-top: 2px solid var(--border); }
+.radio-list { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.radio-list .radio { display: flex; flex-direction: row; align-items: center; gap: 8px; font-weight: normal; }
+.subgroups { margin: 0; padding-left: 18px; }

@@ -70,6 +70,8 @@ class User(Base):
     position_title: Mapped[Optional[str]] = mapped_column(Text)
     profile_notes: Mapped[Optional[str]] = mapped_column(Text)
     org_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("org_units.id"))
+    nickname: Mapped[Optional[str]] = mapped_column(Text)
+    location: Mapped[Optional[str]] = mapped_column(Text)
     last_login_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     last_directory_sync_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
@@ -215,8 +217,59 @@ class Drone(Base):
     video_source_selected: Mapped[Optional[str]] = mapped_column(Text)
     video_source_selected_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
     video_source_selected_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    drone_model_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("drone_models.id"))
+    link_type: Mapped[Optional[str]] = mapped_column(Text)
+    construction: Mapped[Optional[str]] = mapped_column(Text)
+    engine_type: Mapped[Optional[str]] = mapped_column(Text)
+    archived_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)            # архив БПЛА
+    archived_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    archive_reason: Mapped[Optional[str]] = mapped_column(Text)
+    archive_comment: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class CargoType(Base):
+    """Тип груза из справочника администратора."""
+    __tablename__ = "cargo_types"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(Text, unique=True)
+    name: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text, default="")
+    max_weight_g: Mapped[int] = mapped_column(Integer)
+    deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class DroneModel(Base):
+    """Тип (конфигурация) БПЛА из справочника администратора."""
+    __tablename__ = "drone_models"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    model: Mapped[str] = mapped_column(Text)
+    manufacturer: Mapped[str] = mapped_column(Text)
+    link_type: Mapped[str] = mapped_column(Text, default="")
+    construction: Mapped[str] = mapped_column(Text, default="")
+    engine_type: Mapped[str] = mapped_column(Text, default="")
+    max_range_m: Mapped[int] = mapped_column(Integer)
+    max_payload_g: Mapped[int] = mapped_column(Integer)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class OrderCargoItem(Base):
+    __tablename__ = "order_cargo_items"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"))
+    position: Mapped[int] = mapped_column(SmallInteger)
+    cargo_type: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text)
+    weight_g: Mapped[int] = mapped_column(Integer)
+    length_mm: Mapped[int] = mapped_column(Integer)
+    width_mm: Mapped[int] = mapped_column(Integer)
+    height_mm: Mapped[int] = mapped_column(Integer)
 
 
 class DroneHealthCheck(Base):

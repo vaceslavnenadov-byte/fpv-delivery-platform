@@ -36,6 +36,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: false,
+    // pdfmake со шрифтами (~1,2 МБ) — отдельный фрагмент, загружается только при формировании PDF-отчёта.
+    chunkSizeWarningLimit: 1300,
     rollupOptions: {
       input: Object.fromEntries([
         page("login", "index.html"),

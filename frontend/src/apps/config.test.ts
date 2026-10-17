@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessibleApps, roleHome, safeNext } from "./config";
+import { APPS, accessibleApps, roleHome, safeNext, suspendedApp } from "./config";
 
 const perms = (...p: string[]) => (x: string) => p.includes(x);
 const operator = perms("order.queue.read");
@@ -38,5 +38,25 @@ describe("safeNext", () => {
     "/operator/\nX", "/elsewhere/", "", null,
   ])("отклоняет небезопасный адрес %s", (next) => {
     expect(safeNext(next as string | null, operator)).toBeNull();
+  });
+});
+
+describe("приостановленная учётная запись", () => {
+  it("открывает раздел своей роли (только профиль и техподдержка)", () => {
+    expect(suspendedApp(["technician"]).key).toBe("technician");
+    expect(suspendedApp(["customer", "admin"]).key).toBe("admin");
+    expect(suspendedApp([]).key).toBe("customer");
+  });
+});
+
+describe("меню администратора", () => {
+  it("включает справочники и бывшие страницы рекрутёра", () => {
+    const paths = APPS.admin.nav.map((i) => i.to);
+    for (const p of ["/cargo-types", "/drone-models", "/profiles", "/operators", "/people", "/org-units"]) {
+      expect(paths).toContain(p);
+    }
+  });
+  it("у техника — архив и отчёт", () => {
+    expect(APPS.technician.nav.map((i) => i.to)).toEqual(expect.arrayContaining(["/archive", "/tech-report"]));
   });
 });

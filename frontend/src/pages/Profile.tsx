@@ -14,6 +14,8 @@ export function ProfilePage() {
   const [name, setName] = useState(me?.display_name ?? "");
   const [phone, setPhone] = useState(me?.phone ?? "");
   const [email, setEmail] = useState(me?.email ?? "");
+  const [nickname, setNickname] = useState(me?.profile?.nickname ?? "");
+  const [location, setLocation] = useState(me?.profile?.location ?? "");
   const [license, setLicense] = useState("");
   const [msg, setMsg] = useState<{ tone: string; text: string } | null>(null);
   if (!me) return null;
@@ -21,7 +23,8 @@ export function ProfilePage() {
   async function save(e: FormEvent) {
     e.preventDefault();
     try {
-      await api.put("/api/v1/me/profile", { display_name: name, phone: phone || null, email: email || null });
+      await api.put("/api/v1/me/profile", { display_name: name, phone: phone || null, email: email || null,
+                                         nickname: nickname || null, location: location || null });
       await refresh();
       setMsg({ tone: "ok", text: "Профиль сохранён" });
     } catch (err) {
@@ -51,6 +54,12 @@ export function ProfilePage() {
       <div className="grid2">
         <Card title="Учётная запись">
           <KV items={[
+            ["Никнейм", me.profile?.nickname || "—"],
+            ["Должность", me.profile?.position_title || "—"],
+            ["Группа", me.profile?.group || "—"],
+            ["Подгруппы", me.profile?.subgroups.length
+              ? <ol className="subgroups">{me.profile.subgroups.map((g, i) => <li key={i}>{g}</li>)}</ol> : "—"],
+            ["Местоположение", me.profile?.location || "—"],
             ["Доменное имя", me.username],
             ["Роли приложения", me.roles.map((r) => ROLE_LABELS[r] ?? r).join(", ")],
             ["Доменные группы", me.groups.join(", ") || "—"],
@@ -58,13 +67,16 @@ export function ProfilePage() {
               ? <Tone tone={PROFILE_TONE[me.profile_status]}>{PROFILE_LABEL[me.profile_status]}</Tone> : "профиль не заполнен"],
             ["Допуск оператора", me.operator_status ? <Tone tone={me.operator_status === "approved" ? "ok" : "warn"}>{me.operator_status}</Tone> : "—"],
           ]} />
-          <p className="muted small">Роли назначаются через членство в доменных группах или рекрутером; права проверяются сервером при каждом запросе.</p>
+          <p className="muted small">Должность, группу и подгруппы заполняют администратор и рекрутер. Роли назначаются через членство в доменных группах или рекрутером; права проверяются сервером при каждом запросе.</p>
         </Card>
         <Card title="Контактные данные">
           <form className="form" onSubmit={save}>
             <label>Отображаемое имя<input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} /></label>
             <label>Телефон<input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+7 900 000-00-00" /></label>
             <label>Электронная почта<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+            <label>Никнейм<input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={60} /></label>
+            <label>Местоположение<input value={location} onChange={(e) => setLocation(e.target.value)} maxLength={200}
+                                         placeholder="город, площадка, кабинет" /></label>
             <button className="btn primary">Сохранить</button>
           </form>
         </Card>

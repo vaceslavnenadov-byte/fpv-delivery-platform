@@ -23,7 +23,9 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
   }, []);
 
   if (!me) return null;
-  const others = accessibleApps(can).filter((a) => a.key !== app.key);
+  const suspended = me.account_status === "suspended";
+  // Рекрутёрский раздел администратору не нужен: его страницы — в меню администратора.
+  const others = suspended ? [] : accessibleApps(can).filter((a) => a.key !== app.key && !(app.key === "admin" && a.key === "recruiter"));
 
   return (
     <div className="shell">
@@ -32,7 +34,7 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
         <nav>
           <div className="nav-section">
             <div className="nav-title">{app.title.replace("FPV Доставка — ", "")}</div>
-            {app.nav.map((i) => (
+            {!suspended && app.nav.map((i) => (
               <NavLink key={i.to} to={i.to} end className={({ isActive }) => (isActive ? "active" : "")}>
                 {i.label}
               </NavLink>
@@ -52,8 +54,8 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
           {can("support.use") && (
             <div className="nav-section nav-bottom">
               <div className="nav-title">Техподдержка</div>
+              <NavLink to="/support/new">Новое сообщение</NavLink>
               <NavLink to="/support" end>Мои обращения</NavLink>
-              <NavLink to="/support/new">Новое обращение</NavLink>
             </div>
           )}
         </nav>

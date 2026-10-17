@@ -137,6 +137,8 @@ def assign_to_fleet(db: Session, p: Principal, drone_id: uuid.UUID, fleet_id: uu
 def set_published(db: Session, p: Principal, drone_id: uuid.UUID, published: bool) -> Drone:
     drone = fleet_drone(db, p, drone_id, for_update=True)
     if published:
+        if drone.archived_at is not None:
+            raise Conflict("Дрон в архиве БПЛА — сначала верните его в парк", code="drone_archived")
         problems = []
         if drone.status != "active":
             problems.append("регистрация не подтверждена администратором")
@@ -159,11 +161,83 @@ def available_drones(db: Session, p: Principal) -> List[Tuple[Drone, Fleet, bool
     p.require("order.create")
     from .orders import ACTIVE_EXECUTION
     rows = db.execute(select(Drone, Fleet).join(Fleet, Fleet.id == Drone.fleet_id)
-                      .where(Drone.published.is_(True), Drone.status == "active",
+                      .where(Drone.published.is_(True), Drone.status == "active", Drone.archived_at.is_(None),
                              Drone.health_status == "serviceable", Fleet.active.is_(True))
                       .order_by(Fleet.name, Drone.registration_number)).all()
     busy = {d for (d,) in db.execute(select(Order.drone_id).where(Order.status.in_(ACTIVE_EXECUTION))).all()}
     return [(d, f, d.id in busy) for d, f in rows]
+
+
+# --- архив БПЛА ----------------------------------------------------------------------------------
+
+ARCHIVE_REASONS = {
+    "broken": "Сломан", "lost": "Утерян", "repair": "В ремонте", "returned": "Возвращён производителю",
+    "worn_out": "Отработал", "dismantled": "Разобран", "obsolete": "Устарел",
+    "peripherals": "Поломка/отсутствие периферийного оборудования", "other": "Другое",
+}
+
+
+def archive_drone(db: Session, p: Principal, drone_id: uuid.UUID, reason: str, comment: str = "") -> Drone:
+    """Техник переносит дрон своего парка в архив: дрон пропадает из «Мой парк» и из выбора заказчика."""
+    p.require("drone.archive")
+    drone = fleet_drone(db, p, drone_id, for_update=True)
+    if drone.archived_at is not None:
+        raise Conflict("Дрон уже в архиве", code="drone_archived")
+    if reason not in ARCHIVE_REASONS:
+        raise ValidationFailed("Выберите причину переноса в архив", code="archive_reason")
+    comment = (comment or "").strip()
+    if reason == "other" and len(comment) < 3:
+        raise ValidationFailed("Для причины «Другое» напишите комментарий", code="archive_comment_required")
+    busy = db.execute(select(Order.number).where(Order.drone_id == drone.id,
+                                                 Order.status.in_(FLEET_ORDER_STATUSES)).limit(1)).first()
+    if busy:
+        raise Conflict(f"Дрон назначен на незавершённый заказ №{busy[0]} — перенести в архив нельзя",
+                       code="drone_busy")
+    drone.archived_at = clock.now()
+    drone.archived_by = p.user_id
+    drone.archive_reason = reason
+    drone.archive_comment = comment or None
+    drone.published = False
+    drone.updated_at = clock.now()
+    audit.record(db, p.actor, "drone.archived", entity_type="drone", entity_id=drone.id,
+                 details={"reason": reason, "comment": comment})
+    events.notify(db, "drone.updated", {"drone_id": drone.id}, users=[p.user_id], roles=["admin"])
+    return drone
+
+
+def unarchive_drone(db: Session, p: Principal, drone_id: uuid.UUID) -> Drone:
+    """Возврат из архива в парк. Дрон снова требует осмотра техником, прежде чем открыть его для заказов."""
+    p.require("drone.archive")
+    drone = fleet_drone(db, p, drone_id, for_update=True)
+    if drone.archived_at is None:
+        raise Conflict("Дрон не в архиве", code="drone_not_archived")
+    before = drone.archive_reason
+    drone.archived_at = drone.archived_by = drone.archive_reason = drone.archive_comment = None
+    drone.health_status = "requires_check"
+    drone.updated_at = clock.now()
+    audit.record(db, p.actor, "drone.unarchived", entity_type="drone", entity_id=drone.id,
+                 details={"reason_was": before})
+    events.notify(db, "drone.updated", {"drone_id": drone.id}, users=[p.user_id], roles=["admin"])
+    return drone
+
+
+def technician_drones(db: Session, p: Principal, *, archived: Optional[bool] = None) -> List[Tuple[Drone, Fleet]]:
+    p.require("fleet.manage")
+    stmt = select(Drone, Fleet).join(Fleet, Fleet.id == Drone.fleet_id).where(Fleet.technician_id == p.user_id)
+    if archived is True:
+        stmt = stmt.where(Drone.archived_at.is_not(None)).order_by(Drone.archived_at.desc())
+    elif archived is False:
+        stmt = stmt.where(Drone.archived_at.is_(None))
+    return list(db.execute(stmt.order_by(Fleet.name, Drone.registration_number)).all())
+
+
+def last_flights(db: Session, drone_ids: List[uuid.UUID]) -> Dict[uuid.UUID, dt.datetime]:
+    if not drone_ids:
+        return {}
+    from sqlalchemy import func
+    return dict(db.execute(select(Order.drone_id, func.max(Order.started_at))
+                           .where(Order.drone_id.in_(drone_ids), Order.started_at.is_not(None))
+                           .group_by(Order.drone_id)).all())
 
 
 # --- подключение и проверка видео -----------------------------------------------------------------
@@ -280,7 +354,7 @@ def fleet_orders(db: Session, p: Principal) -> List[Order]:
 
 def readiness_reasons(db: Session, settings: Settings, order: Order, drone: Drone) -> List[str]:
     from .orders import route_range_m
-    ok, reasons = drones.readiness(db, settings, drone, cargo_weight_g=order.cargo_weight_g,
+    ok, reasons = drones.readiness(db, settings, drone,
                                    distance_m=route_range_m(order.route))
     t = last_telemetry(db, drone)
     if t is None or (clock.now() - t.recorded_at).total_seconds() > TELEMETRY_FRESH_S:

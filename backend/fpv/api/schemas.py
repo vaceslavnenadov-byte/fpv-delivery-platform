@@ -24,6 +24,8 @@ class ProfileIn(StrictModel):
     display_name: str = Field(min_length=2, max_length=120)
     phone: Optional[str] = Field(default=None, pattern=PHONE_PATTERN)
     email: Optional[str] = Field(default=None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    nickname: Optional[str] = Field(default=None, max_length=60)
+    location: Optional[str] = Field(default=None, max_length=200)
 
 
 class OperatorApplyIn(StrictModel):
@@ -40,6 +42,48 @@ class DroneIn(StrictModel):
     max_payload_g: int = Field(ge=50, le=25000)
     max_range_m: int = Field(ge=500, le=100000)
     fleet_id: Optional[uuid.UUID] = None
+    drone_model_id: Optional[uuid.UUID] = None       # конфигурация из справочника «Типы БПЛА»
+    link_type: Optional[str] = Field(default=None, max_length=100)
+    construction: Optional[str] = Field(default=None, max_length=100)
+    engine_type: Optional[str] = Field(default=None, max_length=100)
+
+
+class ArchiveIn(StrictModel):
+    reason: Literal["broken", "lost", "repair", "returned", "worn_out", "dismantled", "obsolete", "peripherals",
+                    "other"]
+    comment: str = Field(default="", max_length=500)
+
+
+class CargoTypeIn(StrictModel):
+    name: str = Field(min_length=1, max_length=120)
+    category: str = Field(default="", max_length=120)
+    max_weight_g: int = Field(ge=1, le=100000)
+
+
+class CargoTypePatch(StrictModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    category: Optional[str] = Field(default=None, max_length=120)
+    max_weight_g: Optional[int] = Field(default=None, ge=1, le=100000)
+
+
+class DroneModelIn(StrictModel):
+    model: str = Field(min_length=1, max_length=100)
+    manufacturer: str = Field(min_length=2, max_length=100)
+    link_type: str = Field(default="", max_length=100)
+    construction: str = Field(default="", max_length=100)
+    engine_type: str = Field(default="", max_length=100)
+    max_range_m: int = Field(ge=500, le=100000)
+    max_payload_g: int = Field(ge=50, le=25000)
+
+
+class DroneModelPatch(StrictModel):
+    model: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    manufacturer: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    link_type: Optional[str] = Field(default=None, max_length=100)
+    construction: Optional[str] = Field(default=None, max_length=100)
+    engine_type: Optional[str] = Field(default=None, max_length=100)
+    max_range_m: Optional[int] = Field(default=None, ge=500, le=100000)
+    max_payload_g: Optional[int] = Field(default=None, ge=50, le=25000)
 
 
 class ServiceZoneIn(StrictModel):
@@ -118,14 +162,29 @@ class StopIn(PointIn):
 MAX_STOPS = 5
 
 
+CARGO_CODE = r"^[a-z0-9_]+$"
+MAX_CARGO_ITEMS = 10
+
+
+class CargoItemIn(StrictModel):
+    cargo_type: str = Field(min_length=2, max_length=40, pattern=CARGO_CODE)
+    description: str = Field(min_length=3, max_length=1000)
+    weight_g: int = Field(ge=1, le=100000)
+    length_mm: int = Field(ge=1, le=5000)
+    width_mm: int = Field(ge=1, le=5000)
+    height_mm: int = Field(ge=1, le=5000)
+
+
 class OrderIn(StrictModel):
     drone_id: uuid.UUID
-    cargo_type: str = Field(min_length=2, max_length=40, pattern=r"^[a-z_]+$")
-    cargo_description: str = Field(min_length=3, max_length=1000)
-    cargo_weight_g: int = Field(ge=1, le=100000)
-    cargo_length_mm: int = Field(ge=1, le=5000)
-    cargo_width_mm: int = Field(ge=1, le=5000)
-    cargo_height_mm: int = Field(ge=1, le=5000)
+    # Грузы заказа (один дрон). Поля cargo_* — прежний способ указать один груз.
+    cargo_items: List[CargoItemIn] = Field(default_factory=list, max_length=MAX_CARGO_ITEMS)
+    cargo_type: Optional[str] = Field(default=None, min_length=2, max_length=40, pattern=CARGO_CODE)
+    cargo_description: Optional[str] = Field(default=None, min_length=3, max_length=1000)
+    cargo_weight_g: Optional[int] = Field(default=None, ge=1, le=100000)
+    cargo_length_mm: Optional[int] = Field(default=None, ge=1, le=5000)
+    cargo_width_mm: Optional[int] = Field(default=None, ge=1, le=5000)
+    cargo_height_mm: Optional[int] = Field(default=None, ge=1, le=5000)
     origin: PointIn
     destination: PointIn
     stops: List[StopIn] = Field(default_factory=list, max_length=MAX_STOPS)
@@ -146,6 +205,10 @@ class OrderIn(StrictModel):
     def _window(self) -> "OrderIn":
         if self.window_end <= self.window_start:
             raise ValueError("Конец временного окна должен быть позже начала")
+        single = (self.cargo_type, self.cargo_description, self.cargo_weight_g, self.cargo_length_mm,
+                  self.cargo_width_mm, self.cargo_height_mm)
+        if not self.cargo_items and any(v is None for v in single):
+            raise ValueError("Добавьте хотя бы один груз")
         return self
 
 
@@ -271,6 +334,8 @@ class PersonProfileIn(StrictModel):
     profile_notes: Optional[str] = Field(default=None, max_length=2000)
     email: Optional[str] = Field(default=None, max_length=200)
     phone: Optional[str] = Field(default=None, max_length=40)
+    nickname: Optional[str] = Field(default=None, max_length=60)
+    location: Optional[str] = Field(default=None, max_length=200)
     org_unit_id: Optional[uuid.UUID] = None
 
 

@@ -38,15 +38,17 @@ erDiagram
 
 | Сущность ТЗ | Таблица | Ключевые ограничения |
 |---|---|---|
-| Users | `users` | `domain_object_id` UNIQUE (objectGUID), **нет столбца пароля**, физическое удаление запрещено триггером |
+| Users | `users` | `domain_object_id` UNIQUE (objectGUID); пароль домена не хранится (хеш пароля — только у учётных записей приложения); никнейм, местоположение; физическое удаление запрещено триггером |
 | Roles / UserRoles | `roles`, `user_roles` | источник роли: `domain` (из группы) или `manual` |
 | DomainGroups / UserDomainGroups | `domain_groups`, `user_domain_groups` | DN UNIQUE, сопоставление с ролью |
 | Devices / DeviceAccessPolicies | `devices`, `device_access_policies` | правило либо по роли, либо по группе (CHECK), уникальность на устройство |
 | PermissionMatrix | `permissions`, `permission_matrix` | каталог разрешений + матрица роль→разрешение |
-| Drones | `drones` | статус регистрации, техсостояние, связь; ключ устройства — только SHA-256 |
+| Drones | `drones` | статус регистрации, техсостояние, связь; ключ устройства — только SHA-256; тип БПЛА (`drone_model_id`), тип связи, конструкция, двигатель; архив (`archived_at`, причина из 9 значений) |
+| Справочники | `cargo_types`, `drone_models` | код типа груза UNIQUE, название уникально среди неудалённых; тип БПЛА уникален по (производитель, модель) |
 | DroneHealthChecks | `drone_health_checks` | источник: устройство / техник / система |
 | Orders | `orders` | CHECK на 14 статусов, `version`, окно `window_end > window_start`, частичный UNIQUE «один активный заказ на дрон» |
 | OrderStatusHistory | `order_status_history` | только добавление (триггер) |
+| Грузы заказа | `order_cargo_items` | UNIQUE `(order_id, position)`; сводка в `orders.cargo_*` (масса — сумма, габариты — наибольшие) |
 | Routes | `routes` | 1:1 с заказом, контрольные точки, результат проверки маршрута |
 | Operators | `operators` | статус допуска, сумма баллов |
 | Assignments | `assignments` | частичный UNIQUE: одно активное назначение роли на заказ |

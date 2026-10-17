@@ -11,7 +11,8 @@ export interface PersonCard {
   id: string; username: string; auth_source: "domain" | "local"; display_name: string; status: string; status_label: string;
   status_reason: string | null; status_changed_at: string | null; status_changed_by: Brief | null; directory_enabled: boolean;
   profile: { last_name: string | null; first_name: string | null; middle_name: string | null; position_title: string | null;
-             profile_notes: string | null; phone: string | null; email: string | null };
+             profile_notes: string | null; phone: string | null; email: string | null; nickname: string | null;
+             location: string | null };
   org_unit: { id: string; path: string } | null;
   roles: { role: string; source: string; granted_by: Brief | null; granted_at: string | null }[];
   password_changed_at: string | null; password_changed_by: Brief | null; registered_by: Brief | null;

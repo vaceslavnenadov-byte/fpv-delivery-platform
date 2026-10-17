@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { api, errorText } from "../../api";
 import { useAuth } from "../../auth";
-import { Alert, Card, Empty, Pending, Tone } from "../../components/ui";
+import { Alert, Card, ChatImage, Empty, Pending, Tone } from "../../components/ui";
 import { ROLE_LABELS, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
 import type { Order } from "../../types";
@@ -175,7 +175,7 @@ export function SupportTicketPage() {
                 {m.body && <div className="support-msg-body">{m.body}</div>}
                 {m.attachments.map((a) => a.content_type.startsWith("video/")
                   ? <video key={a.id} src={a.url} controls preload="metadata" className="support-media" />
-                  : <a key={a.id} href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt={a.filename || "фото"} className="support-media" /></a>)}
+                  : <ChatImage key={a.id} src={a.url} alt={a.filename || "фото"} className="support-media" />)}
               </div>
             ))}
           </div>

@@ -5,13 +5,14 @@ import { appUrl } from "../base";
 import { useAuth } from "../auth";
 import { CUSTOMER_STREAM_STATUSES, CustomerCameraPublisher, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
+import { OrderCargoCards } from "../components/OrderCargo";
 import { OrderChat } from "../components/OrderChat";
 import { RepeatBadges, RepeatBanner } from "../components/RepeatBadges";
 import { RouteMap } from "../components/RouteMap";
 import { ScoreCard } from "../components/ScoreCard";
 import { Timeline } from "../components/Timeline";
 import { Alert, Badge, Card, KV, Pending, Tone } from "../components/ui";
-import { CARGO_TYPES, fmtDate, fmtDistance } from "../labels";
+import { cargoName, fmtDate, fmtDistance } from "../labels";
 import { useLive } from "../realtime";
 import type { Complaint, HistoryItem, Note, Order, RepeatRequest, Score, Telemetry, UserBrief } from "../types";
 
@@ -167,7 +168,8 @@ export function OrderDetailPage() {
         </Card>
         <Card title="Сведения о заказе">
           <KV items={[
-            ["Груз", `${CARGO_TYPES[o.cargo_type] ?? o.cargo_type}: ${o.cargo_description}`],
+            ["Груз", (o.cargo_items?.length ?? 1) > 1 ? `${o.cargo_items!.length} груза(ов), всего ${o.cargo_weight_g} г — см. «Грузы»`
+              : `${cargoName(o)}: ${o.cargo_description}`],
             ["Масса / габариты", `${o.cargo_weight_g} г, ${o.cargo_dims_mm.join("×")} мм`],
             ...(o.route?.base ? [
               ["А — база парка", o.route.base.address],
@@ -195,6 +197,8 @@ export function OrderDetailPage() {
           ]} />
         </Card>
       </div>
+
+      <OrderCargoCards o={o} />
 
       <div className="grid2">
         <Card title="Действия">

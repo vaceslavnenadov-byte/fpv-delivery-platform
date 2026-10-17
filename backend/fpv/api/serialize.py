@@ -35,6 +35,10 @@ def drone(d: Drone, *, full: bool = True) -> Dict[str, Any]:
         "owner_id": str(d.owner_id), "created_at": ts(d.created_at),
         "fleet_id": str(d.fleet_id) if d.fleet_id else None, "published": bool(d.published),
         "video_checked_at": ts(d.video_checked_at),
+        "drone_model_id": str(d.drone_model_id) if d.drone_model_id else None,
+        "link_type": d.link_type, "construction": d.construction, "engine_type": d.engine_type,
+        "archived": d.archived_at is not None, "archived_at": ts(d.archived_at),
+        "archive_reason": d.archive_reason, "archive_comment": d.archive_comment,
     }
     return data
 
@@ -56,6 +60,7 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
     data: Dict[str, Any] = {
         "id": str(o.id), "number": o.number, "status": o.status, "status_label": STATUS_LABELS.get(o.status),
         "version": o.version, "cargo_type": o.cargo_type, "cargo_description": o.cargo_description,
+        "cargo_type_name": _cargo_names(db).get(o.cargo_type, o.cargo_type),
         "cargo_weight_g": o.cargo_weight_g,
         "cargo_dims_mm": [o.cargo_length_mm, o.cargo_width_mm, o.cargo_height_mm],
         "window_start": ts(o.window_start), "window_end": ts(o.window_end),
@@ -83,6 +88,13 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
     }
     if brief:
         return data
+    from ..services import orders as orders_svc
+    items = orders_svc.cargo_items(db, o)
+    names = _cargo_names(db)
+    data["cargo_items"] = [{"position": i.position, "cargo_type": i.cargo_type,
+                            "cargo_type_name": names.get(i.cargo_type, i.cargo_type), "description": i.description,
+                            "weight_g": i.weight_g, "dims_mm": [i.length_mm, i.width_mm, i.height_mm]}
+                           for i in items]
     data["validation_result"] = o.validation_result
     data["recipient_name"] = o.recipient_name
     data["recipient_phone"] = o.recipient_phone
@@ -100,6 +112,15 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
     from ..services import repeats
     data["repeat_requests"] = [repeats.serialize(db, r) for r in repeats.for_order(db, o.id)]
     return data
+
+
+def _cargo_names(db: Session) -> Dict[str, str]:
+    """Названия типов грузов (кэш на время запроса)."""
+    cache = db.info.get("cargo_names")
+    if cache is None:
+        from ..services import catalogs
+        cache = db.info["cargo_names"] = catalogs.cargo_names(db)
+    return cache
 
 
 def _repeat_of(db: Session, o: Order) -> Optional[Dict[str, Any]]:
