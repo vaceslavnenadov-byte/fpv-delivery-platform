@@ -26,6 +26,7 @@ export function PeoplePage() {
         <button className="btn primary" onClick={() => setAdding((v) => !v)}>{adding ? "Скрыть форму" : "+ Новый пользователь"}</button>
       </div>
       {adding && <NewPerson units={units.data?.items ?? []} roles={roles.data?.items ?? []} />}
+      {adding && <AddDomainUser roles={roles.data?.items ?? []} onDone={list.reload} />}
       <Card title="Список" actions={<div className="row wrap filters">
         <input placeholder="Поиск: ФИО, логин, почта, должность" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Поиск" />
         <GroupSelect units={units.data?.items ?? []} value={unit} onChange={setUnit} empty="Все группы" label="Фильтр по группе" />
@@ -114,6 +115,44 @@ function NewPerson({ units, roles }: { units: { id: string; parent_id: string | 
         {error && <Alert>{error}</Alert>}
         <div><button className="btn primary" disabled={busy}>Сохранить</button></div>
       </form>
+    </Card>
+  );
+}
+
+/** Доменная учётная запись (уже есть в каталоге) — добавить в систему с ролями; пароль — доменный. */
+function AddDomainUser({ roles, onDone }: { roles: RoleRow[]; onDone: () => void }) {
+  const [username, setUsername] = useState("");
+  const [picked, setPicked] = useState<string[]>(["customer"]);
+  const [msg, setMsg] = useState<{ tone: string; text: string } | null>(null);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    try {
+      await api.post("/api/v1/recruitment/users", { username: username.trim(), roles: picked });
+      setMsg({ tone: "ok", text: `Доменная учётная запись ${username.trim()} добавлена` });
+      setUsername("");
+      onDone();
+    } catch (err) {
+      setMsg({ tone: "danger", text: errorText(err) });
+    }
+  }
+  return (
+    <Card title="Или: доменная учётная запись (вход по паролю домена)">
+      <form className="form recruit-form" onSubmit={submit}>
+        <label>Доменный логин<input value={username} onChange={(e) => setUsername(e.target.value)} required minLength={2} placeholder="i.ivanov" /></label>
+        <fieldset className="role-picks">
+          <legend>Роли</legend>
+          {roles.map((r) => (
+            <label key={r.code} className="check">
+              <input type="checkbox" checked={picked.includes(r.code)}
+                     onChange={(e) => setPicked(e.target.checked ? [...picked, r.code] : picked.filter((x) => x !== r.code))} />{r.name}
+            </label>
+          ))}
+        </fieldset>
+        <div><button className="btn">Добавить из домена</button></div>
+      </form>
+      {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+      <p className="muted small">Учётная запись должна уже существовать в домене (её создаёт администратор домена).</p>
     </Card>
   );
 }

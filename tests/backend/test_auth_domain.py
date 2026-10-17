@@ -52,8 +52,10 @@ def test_domain_password_never_stored(api, app):
             dump = c.execute(text(f"SELECT coalesce(string_agg(t::text, ' '), '') FROM {t} t")).scalar()
             assert PASSWORD not in dump, t
             assert "Wrong-Secret-123" not in dump, t
-        cols = c.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users'")).all()
-    assert not any("pass" in col[0] for col in cols)
+        # хеш пароля есть только у учётных записей приложения; у доменных — никогда
+        leaked = c.execute(text("SELECT count(*) FROM users WHERE auth_source = 'domain' "
+                                "AND (password_hash IS NOT NULL OR password_changed_at IS NOT NULL)")).scalar()
+    assert leaked == 0
 
 
 def test_directory_unavailable_returns_503(app, directory):
