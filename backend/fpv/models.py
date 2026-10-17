@@ -492,6 +492,15 @@ class IdempotencyKey(Base):
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 
+class PlatformSetting(Base):
+    """Настройка платформы, изменяемая администратором (например, зона обслуживания)."""
+    __tablename__ = "platform_settings"
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[Any] = mapped_column(JSONB)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
 class MapProvider(Base):
     """Онлайн-карта (плиточный сервис) с API-ключом; плитки отдаются через сервер платформы."""
     __tablename__ = "map_providers"

@@ -565,3 +565,10 @@ label.check { flex-direction: row; align-items: center; }
 .map-source-options button:hover { border-color: var(--accent); }
 .map-source-options button.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .map-source-options button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Зона обслуживания на карте */
+.zone-outline { fill: none; stroke: #2563eb; stroke-width: 2; stroke-dasharray: 10 6; }
+.zone.editing .zone-outline { fill: rgba(37, 99, 235, .08); stroke-width: 3; stroke-dasharray: none; }
+.zone-label { font-size: 11px; font-weight: 600; fill: #1d4ed8; paint-order: stroke; stroke: rgba(255, 255, 255, .9); stroke-width: 3px; }
+.area-grid { grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); }
+@media (max-width: 900px) { .area-grid { grid-template-columns: 1fr; } }

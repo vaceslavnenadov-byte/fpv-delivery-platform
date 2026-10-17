@@ -42,6 +42,14 @@ class DroneIn(StrictModel):
     fleet_id: Optional[uuid.UUID] = None
 
 
+class ServiceAreaIn(StrictModel):
+    south: float = Field(ge=-85, le=85)
+    west: float = Field(ge=-180, le=180)
+    north: float = Field(ge=-85, le=85)
+    east: float = Field(ge=-180, le=180)
+    confirm: bool = False          # сохранить, даже если базы каких-то парков окажутся вне зоны
+
+
 class MapProviderIn(StrictModel):
     preset: Optional[str] = Field(default=None, pattern=r"^[a-z_]{2,40}$")
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)

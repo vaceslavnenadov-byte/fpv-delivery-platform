@@ -79,6 +79,7 @@ export const APPS: Record<string, AppConfig> = {
       { to: "/users", label: "Пользователи и роли" },
       { to: "/scoring", label: "Правила баллов" },
       { to: "/maps", label: "Карты" },
+      { to: "/service-area", label: "Зона обслуживания" },
       { to: "/audit", label: "Журнал аудита" },
       { to: "/monitoring", label: "Мониторинг" },
     ],

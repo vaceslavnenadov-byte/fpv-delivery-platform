@@ -180,8 +180,11 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
     check("cargo_dimensions", max_dim <= settings.max_cargo_dim_mm,
           f"Габариты не более {settings.max_cargo_dim_mm} мм по любой стороне")
     points = route_points(r)
-    check("service_area", all(geo.in_bbox(lat, lon, settings.service_area) for lat, lon in points),
-          "Все точки маршрута в зоне обслуживания")
+    from . import service_area
+    area = service_area.bbox(db, settings)
+    check("service_area", all(geo.in_bbox(lat, lon, area) for lat, lon in points),
+          "Все точки маршрута в зоне обслуживания" if all(geo.in_bbox(lat, lon, area) for lat, lon in points)
+          else "Точки маршрута вне зоны обслуживания платформы")
     check("distance", 0 < r.distance_m <= settings.max_distance_m,
           f"Расстояние маршрута {r.distance_m} м (допустимо до {settings.max_distance_m} м, точки не совпадают)")
     violated = []

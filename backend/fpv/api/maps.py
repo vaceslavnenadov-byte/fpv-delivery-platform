@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .. import runtime
 from ..errors import ValidationFailed
-from ..services import customer_stream, live, map_providers, maps, video_sources
+from ..services import customer_stream, live, map_providers, maps, service_area, video_sources
 from ..services.identity import Principal
 from . import schemas
 from .deps import current_principal, get_db
@@ -72,6 +72,29 @@ def update_map(map_id: uuid.UUID, body: schemas.MapUpdateIn, p: Principal = Depe
 def delete_map(map_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     maps.delete(db, p, map_id)
     db.commit()
+
+
+# --- зона обслуживания ---
+
+@router.get("/api/v1/service-area")
+def get_service_area(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    p.require("map.read")
+    return service_area.describe(db, runtime.settings())
+
+
+@router.put("/api/v1/admin/service-area")
+def put_service_area(body: schemas.ServiceAreaIn, p: Principal = Depends(current_principal),
+                     db: Session = Depends(get_db)):
+    data = service_area.update(db, runtime.settings(), p, body.model_dump(exclude={"confirm"}), confirm=body.confirm)
+    db.commit()
+    return data
+
+
+@router.delete("/api/v1/admin/service-area")
+def reset_service_area(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    data = service_area.reset(db, runtime.settings(), p)
+    db.commit()
+    return data
 
 
 # --- онлайн-карты по API-ключу ---

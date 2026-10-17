@@ -364,7 +364,8 @@ def test_provider(db: Session, settings: Settings, p: Principal, provider_id: uu
     m = db.get(MapProvider, provider_id)
     if m is None:
         raise NotFound("Карта не найдена")
-    lat_min, lon_min, lat_max, lon_max = settings.service_area
+    from . import service_area
+    lat_min, lon_min, lat_max, lon_max = service_area.bbox(db, settings)
     z = max(m.min_zoom, min(12, m.max_zoom))
     x, y = lonlat_to_tile((lat_min + lat_max) / 2, (lon_min + lon_max) / 2, z, m.projection)
     try:
