@@ -608,3 +608,46 @@ class MapLayer(Base):
     uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    reason: Mapped[str] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(Text)
+    order_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("orders.id"))
+    status: Mapped[str] = mapped_column(Text, default="new")
+    status_changed_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    status_changed_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    last_message_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class SupportParticipant(Base):
+    __tablename__ = "support_participants"
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    added_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    added_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    last_read_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id"))
+    author_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    body: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class SupportAttachment(Base):
+    __tablename__ = "support_attachments"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("support_messages.id"))
+    object_key: Mapped[str] = mapped_column(Text, unique=True)
+    content_type: Mapped[str] = mapped_column(Text)
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[str] = mapped_column(Text)
+    filename: Mapped[str] = mapped_column(Text, default="")

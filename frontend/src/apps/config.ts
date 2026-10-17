@@ -77,6 +77,7 @@ export const APPS: Record<string, AppConfig> = {
       { to: "/orders", label: "Все заказы" },
       { to: "/drones", label: "Дроны" },
       { to: "/complaints", label: "Жалобы и споры" },
+      { to: "/support-admin", label: "Обращения в ТП" },
       { to: "/people", label: "Пользователи" },
       { to: "/org-units", label: "Группы пользователей" },
       { to: "/users", label: "Домен, операторы, устройства" },

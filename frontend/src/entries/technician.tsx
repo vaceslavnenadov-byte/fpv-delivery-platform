@@ -5,6 +5,7 @@ import { Alert } from "../components/ui";
 import { ProfilePage } from "../pages/Profile";
 import { FleetOrdersPage, FleetPage, TechOrderPage } from "../pages/technician/FleetPages";
 import { TechnicianPage } from "../pages/technician/TechnicianPage";
+import { supportRoutes } from "../pages/support/routes";
 import { mountApp } from "./common";
 
 mountApp(APPS.technician, (
@@ -15,6 +16,7 @@ mountApp(APPS.technician, (
       <Route path="/orders/:id" element={<TechOrderPage />} />
       <Route path="/service" element={<TechnicianPage />} />
       <Route path="/profile" element={<ProfilePage />} />
+      {supportRoutes()}
       <Route path="*" element={<Alert tone="warn">Страница не найдена</Alert>} />
     </Route>
   </Routes>

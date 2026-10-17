@@ -11,6 +11,7 @@ import { PersonCardPage } from "../pages/people/PersonCardPage";
 import { ProfilePage } from "../pages/Profile";
 import { AdminAuditPage, AdminComplaintsPage, AdminDronesPage, AdminMapsPage, AdminMonitoringPage,
   AdminOrdersPage, AdminOverviewPage, AdminReviewsPage, AdminScoringPage, AdminUsersPage } from "../pages/admin/AdminPages";
+import { supportRoutes } from "../pages/support/routes";
 import { mountApp } from "./common";
 
 mountApp(APPS.admin, (
@@ -33,6 +34,7 @@ mountApp(APPS.admin, (
       <Route path="/monitoring" element={<AdminMonitoringPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />
       <Route path="/profile" element={<ProfilePage />} />
+      {supportRoutes(true)}
       <Route path="*" element={<Alert tone="warn">Страница не найдена</Alert>} />
     </Route>
   </Routes>

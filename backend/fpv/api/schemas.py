@@ -197,6 +197,25 @@ class AssignCoordinatorIn(StrictModel):
     coordinator_id: uuid.UUID
 
 
+class SupportTicketIn(StrictModel):
+    reason: Literal["order", "account", "group", "service", "suggestion", "other"]
+    subject: str = Field(min_length=3, max_length=200)
+    body: str = Field(default="", max_length=5000)
+    order_id: Optional[uuid.UUID] = None
+
+
+class SupportMessageIn(StrictModel):
+    body: str = Field(min_length=1, max_length=5000)
+
+
+class SupportStatusIn(StrictModel):
+    status: Literal["in_progress", "rejected", "done"]
+
+
+class SupportParticipantIn(StrictModel):
+    user_id: uuid.UUID
+
+
 class RepeatRequestIn(StrictModel):
     comment: str = Field(default="", max_length=2000)
 

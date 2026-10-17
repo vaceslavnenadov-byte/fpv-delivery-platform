@@ -7,6 +7,7 @@ import { OrgUnitsPage } from "../pages/people/OrgUnitsPage";
 import { PeoplePage } from "../pages/people/PeoplePage";
 import { PersonCardPage } from "../pages/people/PersonCardPage";
 import { RecruiterOperatorsPage, RecruiterProfilesPage } from "../pages/recruiter/RecruiterPages";
+import { supportRoutes } from "../pages/support/routes";
 import { mountApp } from "./common";
 
 mountApp(APPS.recruiter, (
@@ -19,6 +20,7 @@ mountApp(APPS.recruiter, (
       <Route path="/profiles" element={<RecruiterProfilesPage />} />
       <Route path="/operators" element={<RecruiterOperatorsPage />} />
       <Route path="/profile" element={<ProfilePage />} />
+      {supportRoutes()}
       <Route path="*" element={<Alert tone="warn">Страница не найдена</Alert>} />
     </Route>
   </Routes>

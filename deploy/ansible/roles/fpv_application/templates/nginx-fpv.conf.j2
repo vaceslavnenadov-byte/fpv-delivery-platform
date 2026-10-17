@@ -59,6 +59,14 @@ server {
         include /etc/nginx/proxy_params;
         proxy_request_buffering off;
     }
+    # Вложения обращений в техподдержку: фото и видео до 50 МБ.
+    location ~ ^/api/v1/support/tickets/[0-9]+/files$ {
+        limit_req zone=fpv_api burst=10 nodelay;
+        client_max_body_size 60m;
+        proxy_pass http://127.0.0.1:8000;
+        include /etc/nginx/proxy_params;
+        proxy_request_buffering off;
+    }
     # ^~ обязателен: иначе запрос перехватит regex-блок /api/ ниже (без Upgrade → 404)
     location ^~ /api/v1/ws {
         proxy_pass http://{{ fpv_app_listen }};

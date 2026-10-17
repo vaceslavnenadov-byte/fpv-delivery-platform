@@ -7,6 +7,7 @@ import { OrderDetailPage } from "../pages/OrderDetail";
 import { ProfilePage } from "../pages/Profile";
 import { CoordinatorPage } from "../pages/coordinator/CoordinatorPage";
 import { VideoWallPage } from "../pages/coordinator/VideoWall";
+import { supportRoutes } from "../pages/support/routes";
 import { mountApp } from "./common";
 
 mountApp(APPS.coordinator, (
@@ -17,6 +18,7 @@ mountApp(APPS.coordinator, (
       <Route path="/orders" element={<CoordinatorPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />
       <Route path="/profile" element={<ProfilePage />} />
+      {supportRoutes()}
       <Route path="*" element={<Alert tone="warn">Страница не найдена</Alert>} />
     </Route>
   </Routes>

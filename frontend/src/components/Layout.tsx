@@ -49,6 +49,13 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
             <div className="nav-title">Профиль</div>
             <NavLink to="/profile">Профиль и допуск</NavLink>
           </div>
+          {can("support.use") && (
+            <div className="nav-section nav-bottom">
+              <div className="nav-title">Техподдержка</div>
+              <NavLink to="/support" end>Мои обращения</NavLink>
+              <NavLink to="/support/new">Новое обращение</NavLink>
+            </div>
+          )}
         </nav>
       </aside>
       <div className="main">
@@ -58,6 +65,7 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
           </div>
           <div className="topbar-right">
             <ThemeSwitch />
+            {can("support.use") && <Link to="/support/new" className="btn ghost support-btn" title="Написать в техподдержку">🛟 Техподдержка</Link>}
             <button className="btn ghost" onClick={() => setPanel((v) => !v)} aria-expanded={panel}>
               Уведомления {notes.data && notes.data.unread > 0 && <span className="counter">{notes.data.unread}</span>}
             </button>
