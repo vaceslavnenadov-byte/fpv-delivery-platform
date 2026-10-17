@@ -140,6 +140,10 @@ class Settings:
     ffmpeg_path: str = "ffmpeg"
     live_window_segments: int = 4                # сегментов в списке воспроизведения трансляции
     map_max_bytes: int = 50 * 1024 * 1024        # предельный размер изображения карты
+    map_tile_timeout_s: float = 8.0              # ожидание ответа онлайн-карты
+    map_tile_cache_items: int = 4000             # плиток в памяти процесса (кеш на 10 минут)
+    map_tile_rate_per_min: int = 900             # плиток в минуту на пользователя (защита ключа)
+    map_tile_allow_private: bool = False         # разрешить сервер плиток во внутренней сети
 
     # --- хранилище объектов ---
     object_store: str = "filesystem"            # filesystem | s3
@@ -248,6 +252,10 @@ def load_settings() -> Settings:
         ffmpeg_path=_str("FFMPEG_PATH", d.ffmpeg_path),
         live_window_segments=_int("LIVE_WINDOW_SEGMENTS", d.live_window_segments),
         map_max_bytes=_int("MAP_MAX_BYTES", d.map_max_bytes),
+        map_tile_timeout_s=float(_int("MAP_TILE_TIMEOUT_S", int(d.map_tile_timeout_s))),
+        map_tile_cache_items=_int("MAP_TILE_CACHE_ITEMS", d.map_tile_cache_items),
+        map_tile_rate_per_min=_int("MAP_TILE_RATE_PER_MIN", d.map_tile_rate_per_min),
+        map_tile_allow_private=_bool("MAP_TILE_ALLOW_PRIVATE", d.map_tile_allow_private),
         object_store=_str("OBJECT_STORE", d.object_store),
         object_store_root=_str("OBJECT_STORE_ROOT", d.object_store_root),
         s3_endpoint=_str("S3_ENDPOINT", d.s3_endpoint),

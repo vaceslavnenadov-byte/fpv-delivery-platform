@@ -42,6 +42,19 @@ class DroneIn(StrictModel):
     fleet_id: Optional[uuid.UUID] = None
 
 
+class MapProviderIn(StrictModel):
+    preset: Optional[str] = Field(default=None, pattern=r"^[a-z_]{2,40}$")
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    url_template: Optional[str] = Field(default=None, max_length=1000)
+    api_key: Optional[str] = Field(default=None, max_length=2000)
+    projection: Optional[Literal["3857", "3395"]] = None
+    min_zoom: Optional[int] = Field(default=None, ge=0, le=22)
+    max_zoom: Optional[int] = Field(default=None, ge=0, le=22)
+    attribution: Optional[str] = Field(default=None, max_length=300)
+    active: Optional[bool] = None
+    sort_order: Optional[int] = Field(default=None, ge=0, le=10000)
+
+
 class MapUpdateIn(StrictModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     description: Optional[str] = Field(default=None, max_length=1000)
@@ -96,6 +109,7 @@ class OrderIn(StrictModel):
     origin: PointIn
     destination: PointIn
     stops: List[StopIn] = Field(default_factory=list, max_length=MAX_STOPS)
+    map_provider_id: Optional[uuid.UUID] = None       # онлайн-карта, выбранная заказчиком
     recipient_name: str = Field(min_length=2, max_length=120)
     recipient_phone: str = Field(pattern=PHONE_PATTERN)
     window_start: dt.datetime

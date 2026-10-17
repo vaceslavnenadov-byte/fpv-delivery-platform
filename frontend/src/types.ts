@@ -148,6 +148,7 @@ export interface Order {
   operator_id: string | null;
   coordinator_id: string | null;
   tech_ready_at?: string | null;
+  map_provider_id?: string | null;   // онлайн-карта, выбранная заказчиком
   tech_ready_by?: UserBrief | null;
   started_at?: string | null;
   created_at: string;

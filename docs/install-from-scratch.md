@@ -175,8 +175,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-25_all.deb  fpv-drone-agent_0.1.0-25_all.deb
-# fpv-platform_0.1.0-25_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-26_all.deb  fpv-drone-agent_0.1.0-26_all.deb
+# fpv-platform_0.1.0-26_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -227,7 +227,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-25, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-26, источник file:/srv/packages
 ```
 
 ---
@@ -523,6 +523,19 @@ ls -l ~/test-map.png
 запад `37.55`, восток `37.68` (район примеров адресов в форме заказа). Подробно —
 `docs/maps-and-live.md`.
 
+**Онлайн-карты (если у сервера есть интернет).** **admin** → «Карты» → «Онлайн-карты по API-ключу»:
+сервис (ESRI, Google, Яндекс, 2ГИС, OpenStreetMap или свой XYZ), API-ключ → «Подключить карту» →
+«Проверить». Заказчик выберет карту при оформлении заказа, оператор по умолчанию увидит её же и
+сможет переключиться. Если интернет через прокси — **[root]**:
+
+```bash
+echo 'HTTPS_PROXY=http://proxy.example:3128' >> /etc/fpv/fpv.env      # адрес вашего прокси
+echo 'NO_PROXY=localhost,127.0.0.1,.fpv.local' >> /etc/fpv/fpv.env
+systemctl restart fpv-api
+```
+
+Где взять ключи и что учесть — `docs/maps-and-live.md`, раздел 1а.
+
 ### 9.3. Парк и база (точка А)
 
 **technician** → «Мой парк» → «Создать парк»: название, **щелчок по карте** — там встанет метка **А**,
@@ -632,7 +645,8 @@ FPV_AGENT_VIDEO_FPS=15
 ## 11. Проведение заказа
 
 1. **customer** → «Новый заказ» → **дрон из открытых парков** (точка **А** — база его парка —
-   подставляется сама и закреплена) → груз → на карте **перетащите метки Б** (где забрать груз) и
+   подставляется сама и закреплена) → груз → в списке «Карта» под картой выберите подложку (карта района
+   или подключённая онлайн-карта — её увидит и оператор) → на карте **перетащите метки Б** (где забрать груз) и
    **В** (куда доставить) или выберите точку кнопкой «Б»/«В» и щёлкните по карте; метку в фокусе можно
    сдвигать стрелками (Shift — крупный шаг). Координаты и адрес «Точка на карте (…)» подставятся сами —
    адрес можно уточнить, его ручной текст при перетаскивании сохраняется. Если по пути от Б к В

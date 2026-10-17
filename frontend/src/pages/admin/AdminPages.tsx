@@ -5,6 +5,7 @@ import { Alert, Badge, Card, Empty, KV, Pending, Stat, Tone } from "../../compon
 import { ORDER_STATUS, ROLE_LABELS, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
 import { invalidateMaps } from "../../maps";
+import { MapProvidersCard } from "./MapProviders";
 import type { Complaint, Drone, Fleet, MapLayer, Order, Video } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
 import { DroneService } from "../../components/DroneService";
@@ -583,9 +584,10 @@ export function AdminMapsPage() {
 
   return (
     <div className="stack">
-      <h1>Карты-подложки</h1>
+      <h1>Карты</h1>
+      <MapProvidersCard />
       <Alert tone={msg?.tone ?? "ok"}>{msg?.text}</Alert>
-      <Card title="Загрузить карту">
+      <Card title="Загрузить карту района (без интернета)">
         <p className="muted small">
           Изображение района работ (PNG, JPEG или WebP, до 50 МБ) — например, экспорт из ГИС или скан карты,
           ориентированный на север. Укажите географические координаты краёв изображения: широту верхнего (север)

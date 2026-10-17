@@ -215,7 +215,8 @@ export function FlightMonitorPage() {
           <div className="mon-cam"><CustomerCameraViewer orderId={o.id} variant="hud" /></div>
         ) : route ? (
           <div className="mon-map-body">
-            <RouteMap route={route} track={track} height={400} compact passed={Math.max(0, wpIndex - 1)} />
+            <RouteMap route={route} track={track} height={400} compact passed={Math.max(0, wpIndex - 1)}
+                      providerId={o.map_provider_id} orderId={o.id} />
             <div className="mon-map-info">
               <div>Точка {wpIndex || "—"} / {wpTotal || "—"}</div>
               <div>До точки Б: {remaining != null ? `${(remaining / 1000).toFixed(2)} км` : "—"}</div>

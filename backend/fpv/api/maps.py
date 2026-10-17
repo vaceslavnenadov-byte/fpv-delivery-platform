@@ -5,12 +5,12 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, Path as PathParam, Query, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from .. import runtime
 from ..errors import ValidationFailed
-from ..services import customer_stream, live, maps, video_sources
+from ..services import customer_stream, live, map_providers, maps, video_sources
 from ..services.identity import Principal
 from . import schemas
 from .deps import current_principal, get_db
@@ -72,6 +72,64 @@ def update_map(map_id: uuid.UUID, body: schemas.MapUpdateIn, p: Principal = Depe
 def delete_map(map_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     maps.delete(db, p, map_id)
     db.commit()
+
+
+# --- онлайн-карты по API-ключу ---
+
+@router.get("/api/v1/map-providers")
+def list_providers(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    return {"items": [map_providers.serialize(m) for m in map_providers.list_providers(db, p)]}
+
+
+@router.get("/api/v1/map-providers/{provider_id}/tiles/{z}/{x}/{y}")
+def provider_tile(provider_id: uuid.UUID, z: int = PathParam(..., ge=0, le=22), x: int = PathParam(..., ge=0),
+                  y: int = PathParam(..., ge=0), p: Principal = Depends(current_principal),
+                  db: Session = Depends(get_db)):
+    kind, body = map_providers.fetch_tile(db, runtime.settings(), p, provider_id, z, x, y)
+    # Браузер хранит плитку недолго и только для этого пользователя (условия сервисов карт).
+    return Response(body, media_type=kind, headers={"Cache-Control": "private, max-age=600",
+                                                    "X-Content-Type-Options": "nosniff",
+                                                    "Content-Security-Policy": "default-src 'none'"})
+
+
+@router.get("/api/v1/admin/map-providers")
+def admin_providers(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    p.require("map.manage")
+    items = map_providers.list_providers(db, p, include_inactive=True)
+    presets = [{"code": k, **{f: v[f] for f in ("title", "key_required", "projection", "max_zoom", "url_template",
+                                                  "attribution", "help")}} for k, v in map_providers.PRESETS.items()]
+    return {"items": [map_providers.serialize(m, admin=True) for m in items], "presets": presets}
+
+
+@router.post("/api/v1/admin/map-providers", status_code=201)
+def create_provider(body: schemas.MapProviderIn, p: Principal = Depends(current_principal),
+                    db: Session = Depends(get_db)):
+    m = map_providers.create(db, p, body.model_dump(exclude_none=True))
+    db.commit()
+    return map_providers.serialize(m, admin=True)
+
+
+@router.patch("/api/v1/admin/map-providers/{provider_id}")
+def update_provider(provider_id: uuid.UUID, body: schemas.MapProviderIn, p: Principal = Depends(current_principal),
+                    db: Session = Depends(get_db)):
+    data = body.model_dump(exclude_unset=True)
+    data.pop("preset", None)
+    m = map_providers.update(db, p, provider_id, data)
+    db.commit()
+    return map_providers.serialize(m, admin=True)
+
+
+@router.delete("/api/v1/admin/map-providers/{provider_id}", status_code=204)
+def delete_provider(provider_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    map_providers.delete(db, p, provider_id)
+    db.commit()
+
+
+@router.post("/api/v1/admin/map-providers/{provider_id}/test")
+def test_provider(provider_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    result = map_providers.test_provider(db, runtime.settings(), p, provider_id)
+    db.commit()
+    return result
 
 
 # --- прямая трансляция ---

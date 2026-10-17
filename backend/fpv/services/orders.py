@@ -230,7 +230,14 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     else:
         base, leg_ab, return_m = None, 0.0, None
     distance = int(round(leg_ab + leg_bc))
-    order = Order(customer_id=p.user_id, drone_id=drone.id, status="draft",
+    provider_id = data.get("map_provider_id")
+    if provider_id is not None:
+        from . import map_providers
+        try:
+            map_providers.get_active(db, provider_id)
+        except NotFound as exc:
+            raise ValidationFailed("Выбранная карта недоступна — выберите другую", code="map_provider_invalid") from exc
+    order = Order(customer_id=p.user_id, drone_id=drone.id, status="draft", map_provider_id=provider_id,
                   cargo_type=data["cargo_type"], cargo_description=data["cargo_description"],
                   cargo_weight_g=data["cargo_weight_g"], cargo_length_mm=data["cargo_length_mm"],
                   cargo_width_mm=data["cargo_width_mm"], cargo_height_mm=data["cargo_height_mm"],

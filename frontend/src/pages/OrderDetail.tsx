@@ -136,7 +136,8 @@ export function OrderDetailPage() {
 
       <div className="grid2">
         <Card title="Маршрут и статус">
-          {o.route && <RouteMap route={o.route} track={telemetry.data?.items ?? []} status={o.status_label} />}
+          {o.route && <RouteMap route={o.route} track={telemetry.data?.items ?? []} status={o.status_label}
+                                  providerId={o.map_provider_id} orderId={o.id} />}
           {o.route?.approval_notes?.length ? (
             <ul className="checks">{o.route.approval_notes.map((c) => <li key={c.code} className="fail">✕ {c.message}</li>)}</ul>
           ) : null}

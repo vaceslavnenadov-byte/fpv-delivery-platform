@@ -540,3 +540,16 @@ label.check { flex-direction: row; align-items: center; }
 .stops { display: flex; flex-direction: column; gap: 6px; border: 1px dashed var(--border); border-radius: var(--radius); padding: 8px 10px; }
 .stop-row { display: grid; grid-template-columns: 22px minmax(140px, 2fr) minmax(120px, 2fr) 92px 92px auto; gap: 6px; align-items: center; }
 @media (max-width: 900px) { .stop-row { grid-template-columns: 22px 1fr 1fr; } .stop-row > .row { grid-column: 1 / -1; justify-content: flex-end; } }
+
+/* Онлайн-карты */
+.map-frame { position: relative; }
+.point-picker svg.pannable { cursor: grab; }
+.point-picker svg.pannable:active { cursor: grabbing; }
+.map-zoom { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 4px; }
+.map-zoom button { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
+.map-attribution { font-size: 10px; text-anchor: end; fill: #333; paint-order: stroke; stroke: rgba(255, 255, 255, .85); stroke-width: 3px; }
+.map-attribution-text { font-size: 11px; color: var(--muted); margin-left: 8px; }
+.map-toggle select { max-width: 260px; }
+.map-template { word-break: break-all; max-width: 420px; }
+.provider-form { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }

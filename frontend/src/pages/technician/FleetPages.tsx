@@ -280,7 +280,7 @@ export function TechOrderPage() {
       </div>
       <div className="grid2">
         <Card title="Маршрут">
-          {o.route && <RouteMap route={o.route} height={240} />}
+          {o.route && <RouteMap route={o.route} height={240} providerId={o.map_provider_id} orderId={o.id} />}
         </Card>
         <Card title="Заказ и готовность">
           <KV items={[

@@ -255,6 +255,7 @@ class Order(Base):
     # Первичная готовность дрона к заказу, подтверждённая техником парка
     tech_ready_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     tech_ready_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    map_provider_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("map_providers.id"))   # карта заказчика
 
     route: Mapped[Optional["Route"]] = relationship(back_populates="order", uselist=False, lazy="joined")
 
@@ -489,6 +490,27 @@ class IdempotencyKey(Base):
     response_status: Mapped[Optional[int]] = mapped_column(Integer)
     response_body: Mapped[Any] = mapped_column(JSONB)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class MapProvider(Base):
+    """Онлайн-карта (плиточный сервис) с API-ключом; плитки отдаются через сервер платформы."""
+    __tablename__ = "map_providers"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    preset: Mapped[str] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text)
+    url_template: Mapped[str] = mapped_column(Text, default="")
+    api_key: Mapped[str] = mapped_column(Text, default="")
+    projection: Mapped[str] = mapped_column(Text, default="3857")
+    min_zoom: Mapped[int] = mapped_column(SmallInteger, default=1)
+    max_zoom: Mapped[int] = mapped_column(SmallInteger, default=19)
+    attribution: Mapped[str] = mapped_column(Text, default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=100)
+    last_error: Mapped[Optional[str]] = mapped_column(Text)
+    last_error_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 
 class MapLayer(Base):

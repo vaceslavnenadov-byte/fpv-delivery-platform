@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth";
 import { loadMaps, onMapsChanged, pickMap } from "../maps";
+import { LOCAL, SCHEME, fitView, loadProviders, onProvidersChanged, project, readOrderMapChoice, saveOrderMapChoice,
+         tilesFor, type MapProviderInfo } from "../tiles";
 import type { MapLayer, RouteInfo, Telemetry } from "../types";
 
 const BASEMAP_PREF = "fpv.basemap";
@@ -31,6 +33,24 @@ function useBasemaps(): MapLayer[] {
   return layers;
 }
 
+function useProviders(): MapProviderInfo[] {
+  const { can } = useAuth();
+  const allowed = can("map.read");
+  const [items, setItems] = useState<MapProviderInfo[]>([]);
+  useEffect(() => {
+    if (!allowed) return;
+    let alive = true;
+    const load = () => loadProviders().then((l) => alive && setItems(l));
+    load();
+    const off = onProvidersChanged(load);
+    return () => {
+      alive = false;
+      off();
+    };
+  }, [allowed]);
+  return items;
+}
+
 interface Props {
   route: RouteInfo;
   track?: Telemetry[];          // передаётся только при наличии прав на телеметрию
@@ -38,21 +58,29 @@ interface Props {
   height?: number;
   compact?: boolean;            // без текстовой подписи (монитор полёта)
   passed?: number;              // число пройденных контрольных точек
+  providerId?: string | null;   // онлайн-карта, выбранная заказчиком, — показывается по умолчанию
+  orderId?: string;             // для запоминания карты, которую выбрал этот пользователь
 }
 
 /** Карта маршрута (SVG). Подложка — карта, загруженная администратором платформы
  *  (внешние картографические сервисы не используются — работает в изолированной сети ЦОД);
  *  без подходящей карты показывается схема с сеткой. Позиция дрона показывается только при
  *  наличии достоверных данных (GNSS fix) и соответствующих прав. */
-export function RouteMap({ route, track = [], status, height = 280, compact = false, passed = 0 }: Props) {
+export function RouteMap({ route, track = [], status, height = 280, compact = false, passed = 0, providerId, orderId }: Props) {
   const layers = useBasemaps();
-  const [showBase, setShowBase] = useState(readPref);
-  const toggleBase = (on: boolean) => {
-    setShowBase(on);
-    try {
-      localStorage.setItem(BASEMAP_PREF, on ? "on" : "off");
-    } catch {
-      /* настройка не сохраняется — не критично */
+  const providers = useProviders();
+  // Какую карту показать: выбранную этим пользователем для заказа → карту заказчика →
+  // загруженную карту района (если не отключена) → схему.
+  const [picked, setPicked] = useState<string | null>(() => readOrderMapChoice(orderId));
+  const pick = (v: string) => {
+    setPicked(v);
+    saveOrderMapChoice(orderId, v);
+    if (v === LOCAL || v === SCHEME) {
+      try {
+        localStorage.setItem(BASEMAP_PREF, v === LOCAL ? "on" : "off");
+      } catch {
+        /* настройка не сохраняется — не критично */
+      }
     }
   };
   const fixes = track.filter((t) => t.lat != null && t.lon != null);
@@ -76,27 +104,42 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
   const W = 600, H = height, pad = 40;
   const scale = Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanY);
   const cx = (lonMin + lonMax) / 2, cy = (latMin + latMax) / 2;
-  const x = (lon: number) => W / 2 + (lon - cx) * k * scale;
-  const y = (lat: number) => H / 2 - (lat - cy) * scale;
+  let x = (lon: number) => W / 2 + (lon - cx) * k * scale;
+  let y = (lat: number) => H / 2 - (lat - cy) * scale;
   const last = fixes[fixes.length - 1];
   const fresh = last && Date.now() - new Date(last.recorded_at).getTime() < 30000;
   const gridStep = 50;
   const basemap = pickMap(layers, [...(route.base ? [route.base] : []), route.origin, route.destination, ...route.checkpoints]);
-  const base = showBase ? basemap : null;
+  const customerProvider = providers.find((p) => p.id === providerId) ?? null;
+  const fallback = customerProvider ? customerProvider.id : basemap && readPref() ? LOCAL : SCHEME;
+  const choice = picked && (picked === SCHEME || (picked === LOCAL && basemap) || providers.some((p) => p.id === picked))
+    ? picked : fallback;
+  const provider = providers.find((p) => p.id === choice) ?? null;
+  const base = choice === LOCAL ? basemap : null;
+  // Онлайн-карта: проекция сервиса, масштаб подбирается так, чтобы поместился весь маршрут.
+  const view = provider ? fitView(pts, W, H, pad, provider.projection, provider.min_zoom, provider.max_zoom) : null;
+  if (provider && view) {
+    const left = view.cx - W / 2, top = view.cy - H / 2;
+    x = (lon: number) => project({ lat: 0, lon }, view.z, provider.projection).x - left;
+    y = (lat: number) => project({ lat, lon: 0 }, view.z, provider.projection).y - top;
+  }
 
   return (
     <figure className="map">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Карта маршрута" className={base ? "with-base" : ""}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Карта маршрута" className={base || provider ? "with-base" : ""}>
         <rect width={W} height={H} className="map-bg" />
+        {provider && view && tilesFor(view, W, H, provider).map((t) => (
+          <image key={t.key} href={t.href} x={t.x} y={t.y} width={t.size + 0.5} height={t.size + 0.5} preserveAspectRatio="none" />
+        ))}
         {base && (
           <image href={base.image_url} x={x(base.bounds.west)} y={y(base.bounds.north)}
                  width={x(base.bounds.east) - x(base.bounds.west)} height={y(base.bounds.south) - y(base.bounds.north)}
                  preserveAspectRatio="none" className="map-base" />
         )}
-        {!base && Array.from({ length: Math.ceil(W / gridStep) }, (_, i) => (
+        {!base && !provider && Array.from({ length: Math.ceil(W / gridStep) }, (_, i) => (
           <line key={`v${i}`} x1={i * gridStep} y1={0} x2={i * gridStep} y2={H} className="map-grid" />
         ))}
-        {!base && Array.from({ length: Math.ceil(H / gridStep) }, (_, i) => (
+        {!base && !provider && Array.from({ length: Math.ceil(H / gridStep) }, (_, i) => (
           <line key={`h${i}`} x1={0} y1={i * gridStep} x2={W} y2={i * gridStep} className="map-grid" />
         ))}
         <polyline points={line.map((p) => `${x(p.lon)},${y(p.lat)}`).join(" ")}
@@ -147,11 +190,18 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
         {!compact && hasBase && <>А — база парка, Б — забор груза, {stops.length > 0 && <>1–{stops.length} — промежуточные точки, </>}В — получатель. </>}
         {!compact && <>Маршрут {(route.distance_m / 1000).toFixed(2)} км{route.return_m != null && `, возврат на базу ${(route.return_m / 1000).toFixed(2)} км`}, высота до {route.max_altitude_m} м.
         {status && <> Статус: {status}.</>} {track.length === 0 && "Позиция дрона не отображается (нет данных или прав доступа)."}</>}
-        {basemap && (
-          <label className="map-toggle">
-            <input type="checkbox" checked={showBase} onChange={(e) => toggleBase(e.target.checked)} /> Карта: {basemap.name}
+        {(basemap || providers.length > 0) && (
+          <label className="map-toggle">Карта:{" "}
+            <select value={choice} onChange={(e) => pick(e.target.value)} aria-label="Карта маршрута">
+              {providers.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}{p.id === providerId ? " — выбрана заказчиком" : ""}</option>
+              ))}
+              {basemap && <option value={LOCAL}>Карта района: {basemap.name}</option>}
+              <option value={SCHEME}>Схема без подложки</option>
+            </select>
           </label>
         )}
+        {provider?.attribution && <span className="map-attribution-text">{provider.attribution}</span>}
       </figcaption>
     </figure>
   );

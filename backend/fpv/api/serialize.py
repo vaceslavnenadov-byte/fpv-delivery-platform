@@ -77,6 +77,7 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
             "approval_status": r.approval_status, "approval_notes": r.approval_notes,
         } if r else None,
         "tech_ready_at": ts(o.tech_ready_at),
+        "map_provider_id": str(o.map_provider_id) if o.map_provider_id else None,
     }
     if brief:
         return data

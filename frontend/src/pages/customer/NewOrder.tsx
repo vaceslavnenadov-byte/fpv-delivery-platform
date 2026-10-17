@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../../api";
 import { MapPointsEditor } from "../../components/MapPointsEditor";
+import { LOCAL } from "../../tiles";
 import { RouteMap } from "../../components/RouteMap";
 import { Alert, Card, Pending } from "../../components/ui";
 import { CARGO_TYPES } from "../../labels";
@@ -41,6 +42,9 @@ export function NewOrderPage() {
   });
   const [order, setOrder] = useState<Order | null>(null);
   const [activePin, setActivePin] = useState("origin");
+  // Карта, на которой заказчик прокладывает маршрут; онлайн-карта сохраняется в заказе и по
+  // умолчанию показывается оператору и координатору.
+  const [mapSource, setMapSource] = useState("");
   // Промежуточные точки между Б и В — по порядку прохождения.
   const [stops, setStops] = useState<Stop[]>([]);
   const changeStops = (fn: (s: Stop[]) => Stop[]) => {
@@ -110,6 +114,7 @@ export function NewOrderPage() {
         cargo_height_mm: f.cargo_height_mm,
         origin: { lat: f.origin_lat, lon: f.origin_lon, address: f.origin_address },
         destination: { lat: f.dest_lat, lon: f.dest_lon, address: f.dest_address },
+        map_provider_id: mapSource && mapSource !== LOCAL ? mapSource : null,
         stops: stops.map((x) => ({ lat: x.lat, lon: x.lon, address: x.address, note: x.note ?? "" })),
         recipient_name: f.recipient_name, recipient_phone: f.recipient_phone,
         window_start: new Date(f.window_start).toISOString(), window_end: new Date(f.window_end).toISOString(),
@@ -158,7 +163,7 @@ export function NewOrderPage() {
             </ul>
           </Card>
           <Card title="Условия выполнения">
-            {order.route && <RouteMap route={order.route} height={220} />}
+            {order.route && <RouteMap route={order.route} height={220} providerId={order.map_provider_id} orderId={order.id} />}
             <p className="price">{order.quote_amount ? `${order.quote_amount} ₽` : "—"}</p>
             <p className="muted small">Предварительная стоимость: базовый тариф + расстояние полёта (А→Б→В) + масса груза.</p>
           </Card>
@@ -210,7 +215,7 @@ export function NewOrderPage() {
             </div>
           </Card>
           <Card title="Маршрут">
-            <MapPointsEditor active={activePin} onActiveChange={setActivePin} onChange={movePin} height={340}
+            <MapPointsEditor active={activePin} source={mapSource} onSourceChange={setMapSource} onActiveChange={setActivePin} onChange={movePin} height={340}
               emptyHint="Карт района нет — выберите точки из списка или укажите координаты (карту загружает администратор)."
               pins={[
                 ...(base ? [{ key: "base", label: "А", title: "А — база парка", point: base, className: "map-base-pin", locked: true }] : []),
