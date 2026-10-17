@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type 
 import { loadMaps, onMapsChanged, pickMap } from "../maps";
 import { LOCAL, fitView, loadProviders, onProvidersChanged, project, tilesFor, unproject,
          type MapProviderInfo, type View } from "../tiles";
-import { inArea, loadServiceArea, onServiceAreaChanged, type Area } from "../serviceArea";
+import { inArea, loadZones, onZonesChanged, type Area, type Zone } from "../serviceArea";
 import type { MapLayer, Point } from "../types";
 
 /** Точка на карте-редакторе. locked — показывается, но не перемещается (например, база парка
@@ -35,7 +35,7 @@ interface Frame {
  *  Подложка — загруженная карта района или онлайн-карта (её можно двигать и масштабировать).
  *  Маршрут между метками рисуется пунктиром в порядке массива pins. */
 export function MapPointsEditor({ pins, onChange, active, onActiveChange, height = 360, emptyHint, source, onSourceChange,
-                                 showSourceSelect = true, area, showServiceArea = true, route = true, fitKey }: {
+                                 showSourceSelect = true, area, showServiceArea = true, route = true, fitKey, zoneIds, excludeZoneId }: {
   pins: MapPin[];
   onChange: (key: string, p: Point) => void;
   active?: string;
@@ -45,8 +45,10 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
   source?: string;                                 // id онлайн-карты или «local»
   onSourceChange?: (s: string) => void;
   showSourceSelect?: boolean;                      // false — карту выбирают отдельным полем формы
-  area?: Area | null;                              // прямоугольник для показа (по умолчанию — зона обслуживания)
-  showServiceArea?: boolean;                       // показывать контур зоны обслуживания
+  area?: Area | null;                              // редактируемый прямоугольник (страница зон администратора)
+  showServiceArea?: boolean;                       // показывать контуры зон обслуживания
+  zoneIds?: string[] | null;                       // показывать только эти зоны (например, зону парка дрона)
+  excludeZoneId?: string;                          // не показывать эту зону (её редактируют)
   route?: boolean;                                 // линия между метками (маршрут)
   fitKey?: string | number;                        // при изменении — показать все метки заново
 }) {
@@ -60,19 +62,20 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
   const pan = useRef<{ px: number; py: number; cx: number; cy: number } | null>(null);
   const moved = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
-  const [zone, setZone] = useState<Area | null>(null);
+  const [allZones, setAllZones] = useState<Zone[]>([]);
   useEffect(() => {
     if (!showServiceArea) return;
     let alive = true;
-    const load = () => loadServiceArea().then((a) => alive && setZone(a));
+    const load = () => loadZones().then((z) => alive && setAllZones(z));
     load();
-    const off = onServiceAreaChanged(load);
+    const off = onZonesChanged(load);
     return () => {
       alive = false;
       off();
     };
   }, [showServiceArea]);
-  const rect = area ?? (showServiceArea ? zone : null);
+  const shownZones = showServiceArea
+    ? allZones.filter((z) => z.active && (!zoneIds || zoneIds.includes(z.id)) && z.id !== excludeZoneId) : [];
 
   useEffect(() => {
     let alive = true;
@@ -262,16 +265,17 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
              aria-label="Карта: перетащите метки или щёлкните, чтобы поставить выбранную точку"
              onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClick={place}>
           {f.background}
-          {rect && (() => {
+          {[...shownZones.map((z) => ({ key: z.id, rect: z as Area, name: z.name, editing: false })),
+            ...(area ? [{ key: "editing", rect: area, name: "", editing: true }] : [])].map(({ key, rect, name, editing }) => {
             const x1 = f.x({ lat: rect.north, lon: rect.west }), y1 = f.y({ lat: rect.north, lon: rect.west });
             const x2 = f.x({ lat: rect.south, lon: rect.east }), y2 = f.y({ lat: rect.south, lon: rect.east });
             return (
-              <g className={`zone ${area ? "editing" : ""}`} pointerEvents="none">
+              <g key={key} className={`zone ${editing ? "editing" : ""}`} pointerEvents="none">
                 <rect x={Math.min(x1, x2)} y={Math.min(y1, y2)} width={Math.abs(x2 - x1)} height={Math.abs(y2 - y1)} className="zone-outline" />
-                <text x={Math.min(x1, x2) + 22} y={Math.min(y1, y2) + 30} className="zone-label">Зона обслуживания</text>
+                {name && <text x={Math.min(x1, x2) + 22} y={Math.min(y1, y2) + 30} className="zone-label">{name}</text>}
               </g>
             );
-          })()}
+          })}
           {route && visible.length > 1 && (
             <polyline className="map-route" points={pins.map((p) => `${f.x(p.point)},${f.y(p.point)}`).join(" ")} />
           )}
@@ -306,8 +310,8 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
           {provider && " Карту можно сдвигать мышью, масштаб — колесом или кнопками."}
           {pins.some((p) => p.locked) && ` ${pins.filter((p) => p.locked).map((p) => p.label).join(", ")} — закреплена.`}
           {outside.length > 0 && ` Вне видимой области: ${outside.map((p) => p.label).join(", ")}${provider ? " (⤢ — показать все)" : ""}.`}
-          {showServiceArea && zone && pins.some((p) => !p.locked && !inArea(zone, p.point)) &&
-            " Внимание: есть точки вне зоны обслуживания (пунктирная рамка) — такой маршрут не пройдёт проверку."}
+          {!area && shownZones.length > 0 && pins.some((p) => !p.locked && !shownZones.some((z) => inArea(z, p.point))) &&
+            " Внимание: есть точки вне зоны обслуживания (пунктирная рамка) — они не пройдут проверку."}
         </span>
         <span className="row">
           {showSourceSelect && sources.length > 1 && (

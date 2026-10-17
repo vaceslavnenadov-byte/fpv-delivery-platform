@@ -155,6 +155,7 @@ class Fleet(Base):
     base_lon: Mapped[float] = mapped_column(Float)
     base_address: Mapped[str] = mapped_column(Text)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    zone_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("service_zones.id"))   # зона обслуживания
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
@@ -490,6 +491,30 @@ class IdempotencyKey(Base):
     response_status: Mapped[Optional[int]] = mapped_column(Integer)
     response_body: Mapped[Any] = mapped_column(JSONB)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class ServiceZone(Base):
+    """Зона обслуживания: прямоугольник, внутри которого работают парки назначенных техников."""
+    __tablename__ = "service_zones"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text)
+    south: Mapped[float] = mapped_column(Float)
+    west: Mapped[float] = mapped_column(Float)
+    north: Mapped[float] = mapped_column(Float)
+    east: Mapped[float] = mapped_column(Float)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class ServiceZoneTechnician(Base):
+    __tablename__ = "service_zone_technicians"
+    zone_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("service_zones.id"), primary_key=True)
+    technician_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    assigned_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    assigned_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 
 class PlatformSetting(Base):

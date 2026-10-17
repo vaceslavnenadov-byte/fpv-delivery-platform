@@ -572,3 +572,7 @@ label.check { flex-direction: row; align-items: center; }
 .zone-label { font-size: 11px; font-weight: 600; fill: #1d4ed8; paint-order: stroke; stroke: rgba(255, 255, 255, .9); stroke-width: 3px; }
 .area-grid { grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); }
 @media (max-width: 900px) { .area-grid { grid-template-columns: 1fr; } }
+.zones-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.zone-card { display: flex; flex-direction: column; gap: 10px; }
+.zone-card.inactive { opacity: .7; }
+.zone-fleets { margin: 4px 0 0; padding-left: 18px; }

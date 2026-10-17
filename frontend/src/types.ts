@@ -258,6 +258,7 @@ export interface Fleet {
   active: boolean;
   drone_count: number;
   created_at: string;
+  zone_id?: string | null;
 }
 
 export interface AvailableDrone {
@@ -270,7 +271,7 @@ export interface AvailableDrone {
   link_status: string;
   battery_pct: number | null;
   busy: boolean;
-  fleet: { id: string; name: string; base: Point };
+  fleet: { id: string; name: string; zone_id?: string | null; base: Point };
 }
 
 export interface DroneConnection {

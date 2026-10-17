@@ -1,7 +1,8 @@
 import { api } from "./api";
 
-// Зона обслуживания платформы: прямоугольник, внутри которого должны лежать базы парков и точки
-// маршрутов. Задаёт администратор («Зона обслуживания»); показывается контуром на картах-редакторах.
+// Зоны обслуживания: прямоугольники, внутри которых должны лежать базы парков и точки маршрутов.
+// Создаёт администратор («Зоны обслуживания») и назначает в них техников. Сервер отдаёт каждому
+// пользователю нужное: технику — его зоны, заказчику — все активные, администратору — с техниками.
 
 export interface Area {
   south: number;
@@ -10,32 +11,32 @@ export interface Area {
   east: number;
 }
 
-export interface ServiceAreaInfo extends Area {
-  source: "admin" | "config";
-  config_default: Area;
-  updated_at: string | null;
-  updated_by?: { display_name: string } | null;
+export interface Zone extends Area {
+  id: string;
+  name: string;
+  active: boolean;
+  open_to_all?: boolean;
 }
 
-let cache: Promise<ServiceAreaInfo | null> | null = null;
+let cache: Promise<Zone[]> | null = null;
 const listeners = new Set<() => void>();
 
-export function loadServiceArea(): Promise<ServiceAreaInfo | null> {
+export function loadZones(): Promise<Zone[]> {
   if (!cache) {
-    cache = api.get<ServiceAreaInfo>("/api/v1/service-area").catch(() => {
+    cache = api.get<{ items: Zone[] }>("/api/v1/service-zones").then((r) => r.items, () => {
       cache = null;
-      return null;
+      return [];
     });
   }
   return cache;
 }
 
-export function invalidateServiceArea(): void {
+export function invalidateZones(): void {
   cache = null;
   listeners.forEach((f) => f());
 }
 
-export function onServiceAreaChanged(f: () => void): () => void {
+export function onZonesChanged(f: () => void): () => void {
   listeners.add(f);
   return () => listeners.delete(f);
 }

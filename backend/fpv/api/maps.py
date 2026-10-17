@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .. import runtime
 from ..errors import ValidationFailed
-from ..services import customer_stream, live, map_providers, maps, service_area, video_sources
+from ..services import customer_stream, live, map_providers, maps, video_sources, zones
 from ..services.identity import Principal
 from . import schemas
 from .deps import current_principal, get_db
@@ -74,25 +74,57 @@ def delete_map(map_id: uuid.UUID, p: Principal = Depends(current_principal), db:
     db.commit()
 
 
-# --- зона обслуживания ---
+# --- зоны обслуживания ---
 
-@router.get("/api/v1/service-area")
-def get_service_area(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
-    p.require("map.read")
-    return service_area.describe(db, runtime.settings())
+@router.get("/api/v1/service-zones")
+def list_zones(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    items = zones.visible_zones(db, runtime.settings(), p)
+    data = {"items": items}
+    if p.has("platform.settings"):
+        data["technicians"] = zones.technicians(db)
+    db.commit()                     # первая «Основная зона» создаётся при первом обращении
+    return data
 
 
-@router.put("/api/v1/admin/service-area")
-def put_service_area(body: schemas.ServiceAreaIn, p: Principal = Depends(current_principal),
-                     db: Session = Depends(get_db)):
-    data = service_area.update(db, runtime.settings(), p, body.model_dump(exclude={"confirm"}), confirm=body.confirm)
+@router.post("/api/v1/admin/service-zones", status_code=201)
+def create_zone(body: schemas.ServiceZoneIn, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    z = zones.create(db, runtime.settings(), p, body.model_dump(exclude={"confirm", "active"}))
+    data = zones.serialize(db, z, full=True)
     db.commit()
     return data
 
 
-@router.delete("/api/v1/admin/service-area")
-def reset_service_area(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
-    data = service_area.reset(db, runtime.settings(), p)
+@router.patch("/api/v1/admin/service-zones/{zone_id}")
+def update_zone(zone_id: uuid.UUID, body: schemas.ServiceZonePatch, p: Principal = Depends(current_principal),
+                db: Session = Depends(get_db)):
+    z = zones.update(db, runtime.settings(), p, zone_id, body.model_dump(exclude={"confirm"}, exclude_none=True),
+                     confirm=body.confirm)
+    data = zones.serialize(db, z, full=True)
+    db.commit()
+    return data
+
+
+@router.delete("/api/v1/admin/service-zones/{zone_id}", status_code=204)
+def delete_zone(zone_id: uuid.UUID, confirm: bool = Query(False), p: Principal = Depends(current_principal),
+                db: Session = Depends(get_db)):
+    zones.delete(db, runtime.settings(), p, zone_id, confirm=confirm)
+    db.commit()
+
+
+@router.put("/api/v1/admin/service-zones/{zone_id}/technicians/{technician_id}")
+def add_technician(zone_id: uuid.UUID, technician_id: uuid.UUID, p: Principal = Depends(current_principal),
+                   db: Session = Depends(get_db)):
+    z = zones.assign(db, p, zone_id, technician_id, True)
+    data = zones.serialize(db, z, full=True)
+    db.commit()
+    return data
+
+
+@router.delete("/api/v1/admin/service-zones/{zone_id}/technicians/{technician_id}")
+def remove_technician(zone_id: uuid.UUID, technician_id: uuid.UUID, p: Principal = Depends(current_principal),
+                      db: Session = Depends(get_db)):
+    z = zones.assign(db, p, zone_id, technician_id, False)
+    data = zones.serialize(db, z, full=True)
     db.commit()
     return data
 

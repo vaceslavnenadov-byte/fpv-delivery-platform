@@ -65,26 +65,23 @@ def list_fleets(db: Session, p: Principal) -> List[Fleet]:
     return list(db.execute(stmt.where(Fleet.technician_id == p.user_id)).scalars())
 
 
-def _check_base(db: Session, b: Dict[str, Any]) -> None:
+def _check_base(db: Session, technician_id: uuid.UUID, b: Dict[str, Any]):
+    """База — в зоне обслуживания, доступной технику; возвращает зону для привязки парка."""
     from .. import runtime
-    from . import service_area
-    if not service_area.contains(db, runtime.settings(), b["lat"], b["lon"]):
-        s, w, n, e = service_area.bbox(db, runtime.settings())
-        raise ValidationFailed(f"База парка должна быть в зоне обслуживания платформы (широта {s}…{n}, "
-                               f"долгота {w}…{e}). Зону меняет администратор: «Зона обслуживания»",
-                               code="base_outside_area")
+    from . import zones
+    return zones.check_fleet_base(db, runtime.settings(), technician_id, b["lat"], b["lon"])
 
 
 def create_fleet(db: Session, p: Principal, data: Dict[str, Any]) -> Fleet:
     p.require("fleet.manage")
     b = data["base"]
-    _check_base(db, b)
+    zone = _check_base(db, p.user_id, b)
     fleet = Fleet(name=data["name"], technician_id=p.user_id, base_lat=b["lat"], base_lon=b["lon"],
-                  base_address=b["address"], created_at=clock.now(), updated_at=clock.now())
+                  base_address=b["address"], zone_id=zone.id, created_at=clock.now(), updated_at=clock.now())
     db.add(fleet)
     db.flush()
     audit.record(db, p.actor, "fleet.created", entity_type="fleet", entity_id=fleet.id,
-                 details={"name": fleet.name, "base": [fleet.base_lat, fleet.base_lon]})
+                 details={"name": fleet.name, "base": [fleet.base_lat, fleet.base_lon], "zone": zone.name})
     return fleet
 
 
@@ -94,8 +91,9 @@ def update_fleet(db: Session, p: Principal, fleet_id: uuid.UUID, data: Dict[str,
         fleet.name = data["name"]
     if data.get("base"):
         b = data["base"]
-        _check_base(db, b)
+        zone = _check_base(db, fleet.technician_id, b)
         fleet.base_lat, fleet.base_lon, fleet.base_address = b["lat"], b["lon"], b["address"]
+        fleet.zone_id = zone.id
     if data.get("active") is not None:
         fleet.active = bool(data["active"])
     fleet.updated_at = clock.now()

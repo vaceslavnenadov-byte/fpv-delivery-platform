@@ -217,7 +217,8 @@ export function NewOrderPage() {
           </Card>
           <Card title="Маршрут">
             <MapSourcePicker value={mapSource} onChange={setMapSource} />
-            <MapPointsEditor active={activePin} source={mapSource} onSourceChange={setMapSource} showSourceSelect={false} onActiveChange={setActivePin} onChange={movePin} height={340}
+            <MapPointsEditor active={activePin} source={mapSource} onSourceChange={setMapSource} showSourceSelect={false}
+              zoneIds={chosen?.fleet.zone_id ? [chosen.fleet.zone_id] : null} onActiveChange={setActivePin} onChange={movePin} height={340}
               emptyHint="Карт района нет — выберите точки из списка или укажите координаты (карту загружает администратор)."
               pins={[
                 ...(base ? [{ key: "base", label: "А", title: "А — база парка", point: base, className: "map-base-pin", locked: true }] : []),

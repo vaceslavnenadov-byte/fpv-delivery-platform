@@ -364,10 +364,10 @@ def test_provider(db: Session, settings: Settings, p: Principal, provider_id: uu
     m = db.get(MapProvider, provider_id)
     if m is None:
         raise NotFound("Карта не найдена")
-    from . import service_area
-    lat_min, lon_min, lat_max, lon_max = service_area.bbox(db, settings)
+    from . import zones
+    lat_c, lon_c = zones.center(db, settings)
     z = max(m.min_zoom, min(12, m.max_zoom))
-    x, y = lonlat_to_tile((lat_min + lat_max) / 2, (lon_min + lon_max) / 2, z, m.projection)
+    x, y = lonlat_to_tile(lat_c, lon_c, z, m.projection)
     try:
         kind, body = _fetch(db, settings, m, p.user_id, z, x, y)
         return {"ok": True, "message": f"Плитка {z}/{x}/{y} получена ({kind}, {len(body)} байт)"}

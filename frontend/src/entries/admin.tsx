@@ -4,7 +4,7 @@ import { MonitorShell } from "../apps/MonitorShell";
 import { ShellOutlet } from "../apps/shell";
 import { Alert } from "../components/ui";
 import { OrderDetailPage } from "../pages/OrderDetail";
-import { ServiceAreaPage } from "../pages/admin/ServiceAreaPage";
+import { ZonesPage } from "../pages/admin/ZonesPage";
 import { ProfilePage } from "../pages/Profile";
 import { AdminAuditPage, AdminComplaintsPage, AdminDronesPage, AdminMapsPage, AdminMonitoringPage,
   AdminOrdersPage, AdminOverviewPage, AdminReviewsPage, AdminScoringPage, AdminUsersPage } from "../pages/admin/AdminPages";
@@ -22,7 +22,7 @@ mountApp(APPS.admin, (
       <Route path="/users" element={<AdminUsersPage />} />
       <Route path="/scoring" element={<AdminScoringPage />} />
       <Route path="/maps" element={<AdminMapsPage />} />
-      <Route path="/service-area" element={<ServiceAreaPage />} />
+      <Route path="/service-zones" element={<ZonesPage />} />
       <Route path="/audit" element={<AdminAuditPage />} />
       <Route path="/monitoring" element={<AdminMonitoringPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />

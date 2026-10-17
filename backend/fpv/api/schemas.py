@@ -42,11 +42,23 @@ class DroneIn(StrictModel):
     fleet_id: Optional[uuid.UUID] = None
 
 
-class ServiceAreaIn(StrictModel):
+class ServiceZoneIn(StrictModel):
+    name: str = Field(min_length=1, max_length=120)
     south: float = Field(ge=-85, le=85)
     west: float = Field(ge=-180, le=180)
     north: float = Field(ge=-85, le=85)
     east: float = Field(ge=-180, le=180)
+    active: Optional[bool] = None
+    confirm: bool = False
+
+
+class ServiceZonePatch(StrictModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    south: Optional[float] = Field(default=None, ge=-85, le=85)
+    west: Optional[float] = Field(default=None, ge=-180, le=180)
+    north: Optional[float] = Field(default=None, ge=-85, le=85)
+    east: Optional[float] = Field(default=None, ge=-180, le=180)
+    active: Optional[bool] = None
     confirm: bool = False          # сохранить, даже если базы каких-то парков окажутся вне зоны
 
 

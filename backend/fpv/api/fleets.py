@@ -22,7 +22,8 @@ router = APIRouter(tags=["fleets"])
 def fleet_json(f: Fleet, drone_count: int = 0) -> dict:
     return {"id": str(f.id), "name": f.name, "technician_id": str(f.technician_id),
             "base": {"lat": f.base_lat, "lon": f.base_lon, "address": f.base_address},
-            "active": f.active, "drone_count": drone_count, "created_at": serialize.ts(f.created_at)}
+            "active": f.active, "drone_count": drone_count, "created_at": serialize.ts(f.created_at),
+            "zone_id": str(f.zone_id) if f.zone_id else None}
 
 
 @router.get("/api/v1/fleets")
@@ -69,7 +70,7 @@ def available_drones(p: Principal = Depends(current_principal), db: Session = De
         "id": str(d.id), "registration_number": d.registration_number, "model": d.model,
         "manufacturer": d.manufacturer, "max_payload_g": d.max_payload_g, "max_range_m": d.max_range_m,
         "link_status": d.link_status, "battery_pct": d.battery_pct, "busy": busy,
-        "fleet": {"id": str(f.id), "name": f.name,
+        "fleet": {"id": str(f.id), "name": f.name, "zone_id": str(f.zone_id) if f.zone_id else None,
                   "base": {"lat": f.base_lat, "lon": f.base_lon, "address": f.base_address}},
     } for d, f, busy in fleets.available_drones(db, p)]}
 

@@ -8,12 +8,15 @@ import { RouteMap } from "../../components/RouteMap";
 import { Alert, Badge, Card, Empty, KV, Pending, Tone } from "../../components/ui";
 import { CARGO_TYPES, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
+import type { Zone } from "../../serviceArea";
 import type { Drone, Fleet, Order } from "../../types";
 
 // --- Мой парк: парки, дроны, ключи, открытие для заказов, подключение ---
 
 export function FleetPage() {
   const fleets = useLive(() => api.get<{ items: Fleet[] }>("/api/v1/fleets"), []);
+  const zones = useLive(() => api.get<{ items: (Zone & { open_to_all?: boolean })[] }>("/api/v1/service-zones"), [],
+    (m) => m.kind === "platform.zones_changed");
   const [active, setActive] = useState<string>("");
   if (fleets.error) return <Alert>{errorText(fleets.error)}</Alert>;
   if (!fleets.data) return <Pending />;
@@ -24,6 +27,11 @@ export function FleetPage() {
       <h1>Мой парк</h1>
       <p className="muted">Вы заводите дроны в свой парк, проверяете их состояние и подключение (телеметрия и видео),
         открываете для заказов и подтверждаете готовность дрона к каждому заказу. База парка — точка А маршрута.</p>
+      {zones.data && (zones.data.items.length === 0
+        ? <Alert tone="warn">Вам не назначена ни одна зона обслуживания — создать парк или перенести базу нельзя.
+            Обратитесь к администратору («Зоны обслуживания»).</Alert>
+        : <p className="small">Ваши зоны обслуживания (база парка и точки заказов — внутри зоны, на карте — пунктирная рамка):{" "}
+            {zones.data.items.map((z) => <span key={z.id} className="chip">{z.name}{z.open_to_all ? " · общая" : ""}</span>)}</p>)}
       {list.length > 1 && (
         <div className="row">
           {list.map((f) => (
