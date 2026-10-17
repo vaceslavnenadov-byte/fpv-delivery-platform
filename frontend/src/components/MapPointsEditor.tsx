@@ -14,6 +14,7 @@ export interface MapPin {
 }
 
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
+const listRu = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} и ${xs[xs.length - 1]}` : xs.join(""));
 
 /** Карта района с метками, которые перетаскиваются мышью или пальцем. Щелчок по пустому месту
  *  ставит выбранную точку (active). Метку в фокусе можно сдвигать стрелками (Shift — крупнее).
@@ -147,7 +148,7 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
       </svg>
       <figcaption className="row between">
         <span className="small muted">
-          Перетащите метки {movable.map((p) => p.label).join(" и ")} или щёлкните по карте
+          Перетащите {movable.length > 1 ? "метки" : "метку"} {listRu(movable.map((p) => p.label))} или щёлкните по карте
           {movable.length > 1 && onActiveChange ? " — встанет выбранная точка" : ""}.
           {pins.some((p) => p.locked) && ` ${pins.filter((p) => p.locked).map((p) => p.label).join(", ")} — закреплена.`}
           {outside.length > 0 && ` Вне этой карты: ${outside.map((p) => p.label).join(", ")}.`}

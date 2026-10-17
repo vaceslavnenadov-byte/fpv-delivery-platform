@@ -288,6 +288,7 @@ export function TechOrderPage() {
             ["Груз", `${CARGO_TYPES[o.cargo_type] ?? o.cargo_type}, ${o.cargo_weight_g} г`],
             ["А — база", o.route?.base?.address ?? "—"],
             ["Б — забор груза", o.route?.origin.address],
+            ...((o.route?.stops ?? []).map((x, i) => [`${i + 1} — промежуточная точка`, x.note ? `${x.address} — ${x.note}` : x.address]) as [string, string][]),
             ["В — получатель", o.route?.destination.address],
             ["Окно доставки", `${fmtDate(o.window_start)} — ${fmtDate(o.window_end)}`],
             ["Оператор", o.operator?.display_name ?? "не назначен"],

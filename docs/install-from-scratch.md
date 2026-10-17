@@ -175,8 +175,8 @@ git clone -b claude/complex-system-development-ucubxt \
     https://github.com/vaceslavnenadov-byte/fpv-delivery-packages fpv-packages
 
 ls /opt/fpv-packages/debian/fpv/
-# fpv-desktop_0.1.0-24_all.deb  fpv-drone-agent_0.1.0-24_all.deb
-# fpv-platform_0.1.0-24_amd64.deb  SHA256SUMS
+# fpv-desktop_0.1.0-25_all.deb  fpv-drone-agent_0.1.0-25_all.deb
+# fpv-platform_0.1.0-25_amd64.deb  SHA256SUMS
 (cd /opt/fpv-packages/debian/fpv && sha256sum -c SHA256SUMS)     # все три: OK
 ```
 
@@ -227,7 +227,7 @@ cat /etc/apt/sources.list.d/fpv-local.sources
 # Signed-By: /usr/share/keyrings/fpv-local.gpg
 
 apt update                         # без «NO_PUBKEY» и «is not signed»
-apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-24, источник file:/srv/packages
+apt policy fpv-platform fpv-drone-agent fpv-desktop   # Кандидат у всех: 0.1.0-25, источник file:/srv/packages
 ```
 
 ---
@@ -635,7 +635,10 @@ FPV_AGENT_VIDEO_FPS=15
    подставляется сама и закреплена) → груз → на карте **перетащите метки Б** (где забрать груз) и
    **В** (куда доставить) или выберите точку кнопкой «Б»/«В» и щёлкните по карте; метку в фокусе можно
    сдвигать стрелками (Shift — крупный шаг). Координаты и адрес «Точка на карте (…)» подставятся сами —
-   адрес можно уточнить, его ручной текст при перетаскивании сохраняется. Затем получатель, временное окно → «Проверить и рассчитать стоимость» (расстояние А→Б→В) →
+   адрес можно уточнить, его ручной текст при перетаскивании сохраняется. Если по пути от Б к В
+   нужно заехать ещё куда-то — **«+ Добавить точку»** (до 5 промежуточных точек 1, 2, …): метку
+   перетащите на карте, укажите адрес и, при желании, что сделать; порядок меняется кнопками ↑/↓,
+   ✕ — удалить. Расстояние, стоимость и проверки учитывают весь путь. Затем получатель, временное окно → «Проверить и рассчитать стоимость» (расстояние А→Б→В) →
    «Подтвердить заказ».
 2. **operator** → очередь → принимает заказ.
 3. **technician** → «Заказы на дронах парка» → заказ → проверяет подключение и видео

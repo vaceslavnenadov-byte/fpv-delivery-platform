@@ -152,6 +152,7 @@ def mission_info(db: Session, drone: Drone) -> Dict[str, Any]:
             "route": {"base": {"lat": r.base_lat, "lon": r.base_lon} if r.base_lat is not None else None,
                       "origin": {"lat": r.origin_lat, "lon": r.origin_lon},
                       "destination": {"lat": r.dest_lat, "lon": r.dest_lon},
+                      "stops": [{"lat": x["lat"], "lon": x["lon"]} for x in (r.stops or [])],
                       "checkpoints": r.checkpoints, "max_altitude_m": r.max_altitude_m},
             "video_buffer_seconds": None,
             # выбранный оператором источник видео (настройка видео, не команда полёта)

@@ -19,12 +19,18 @@ export interface Point {
   address?: string;
 }
 
+export interface Stop extends Point {
+  address: string;
+  note?: string;
+}
+
 export interface RouteInfo {
   base?: Point | null;          // А — база парка (если есть, origin = Б — забор груза, destination = В)
   origin: Point;
   destination: Point;
   distance_m: number;
   return_m?: number | null;
+  stops?: Stop[];               // промежуточные точки между Б и В (по порядку)
   max_altitude_m: number;
   checkpoints: { name: string; lat: number; lon: number; kind?: string }[];
   approval_status: string;

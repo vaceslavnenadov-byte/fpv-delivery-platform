@@ -6,7 +6,7 @@ import { RouteMap } from "../../components/RouteMap";
 import { Alert, Card, Pending } from "../../components/ui";
 import { CARGO_TYPES } from "../../labels";
 import { useLive } from "../../realtime";
-import type { AvailableDrone, Order } from "../../types";
+import type { AvailableDrone, Order, Stop } from "../../types";
 
 const PRESETS = [
   { name: "Склад (ул. Примерная, 1)", lat: 55.75, lon: 37.6 },
@@ -14,6 +14,10 @@ const PRESETS = [
   { name: "Поликлиника (ул. Лесная, 5)", lat: 55.78, lon: 37.58 },
   { name: "Пункт выдачи (ул. Речная, 12)", lat: 55.73, lon: 37.66 },
 ];
+
+const MAX_STOPS = 5;
+const mapAddress = (lat: number, lon: number) => `Точка на карте (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
+const isAutoAddress = (a: string) => !a.trim() || PRESETS.some((x) => x.name === a) || a.startsWith("Точка на карте");
 
 function localInput(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -37,6 +41,30 @@ export function NewOrderPage() {
   });
   const [order, setOrder] = useState<Order | null>(null);
   const [activePin, setActivePin] = useState("origin");
+  // Промежуточные точки между Б и В — по порядку прохождения.
+  const [stops, setStops] = useState<Stop[]>([]);
+  const changeStops = (fn: (s: Stop[]) => Stop[]) => {
+    idemKey.current = newIdempotencyKey();
+    setStops(fn);
+  };
+  const addStop = () => changeStops((list) => {
+    // новая точка — посередине последнего участка до В, чтобы сразу была видна на карте
+    const prev = list.length ? list[list.length - 1] : { lat: f.origin_lat, lon: f.origin_lon };
+    const lat = Math.round(((prev.lat + f.dest_lat) / 2) * 1e6) / 1e6;
+    const lon = Math.round(((prev.lon + f.dest_lon) / 2) * 1e6) / 1e6;
+    setActivePin(`stop-${list.length}`);
+    return [...list, { lat, lon, address: mapAddress(lat, lon), note: "" }];
+  });
+  const editStop = (i: number, patch: Partial<Stop>) => changeStops((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const moveStop = (i: number, d: number) => changeStops((list) => {
+    const next = [...list];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    return next;
+  });
+  const removeStop = (i: number) => {
+    setActivePin("dest");
+    changeStops((list) => list.filter((_, j) => j !== i));
+  };
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // Ключ идемпотентности живёт, пока форма не изменена: повторная отправка не создаёт дубликат.
@@ -52,12 +80,17 @@ export function NewOrderPage() {
   // адрес заменяется на «Точка на карте», заказчик может уточнить его в поле «Адрес».
   const movePin = (key: string, p: { lat: number; lon: number }) => {
     idemKey.current = newIdempotencyKey();
+    if (key.startsWith("stop-")) {
+      const i = Number(key.slice(5));
+      changeStops((list) => list.map((x, j) => (j === i
+        ? { ...x, lat: p.lat, lon: p.lon, address: isAutoAddress(x.address) ? mapAddress(p.lat, p.lon) : x.address } : x)));
+      return;
+    }
     const pre = key === "origin" ? "origin" : "dest";
     setF((s) => {
       const addr = s[`${pre}_address`];
-      const stale = !addr.trim() || PRESETS.some((x) => x.name === addr) || addr.startsWith("Точка на карте");
       return { ...s, [`${pre}_lat`]: p.lat, [`${pre}_lon`]: p.lon,
-               [`${pre}_address`]: stale ? `Точка на карте (${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})` : addr };
+               [`${pre}_address`]: isAutoAddress(addr) ? mapAddress(p.lat, p.lon) : addr };
     });
   };
 
@@ -77,6 +110,7 @@ export function NewOrderPage() {
         cargo_height_mm: f.cargo_height_mm,
         origin: { lat: f.origin_lat, lon: f.origin_lon, address: f.origin_address },
         destination: { lat: f.dest_lat, lon: f.dest_lon, address: f.dest_address },
+        stops: stops.map((x) => ({ lat: x.lat, lon: x.lon, address: x.address, note: x.note ?? "" })),
         recipient_name: f.recipient_name, recipient_phone: f.recipient_phone,
         window_start: new Date(f.window_start).toISOString(), window_end: new Date(f.window_end).toISOString(),
       };
@@ -181,12 +215,14 @@ export function NewOrderPage() {
               pins={[
                 ...(base ? [{ key: "base", label: "А", title: "А — база парка", point: base, className: "map-base-pin", locked: true }] : []),
                 { key: "origin", label: "Б", title: "Б — где забрать груз", point: { lat: f.origin_lat, lon: f.origin_lon }, className: "map-pickup" },
+                ...stops.map((x, i) => ({ key: `stop-${i}`, label: String(i + 1), title: `${i + 1} — промежуточная точка`,
+                                          point: { lat: x.lat, lon: x.lon }, className: "map-stop" })),
                 { key: "dest", label: "В", title: "В — получатель", point: { lat: f.dest_lat, lon: f.dest_lon }, className: "map-b" },
               ]} />
             <div className="form grid2">
               <div className="span2 muted small">
                 <b>А — база парка:</b> {base ? `${base.address} (${base.lat.toFixed(4)}, ${base.lon.toFixed(4)})` : "—"}.
-                Дрон вылетает с базы, забирает груз в точке Б и доставляет получателю в точку В.
+                Дрон вылетает с базы, забирает груз в точке Б, проходит промежуточные точки (если есть) и доставляет получателю в точку В.
                 Базу парка меняет техник, поэтому метка А закреплена.
               </div>
               <label className="span2">Точка Б — где забрать груз
@@ -200,6 +236,37 @@ export function NewOrderPage() {
               <label>Широта Б<input type="number" step="0.0001" value={f.origin_lat} onChange={set("origin_lat")} /></label>
               <label>Долгота Б<input type="number" step="0.0001" value={f.origin_lon} onChange={set("origin_lon")} /></label>
               <label className="span2">Адрес Б<input value={f.origin_address} onChange={set("origin_address")} /></label>
+              <div className="span2 stops">
+                <div className="row between">
+                  <strong>Промежуточные точки</strong>
+                  <button type="button" className="btn small" onClick={addStop} disabled={stops.length >= MAX_STOPS}>
+                    + Добавить точку
+                  </button>
+                </div>
+                {stops.length === 0 ? (
+                  <p className="muted small">Нужно заехать по пути от Б к В? Добавьте до {MAX_STOPS} точек — они пройдутся по порядку.</p>
+                ) : stops.map((x, i) => (
+                  <div key={i} className="stop-row">
+                    <span className="pin-dot map-stop" aria-hidden>{i + 1}</span>
+                    <input value={x.address} onChange={(e) => editStop(i, { address: e.target.value })} required minLength={3}
+                           aria-label={`Адрес точки ${i + 1}`} placeholder="Адрес" />
+                    <input value={x.note ?? ""} onChange={(e) => editStop(i, { note: e.target.value })} maxLength={200}
+                           aria-label={`Комментарий к точке ${i + 1}`} placeholder="Что сделать (необязательно)" />
+                    <input type="number" step="0.0001" value={x.lat} onChange={(e) => editStop(i, { lat: Number(e.target.value) })}
+                           aria-label={`Широта точки ${i + 1}`} />
+                    <input type="number" step="0.0001" value={x.lon} onChange={(e) => editStop(i, { lon: Number(e.target.value) })}
+                           aria-label={`Долгота точки ${i + 1}`} />
+                    <span className="row">
+                      <button type="button" className="btn small ghost" disabled={i === 0} onClick={() => moveStop(i, -1)}
+                              aria-label={`Точку ${i + 1} раньше`} title="Раньше">↑</button>
+                      <button type="button" className="btn small ghost" disabled={i === stops.length - 1} onClick={() => moveStop(i, 1)}
+                              aria-label={`Точку ${i + 1} позже`} title="Позже">↓</button>
+                      <button type="button" className="btn small ghost" onClick={() => removeStop(i)}
+                              aria-label={`Удалить точку ${i + 1}`} title="Удалить">✕</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
               <label className="span2">Точка В — куда доставить (получатель)
                 <select onChange={(e) => { const p = PRESETS[Number(e.target.value)]; idemKey.current = newIdempotencyKey();
                   setF((s) => ({ ...s, dest_address: p.name, dest_lat: p.lat, dest_lon: p.lon })); }}

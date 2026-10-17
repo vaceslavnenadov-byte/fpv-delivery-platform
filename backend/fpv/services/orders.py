@@ -153,8 +153,9 @@ def route_range_m(route: Route) -> int:
 
 
 def route_points(route: Route) -> List[Tuple[float, float]]:
-    """Опорные точки маршрута по порядку: [А (база)], Б (забор груза), В (получатель)."""
-    pts = [(route.origin_lat, route.origin_lon), (route.dest_lat, route.dest_lon)]
+    """Опорные точки маршрута по порядку: [А (база)], Б (забор груза), [промежуточные], В (получатель)."""
+    pts = [(route.origin_lat, route.origin_lon), *[(s["lat"], s["lon"]) for s in (route.stops or [])],
+           (route.dest_lat, route.dest_lon)]
     if route.base_lat is not None:
         pts.insert(0, (route.base_lat, route.base_lon))
     return pts
@@ -218,7 +219,10 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     if drone is None or not (fleet_ok or legacy_ok):
         raise ValidationFailed("Выберите дрон из открытых для заказов парков", code="drone_invalid")
     o, d = data["origin"], data["destination"]
-    leg_bc = geo.haversine_m(o["lat"], o["lon"], d["lat"], d["lon"])
+    stops = [{"lat": round(x["lat"], 6), "lon": round(x["lon"], 6), "address": x["address"].strip(),
+              "note": (x.get("note") or "").strip()} for x in (data.get("stops") or [])]
+    chain = [(o["lat"], o["lon"]), *[(x["lat"], x["lon"]) for x in stops], (d["lat"], d["lon"])]
+    leg_bc = sum(geo.haversine_m(a[0], a[1], b[0], b[1]) for a, b in zip(chain, chain[1:]))
     if fleet is not None:
         base = {"lat": fleet.base_lat, "lon": fleet.base_lon, "address": fleet.base_address}
         leg_ab = geo.haversine_m(base["lat"], base["lon"], o["lat"], o["lon"])
@@ -237,7 +241,7 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     db.flush()
     db.add(Route(order_id=order.id, origin_lat=o["lat"], origin_lon=o["lon"], origin_address=o["address"],
                  dest_lat=d["lat"], dest_lon=d["lon"], dest_address=d["address"], distance_m=distance,
-                 checkpoints=build_checkpoints(base, o, d),
+                 checkpoints=build_checkpoints(base, o, d, stops), stops=stops,
                  base_lat=base["lat"] if base else None, base_lon=base["lon"] if base else None,
                  base_address=base["address"] if base else None, return_m=return_m))
     db.add(OrderStatusHistory(order_id=order.id, from_status=None, to_status="draft", actor_id=p.user_id,
@@ -245,13 +249,15 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     db.flush()
     db.refresh(order)
     audit.record(db, p.actor, "order.created", entity_type="order", entity_id=order.id,
-                 details={"drone_id": drone.id, "distance_m": distance})
+                 details={"drone_id": drone.id, "distance_m": distance, "stops": len(stops)})
     return order
 
 
-def build_checkpoints(base: Optional[Dict[str, Any]], o: Dict[str, Any], d: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Контрольные точки: [подлёт А→Б, Б — забор груза (kind=pickup)], затем Б→В.
-    Справочные точки маршрута для отображения и учёта прохождения, не команды дрону."""
+def build_checkpoints(base: Optional[Dict[str, Any]], o: Dict[str, Any], d: Dict[str, Any],
+                      stops: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """Контрольные точки: [подлёт А→Б, Б — забор груза (kind=pickup)], затем Б→В через промежуточные
+    точки заказчика (kind=stop). Справочные точки маршрута для отображения и учёта прохождения,
+    не команды дрону."""
     def pt(name: str, lat: float, lon: float, kind: str = "checkpoint") -> Dict[str, Any]:
         return {"name": name, "lat": round(lat, 6), "lon": round(lon, 6), "kind": kind}
     cps: List[Dict[str, Any]] = []
@@ -259,9 +265,21 @@ def build_checkpoints(base: Optional[Dict[str, Any]], o: Dict[str, Any], d: Dict
         lat, lon = geo.interpolate((base["lat"], base["lon"]), (o["lat"], o["lon"]), 0.5)
         cps.append(pt("Подлёт", lat, lon))
         cps.append(pt("Б — забор груза", o["lat"], o["lon"], "pickup"))
-    for i, t in enumerate((0.25, 0.5, 0.75), start=1):
-        lat, lon = geo.interpolate((o["lat"], o["lon"]), (d["lat"], d["lon"]), t)
-        cps.append(pt(f"КТ-{i}", lat, lon))
+    if not stops:
+        for i, t in enumerate((0.25, 0.5, 0.75), start=1):
+            lat, lon = geo.interpolate((o["lat"], o["lon"]), (d["lat"], d["lon"]), t)
+            cps.append(pt(f"КТ-{i}", lat, lon))
+        return cps
+    # с промежуточными точками — контрольная точка посередине каждого участка
+    chain = [o, *stops, d]
+    n = 0
+    for i, (a, b) in enumerate(zip(chain, chain[1:])):
+        n += 1
+        lat, lon = geo.interpolate((a["lat"], a["lon"]), (b["lat"], b["lon"]), 0.5)
+        cps.append(pt(f"КТ-{n}", lat, lon))
+        if i < len(stops):
+            s = stops[i]
+            cps.append(pt(f"{i + 1} — {s['address']}", s["lat"], s["lon"], "stop"))
     return cps
 
 

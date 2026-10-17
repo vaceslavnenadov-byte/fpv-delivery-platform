@@ -533,3 +533,10 @@ label.check { flex-direction: row; align-items: center; }
 .pin-dot.map-pickup { background: #d97706; }
 .pin-dot.map-b { background: var(--danger); }
 .pin-dot.map-base-pin { background: #475467; }
+
+/* Промежуточные точки маршрута */
+.map-stop { fill: #7c3aed; }
+.pin-dot.map-stop { background: #7c3aed; }
+.stops { display: flex; flex-direction: column; gap: 6px; border: 1px dashed var(--border); border-radius: var(--radius); padding: 8px 10px; }
+.stop-row { display: grid; grid-template-columns: 22px minmax(140px, 2fr) minmax(120px, 2fr) 92px 92px auto; gap: 6px; align-items: center; }
+@media (max-width: 900px) { .stop-row { grid-template-columns: 22px 1fr 1fr; } .stop-row > .row { grid-column: 1 / -1; justify-content: flex-end; } }

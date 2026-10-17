@@ -78,6 +78,13 @@ class PointIn(StrictModel):
     address: str = Field(min_length=3, max_length=300)
 
 
+class StopIn(PointIn):
+    note: str = Field(default="", max_length=200)
+
+
+MAX_STOPS = 5
+
+
 class OrderIn(StrictModel):
     drone_id: uuid.UUID
     cargo_type: str = Field(min_length=2, max_length=40, pattern=r"^[a-z_]+$")
@@ -88,6 +95,7 @@ class OrderIn(StrictModel):
     cargo_height_mm: int = Field(ge=1, le=5000)
     origin: PointIn
     destination: PointIn
+    stops: List[StopIn] = Field(default_factory=list, max_length=MAX_STOPS)
     recipient_name: str = Field(min_length=2, max_length=120)
     recipient_phone: str = Field(pattern=PHONE_PATTERN)
     window_start: dt.datetime

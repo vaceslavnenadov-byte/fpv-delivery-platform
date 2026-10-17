@@ -148,6 +148,7 @@ export function OrderDetailPage() {
             ...(o.route?.base ? [
               ["А — база парка", o.route.base.address],
               ["Б — забор груза", o.route.origin.address],
+              ...((o.route.stops ?? []).map((x, i) => [`${i + 1} — промежуточная точка`, x.note ? `${x.address} — ${x.note}` : x.address]) as [string, string][]),
               ["В — получатель", o.route.destination.address],
             ] as [string, string | undefined][] : [
               ["Точка А", o.route?.origin.address],

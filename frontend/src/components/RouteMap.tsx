@@ -60,7 +60,8 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
   const hasBase = !!route.base;
   const pickupLabel = hasBase ? "Б" : "А";
   const destLabel = hasBase ? "В" : "Б";
-  const cps = route.checkpoints.filter((c) => c.kind !== "pickup");
+  const cps = route.checkpoints.filter((c) => c.kind !== "pickup" && c.kind !== "stop");
+  const stops = route.stops ?? [];
   // Линия маршрута: [А →] контрольные точки (в т.ч. Б) → получатель.
   const line = [route.base ?? route.origin, ...route.checkpoints, route.destination];
   const pts = [...(route.base ? [route.base] : []), route.origin, route.destination, ...route.checkpoints,
@@ -119,6 +120,13 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
           <circle cx={x(route.origin.lon)} cy={y(route.origin.lat)} r={9} className={hasBase ? "map-pickup" : "map-a"} />
           <text x={x(route.origin.lon)} y={y(route.origin.lat) + 4} className="map-pin">{pickupLabel}</text>
         </g>
+        {stops.map((st, i) => (
+          <g key={`stop-${i}`}>
+            <title>{`${i + 1} — ${st.address}${st.note ? ` (${st.note})` : ""}`}</title>
+            <circle cx={x(st.lon)} cy={y(st.lat)} r={9} className="map-stop" />
+            <text x={x(st.lon)} y={y(st.lat) + 4} className="map-pin">{i + 1}</text>
+          </g>
+        ))}
         <g>
           <circle cx={x(route.destination.lon)} cy={y(route.destination.lat)} r={9} className="map-b" />
           <text x={x(route.destination.lon)} y={y(route.destination.lat) + 4} className="map-pin">{destLabel}</text>
@@ -136,7 +144,7 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
         )}
       </svg>
       <figcaption>
-        {!compact && hasBase && <>А — база парка, Б — забор груза, В — получатель. </>}
+        {!compact && hasBase && <>А — база парка, Б — забор груза, {stops.length > 0 && <>1–{stops.length} — промежуточные точки, </>}В — получатель. </>}
         {!compact && <>Маршрут {(route.distance_m / 1000).toFixed(2)} км{route.return_m != null && `, возврат на базу ${(route.return_m / 1000).toFixed(2)} км`}, высота до {route.max_altitude_m} м.
         {status && <> Статус: {status}.</>} {track.length === 0 && "Позиция дрона не отображается (нет данных или прав доступа)."}</>}
         {basemap && (

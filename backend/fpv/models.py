@@ -292,6 +292,7 @@ class Route(Base):
     base_lon: Mapped[Optional[float]] = mapped_column(Float)
     base_address: Mapped[Optional[str]] = mapped_column(Text)
     return_m: Mapped[Optional[int]] = mapped_column(Integer)    # возврат от получателя на базу
+    stops: Mapped[Any] = mapped_column(JSONB, default=list)       # промежуточные точки между Б и В
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     order: Mapped[Order] = relationship(back_populates="route")
 

@@ -72,7 +72,7 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
             "destination": {"lat": r.dest_lat, "lon": r.dest_lon, "address": r.dest_address},
             "base": {"lat": r.base_lat, "lon": r.base_lon, "address": r.base_address}
                     if r.base_lat is not None else None,
-            "return_m": r.return_m,
+            "return_m": r.return_m, "stops": r.stops or [],
             "distance_m": r.distance_m, "max_altitude_m": r.max_altitude_m, "checkpoints": r.checkpoints,
             "approval_status": r.approval_status, "approval_notes": r.approval_notes,
         } if r else None,
