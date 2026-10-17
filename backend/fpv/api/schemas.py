@@ -218,6 +218,55 @@ class UserStatusIn(StrictModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+ROLE_CODE = Literal["customer", "operator", "coordinator", "technician", "recruiter", "admin"]
+
+
+class LocalUserIn(StrictModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=10, max_length=200)
+    last_name: str = Field(min_length=1, max_length=80)
+    first_name: str = Field(min_length=1, max_length=80)
+    middle_name: Optional[str] = Field(default=None, max_length=80)
+    position_title: Optional[str] = Field(default=None, max_length=160)
+    profile_notes: Optional[str] = Field(default=None, max_length=2000)
+    email: Optional[str] = Field(default=None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    phone: Optional[str] = Field(default=None, pattern=PHONE_PATTERN)
+    org_unit_id: Optional[uuid.UUID] = None
+    roles: List[ROLE_CODE] = Field(default_factory=list, max_length=6)
+
+
+class PersonProfileIn(StrictModel):
+    last_name: Optional[str] = Field(default=None, max_length=80)
+    first_name: Optional[str] = Field(default=None, max_length=80)
+    middle_name: Optional[str] = Field(default=None, max_length=80)
+    position_title: Optional[str] = Field(default=None, max_length=160)
+    profile_notes: Optional[str] = Field(default=None, max_length=2000)
+    email: Optional[str] = Field(default=None, max_length=200)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    org_unit_id: Optional[uuid.UUID] = None
+
+
+class CredentialsIn(StrictModel):
+    username: Optional[str] = Field(default=None, min_length=3, max_length=64)
+    password: Optional[str] = Field(default=None, min_length=10, max_length=200)
+
+
+class AccountStatusIn(StrictModel):
+    status: Literal["active", "suspended", "banned"]
+    reason: str = Field(default="", max_length=500)
+
+
+class OrgUnitIn(StrictModel):
+    name: str = Field(min_length=1, max_length=160)
+    parent_id: Optional[uuid.UUID] = None
+
+
+class OrgUnitPatch(StrictModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=160)
+    parent_id: Optional[uuid.UUID] = None
+    move: bool = False             # true — применить parent_id (в том числе null — сделать корневой)
+
+
 class RecruitUserIn(StrictModel):
     username: str = Field(min_length=2, max_length=120)
     roles: List[Literal["customer", "operator", "coordinator", "technician", "recruiter", "admin"]] = Field(

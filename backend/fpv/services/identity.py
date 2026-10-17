@@ -41,6 +41,7 @@ class Principal:
     profile_completed: bool = True
     operator_status: Optional[str] = None
     groups: List[str] = field(default_factory=list)
+    account_status: str = "active"
 
     def has(self, permission: str) -> bool:
         return permission in self.permissions
@@ -82,6 +83,11 @@ def permissions_for_roles(db: Session, roles: Iterable[str]) -> Set[str]:
     return set(rows)
 
 
+SUSPENDED_ALLOWED = {"profile.self", "notification.read", "support.use"}
+BANNED_MESSAGE = "Ваш аккаунт забанен. Обратитесь в техподдержку"
+LOGIN_ALLOWED_STATUSES = ("active", "suspended")
+
+
 def build_principal(db: Session, user: User, session_id: Optional[uuid.UUID] = None,
                     ip: Optional[str] = None) -> Principal:
     roles = effective_roles(db, user.id)
@@ -91,13 +97,17 @@ def build_principal(db: Session, user: User, session_id: Optional[uuid.UUID] = N
     # Права оператора на работу с заказами действуют только после подтверждения администратором.
     if "operator" in roles and operator_status != "approved":
         perms -= {"order.queue.read", "order.accept", "order.execute", "order.report"}
+    if user.status == "suspended":
+        # Приостановленная учётная запись: вход есть, обязанности недоступны — только профиль,
+        # уведомления и обращения в техподдержку.
+        perms &= SUSPENDED_ALLOWED
     groups = list(db.execute(select(DomainGroup.name).join(
         UserDomainGroup, UserDomainGroup.domain_group_id == DomainGroup.id)
         .where(UserDomainGroup.user_id == user.id)).scalars())
     return Principal(user_id=user.id, username=user.domain_username, display_name=user.display_name,
                      roles=roles, permissions=perms, session_id=session_id, ip=ip,
                      profile_completed=user.profile_completed, operator_status=operator_status,
-                     groups=sorted(groups))
+                     groups=sorted(groups), account_status=user.status)
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +200,16 @@ def check_device_access(db: Session, user_id: uuid.UUID, device_code: str) -> De
 def login(db: Session, settings: Settings, provider: DirectoryProvider, username: str, password: str, *,
           ip: Optional[str], user_agent: Optional[str], device_code: Optional[str] = None) -> LoginResult:
     attempted = (username or "")[:64]
+    local = db.execute(select(User).where(User.domain_username == attempted.strip().lower(),
+                                          User.auth_source == "local")).scalar_one_or_none()
+    if local is not None:
+        from .directory import _pbkdf2_verify
+        if not local.password_hash or not _pbkdf2_verify(password or "", local.password_hash):
+            audit.record(db, audit.Actor(None, attempted, ip), "auth.login", outcome="denied",
+                         details={"reason": "invalid_credentials", "source": "local"})
+            db.commit()
+            raise NotAuthenticated("Неверное имя пользователя или пароль", code="invalid_credentials")
+        return _finish_login(db, settings, local, attempted, ip=ip, user_agent=user_agent, device_code=device_code)
     try:
         identity = provider.authenticate(username, password)
     except DirectoryUnavailable:
@@ -214,7 +234,17 @@ def login(db: Session, settings: Settings, provider: DirectoryProvider, username
         raise NotAuthenticated("Неверное имя пользователя или пароль", code="invalid_credentials")
 
     user = sync_identity(db, identity)
-    if user.status != "active":
+    return _finish_login(db, settings, user, attempted, ip=ip, user_agent=user_agent, device_code=device_code)
+
+
+def _finish_login(db: Session, settings: Settings, user: User, attempted: str, *, ip: Optional[str],
+                  user_agent: Optional[str], device_code: Optional[str]) -> LoginResult:
+    if user.status == "banned":
+        audit.record(db, audit.Actor(user.id, user.domain_username, ip), "auth.login", outcome="denied",
+                     entity_type="user", entity_id=user.id, details={"reason": "user_banned"})
+        db.commit()
+        raise NotAuthenticated(BANNED_MESSAGE, code="account_banned")
+    if user.status not in LOGIN_ALLOWED_STATUSES:
         audit.record(db, audit.Actor(user.id, user.domain_username, ip), "auth.login", outcome="denied",
                      entity_type="user", entity_id=user.id, details={"reason": f"user_{user.status}"})
         db.commit()
@@ -291,12 +321,13 @@ def authenticate_session(db: Session, settings: Settings, provider: DirectoryPro
         db.commit()
         raise NotAuthenticated("Сессия истекла", code="session_expired")
     user = db.get(User, rec.user_id)
-    if user is None or user.status != "active" or not user.directory_enabled:
+    if user is None or user.status not in LOGIN_ALLOWED_STATUSES or not user.directory_enabled:
         rec.revoked_at = now
         rec.revoke_reason = "user_inactive"
         db.commit()
         raise NotAuthenticated("Доступ отозван", code="access_revoked")
-    if (now - rec.last_directory_check_at).total_seconds() >= settings.directory_revalidate_s:
+    if user.auth_source == "domain" and \
+            (now - rec.last_directory_check_at).total_seconds() >= settings.directory_revalidate_s:
         try:
             identity = provider.lookup(user.domain_username)
         except DirectoryUnavailable:
@@ -326,7 +357,8 @@ def authenticate_session(db: Session, settings: Settings, provider: DirectoryPro
 def sync_all_users(db: Session, provider: DirectoryProvider) -> Dict[str, int]:
     """Плановая синхронизация: блокировка в каталоге → отзыв доступа во всех сессиях."""
     stats = {"checked": 0, "disabled": 0, "updated": 0}
-    users = list(db.execute(select(User).where(User.status == "active")).scalars())
+    users = list(db.execute(select(User).where(User.status.in_(LOGIN_ALLOWED_STATUSES),
+                                               User.auth_source == "domain")).scalars())
     for user in users:
         stats["checked"] += 1
         identity = provider.lookup(user.domain_username)

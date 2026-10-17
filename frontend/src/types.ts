@@ -10,6 +10,7 @@ export interface Me {
   email?: string | null;
   phone?: string | null;
   profile_status?: "pending" | "verified" | "rejected";
+  account_status?: "active" | "suspended";
   profile_review_notes?: string | null;
 }
 

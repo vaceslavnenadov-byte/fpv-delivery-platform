@@ -4,9 +4,9 @@
 добавляет существующую доменную учётную запись в систему заранее — до первого входа — и выдаёт
 ей роли приложения. Без роли вход в приложение невозможен.
 
-Рекрутер выдаёт и снимает только «рабочие» роли (RECRUITABLE_ROLES). Роли администратора и
-рекрутера выдаёт только администратор (разрешение user.manage), иначе рекрутер мог бы расширить
-собственные права. Роли из доменных групп меняются в каталоге, не здесь.
+Рекрутер выдаёт и снимает роли из RECRUITABLE_ROLES (включая роль рекрутера). Роль администратора
+выдаёт только администратор (разрешение user.manage); кто и когда её выдал, видно в карточке
+пользователя (user_roles.granted_by/granted_at) и в журнале аудита. Роли из доменных групп меняются в каталоге, не здесь.
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from ..services.directory import DirectoryProvider, DirectoryUnavailable, normal
 from . import audit, identity, notifications
 from .identity import Principal
 
-RECRUITABLE_ROLES = ("customer", "operator", "coordinator", "technician")
-PRIVILEGED_ROLES = ("admin", "recruiter")
+RECRUITABLE_ROLES = ("customer", "operator", "coordinator", "technician", "recruiter")
+PRIVILEGED_ROLES = ("admin",)
 
 
 def _user(db: Session, user_id: uuid.UUID) -> User:
@@ -102,7 +102,7 @@ def register_user(db: Session, p: Principal, provider: DirectoryProvider, userna
 def set_role(db: Session, p: Principal, user_id: uuid.UUID, role_code: str, grant: bool) -> None:
     p.require("user.recruit")
     if role_code in PRIVILEGED_ROLES and not p.has("user.manage"):
-        raise Forbidden("Роли администратора и рекрутера выдаёт только администратор")
+        raise Forbidden("Роль администратора выдаёт только администратор")
     if role_code not in RECRUITABLE_ROLES + PRIVILEGED_ROLES:
         raise ValidationFailed("Неизвестная роль")
     user = _user(db, user_id)

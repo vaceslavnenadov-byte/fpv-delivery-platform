@@ -32,9 +32,8 @@ def test_recruiter_registers_user_and_grants_role(world, app, api):
 def test_recruiter_cannot_grant_privileged_roles(world, api):
     rec = api("recruiter")
     cust = _find(rec, "customer")
-    for role in ("admin", "recruiter"):
-        r = rec.post(f"/api/v1/recruitment/users/{cust['id']}/roles", json={"role": role, "grant": True})
-        assert r.status_code == 403
+    r = rec.post(f"/api/v1/recruitment/users/{cust['id']}/roles", json={"role": "admin", "grant": True})
+    assert r.status_code == 403
     me = _find(rec, "recruiter")
     assert rec.post(f"/api/v1/recruitment/users/{me['id']}/roles",
                     json={"role": "operator", "grant": True}).status_code == 403
@@ -45,11 +44,11 @@ def test_recruiter_cannot_grant_privileged_roles(world, api):
     assert world.customer.get("/api/v1/recruitment/users").status_code == 403
     assert rec.get("/api/v1/admin/users").status_code == 403
     codes = [x["code"] for x in rec.get("/api/v1/recruitment/roles").json()["items"]]
-    assert codes == ["customer", "operator", "coordinator", "technician"]
+    assert codes == ["customer", "operator", "coordinator", "technician", "recruiter"]
     # администратор сохраняет все права и может назначить рекрутера
     assert world.admin.post(f"/api/v1/recruitment/users/{cust['id']}/roles",
                             json={"role": "recruiter", "grant": True}).status_code == 200
-    assert "recruiter" in [x["code"] for x in world.admin.get("/api/v1/recruitment/roles").json()["items"]]
+    assert "admin" in [x["code"] for x in world.admin.get("/api/v1/recruitment/roles").json()["items"]]
 
 
 def test_profile_review(world, api):

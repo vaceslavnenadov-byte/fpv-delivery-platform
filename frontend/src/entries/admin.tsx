@@ -5,6 +5,9 @@ import { ShellOutlet } from "../apps/shell";
 import { Alert } from "../components/ui";
 import { OrderDetailPage } from "../pages/OrderDetail";
 import { ZonesPage } from "../pages/admin/ZonesPage";
+import { OrgUnitsPage } from "../pages/people/OrgUnitsPage";
+import { PeoplePage } from "../pages/people/PeoplePage";
+import { PersonCardPage } from "../pages/people/PersonCardPage";
 import { ProfilePage } from "../pages/Profile";
 import { AdminAuditPage, AdminComplaintsPage, AdminDronesPage, AdminMapsPage, AdminMonitoringPage,
   AdminOrdersPage, AdminOverviewPage, AdminReviewsPage, AdminScoringPage, AdminUsersPage } from "../pages/admin/AdminPages";
@@ -23,6 +26,9 @@ mountApp(APPS.admin, (
       <Route path="/scoring" element={<AdminScoringPage />} />
       <Route path="/maps" element={<AdminMapsPage />} />
       <Route path="/service-zones" element={<ZonesPage />} />
+      <Route path="/people" element={<PeoplePage />} />
+      <Route path="/people/:id" element={<PersonCardPage />} />
+      <Route path="/org-units" element={<OrgUnitsPage />} />
       <Route path="/audit" element={<AdminAuditPage />} />
       <Route path="/monitoring" element={<AdminMonitoringPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />

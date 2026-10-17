@@ -57,11 +57,35 @@ class User(Base):
     profile_reviewed_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     profile_review_notes: Mapped[Optional[str]] = mapped_column(Text)
     registered_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    auth_source: Mapped[str] = mapped_column(Text, default="domain")          # domain | local
+    password_hash: Mapped[Optional[str]] = mapped_column(Text)
+    password_changed_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    password_changed_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    status_reason: Mapped[Optional[str]] = mapped_column(Text)
+    status_changed_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    status_changed_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    last_name: Mapped[Optional[str]] = mapped_column(Text)
+    first_name: Mapped[Optional[str]] = mapped_column(Text)
+    middle_name: Mapped[Optional[str]] = mapped_column(Text)
+    position_title: Mapped[Optional[str]] = mapped_column(Text)
+    profile_notes: Mapped[Optional[str]] = mapped_column(Text)
+    org_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("org_units.id"))
     last_login_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     last_directory_sync_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+
+
+class OrgUnit(Base):
+    """Внутренняя группа пользователей (компания, отдел, кабинет …); дерево любой глубины."""
+    __tablename__ = "org_units"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("org_units.id"))
+    name: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 
 class UserRole(Base):

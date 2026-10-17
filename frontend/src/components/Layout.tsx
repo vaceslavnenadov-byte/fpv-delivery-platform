@@ -68,6 +68,12 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
             <button className="btn ghost" onClick={async () => { await logout(); window.location.href = "/"; }}>Выйти</button>
           </div>
         </header>
+        {me.account_status === "suspended" && (
+          <div className="alert tone-warn suspended-banner" role="alert">
+            Учётная запись приостановлена администратором: должностные обязанности временно недоступны. Доступны профиль,
+            уведомления и обращения в техподдержку.
+          </div>
+        )}
         {panel && (
           <div className="notif-panel">
             <div className="row between">

@@ -20,7 +20,8 @@ router = APIRouter(prefix="/api/v1", tags=["auth"])
 def principal_dict(p: Principal) -> dict:
     return {"id": str(p.user_id), "username": p.username, "display_name": p.display_name,
             "roles": sorted(p.roles), "permissions": sorted(p.permissions), "groups": p.groups,
-            "profile_completed": p.profile_completed, "operator_status": p.operator_status}
+            "profile_completed": p.profile_completed, "operator_status": p.operator_status,
+            "account_status": p.account_status}
 
 
 @router.post("/auth/login")

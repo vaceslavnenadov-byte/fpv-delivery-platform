@@ -576,3 +576,11 @@ label.check { flex-direction: row; align-items: center; }
 .zone-card { display: flex; flex-direction: column; gap: 10px; }
 .zone-card.inactive { opacity: .7; }
 .zone-fleets { margin: 4px 0 0; padding-left: 18px; }
+
+/* Пользователи и группы */
+.filters input, .filters select { max-width: 240px; }
+.org-tree { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.org-row { align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--row-line); }
+.org-branch { color: var(--muted); width: 14px; text-align: center; }
+.group-edit { margin: 12px 0; }
+.suspended-banner { margin: 0 0 12px; }
