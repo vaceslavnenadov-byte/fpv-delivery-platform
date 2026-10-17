@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../../api";
 import { MapPointsEditor } from "../../components/MapPointsEditor";
+import { MapSourcePicker, preferredMapSource } from "../../components/MapSourcePicker";
 import { LOCAL } from "../../tiles";
 import { RouteMap } from "../../components/RouteMap";
 import { Alert, Card, Pending } from "../../components/ui";
@@ -44,7 +45,7 @@ export function NewOrderPage() {
   const [activePin, setActivePin] = useState("origin");
   // Карта, на которой заказчик прокладывает маршрут; онлайн-карта сохраняется в заказе и по
   // умолчанию показывается оператору и координатору.
-  const [mapSource, setMapSource] = useState("");
+  const [mapSource, setMapSource] = useState(preferredMapSource);
   // Промежуточные точки между Б и В — по порядку прохождения.
   const [stops, setStops] = useState<Stop[]>([]);
   const changeStops = (fn: (s: Stop[]) => Stop[]) => {
@@ -215,7 +216,8 @@ export function NewOrderPage() {
             </div>
           </Card>
           <Card title="Маршрут">
-            <MapPointsEditor active={activePin} source={mapSource} onSourceChange={setMapSource} onActiveChange={setActivePin} onChange={movePin} height={340}
+            <MapSourcePicker value={mapSource} onChange={setMapSource} />
+            <MapPointsEditor active={activePin} source={mapSource} onSourceChange={setMapSource} showSourceSelect={false} onActiveChange={setActivePin} onChange={movePin} height={340}
               emptyHint="Карт района нет — выберите точки из списка или укажите координаты (карту загружает администратор)."
               pins={[
                 ...(base ? [{ key: "base", label: "А", title: "А — база парка", point: base, className: "map-base-pin", locked: true }] : []),

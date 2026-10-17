@@ -553,3 +553,15 @@ label.check { flex-direction: row; align-items: center; }
 .map-toggle select { max-width: 260px; }
 .map-template { word-break: break-all; max-width: 420px; }
 .provider-form { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+
+/* Выбор карты в форме заказа */
+.map-source { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px 4px; margin: 0 0 10px; }
+.map-source legend { padding: 0 4px; font-weight: 600; }
+.map-source-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.map-source-options button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 150px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+  color: var(--text); cursor: pointer; font: inherit; text-align: left; }
+.map-source-options button small { color: var(--muted); font-size: 0.8em; }
+.map-source-options button:hover { border-color: var(--accent); }
+.map-source-options button.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.map-source-options button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

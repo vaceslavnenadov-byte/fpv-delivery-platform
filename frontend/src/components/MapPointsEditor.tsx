@@ -33,7 +33,8 @@ interface Frame {
  *  выбранную точку (active), метку в фокусе можно сдвигать стрелками (Shift — крупнее).
  *  Подложка — загруженная карта района или онлайн-карта (её можно двигать и масштабировать).
  *  Маршрут между метками рисуется пунктиром в порядке массива pins. */
-export function MapPointsEditor({ pins, onChange, active, onActiveChange, height = 360, emptyHint, source, onSourceChange }: {
+export function MapPointsEditor({ pins, onChange, active, onActiveChange, height = 360, emptyHint, source, onSourceChange,
+                                 showSourceSelect = true }: {
   pins: MapPin[];
   onChange: (key: string, p: Point) => void;
   active?: string;
@@ -42,6 +43,7 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
   emptyHint?: string;
   source?: string;                                 // id онлайн-карты или «local»
   onSourceChange?: (s: string) => void;
+  showSourceSelect?: boolean;                      // false — карту выбирают отдельным полем формы
 }) {
   const [layers, setLayers] = useState<MapLayer[]>([]);
   const [providers, setProviders] = useState<MapProviderInfo[]>([]);
@@ -274,7 +276,7 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
           {outside.length > 0 && ` Вне видимой области: ${outside.map((p) => p.label).join(", ")}${provider ? " (⤢ — показать все)" : ""}.`}
         </span>
         <span className="row">
-          {sources.length > 1 && (
+          {showSourceSelect && sources.length > 1 && (
             <select value={effective} onChange={(e) => setSource(e.target.value)} aria-label="Карта">
               {sources.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
