@@ -1,3 +1,4 @@
+import { RepeatBadges } from "../../components/RepeatBadges";
 import { useState } from "react";
 import { Link } from "react-router";
 import { openFlightMonitor } from "../OrderDetail";
@@ -58,7 +59,7 @@ export function OperatorQueuePage() {
           <div className="cards">
             {q.data.items.map((o) => (
               <article key={o.id} className="order-card">
-                <div className="row between"><Link to={`/orders/${o.id}`}><strong>№{o.number}</strong></Link><Badge kind="order" value={o.status} /></div>
+                <div className="row between"><Link to={`/orders/${o.id}`}><strong>№{o.number}</strong></Link> <RepeatBadges o={o} /><Badge kind="order" value={o.status} /></div>
                 <div>{CARGO_TYPES[o.cargo_type] ?? o.cargo_type}, {o.cargo_weight_g} г — {o.cargo_description}</div>
                 <div className="small">{o.route?.base
                   ? <>А (база): {o.route.base.address}<br />Б (забор): {o.route.origin.address}<br />В: {o.route.destination.address}</>

@@ -1,3 +1,4 @@
+import { RepeatBadges, RepeatBanner } from "../../components/RepeatBadges";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { api, errorText } from "../../api";
@@ -283,7 +284,8 @@ export function TechOrderPage() {
   return (
     <div className="stack">
       <div className="row between">
-        <h1>Заказ №{o.number} <Badge kind="order" value={o.status} /></h1>
+        <RepeatBanner o={o} />
+        <h1>Заказ №{o.number} <Badge kind="order" value={o.status} /> <RepeatBadges o={o} /></h1>
         <Link to="/orders" className="btn ghost">← Заказы парка</Link>
       </div>
       <div className="grid2">

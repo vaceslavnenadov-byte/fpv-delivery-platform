@@ -281,6 +281,8 @@ class Order(Base):
     tech_ready_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     tech_ready_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
     map_provider_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("map_providers.id"))   # карта заказчика
+    repeat_of: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("orders.id"))      # повторный вылет заказа
+    priority: Mapped[bool] = mapped_column(Boolean, default=False)
 
     route: Mapped[Optional["Route"]] = relationship(back_populates="order", uselist=False, lazy="joined")
 
@@ -321,6 +323,21 @@ class Route(Base):
     stops: Mapped[Any] = mapped_column(JSONB, default=list)       # промежуточные точки между Б и В
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     order: Mapped[Order] = relationship(back_populates="route")
+
+
+class RepeatRequest(Base):
+    """Запрос заказчика на повторный вылет; согласует координатор заказа."""
+    __tablename__ = "repeat_requests"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    order_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("orders.id"))
+    requested_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    comment: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(Text, default="pending")
+    decided_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    decided_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    decision_comment: Mapped[Optional[str]] = mapped_column(Text)
+    new_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("orders.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 
 class Assignment(Base):

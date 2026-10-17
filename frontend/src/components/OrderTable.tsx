@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { RepeatBadges } from "./RepeatBadges";
 import { Badge, Empty } from "./ui";
 import { CARGO_TYPES, fmtDate, fmtDistance } from "../labels";
 import type { Order } from "../types";
@@ -13,8 +14,8 @@ export function OrderTable({ orders, showCustomer = false }: { orders: Order[]; 
         </thead>
         <tbody>
           {orders.map((o) => (
-            <tr key={o.id}>
-              <td><Link to={`/orders/${o.id}`}>№{o.number}</Link></td>
+            <tr key={o.id} className={o.priority ? "priority-row" : ""}>
+              <td><Link to={`/orders/${o.id}`}>№{o.number}</Link> <RepeatBadges o={o} /></td>
               <td><Badge kind="order" value={o.status} />
                 {o.status === "in_progress" && (
                   <> <Link to={`/orders/${o.id}`} className="live-badge" title="Смотреть трансляцию с дрона">● В ЭФИРЕ</Link></>

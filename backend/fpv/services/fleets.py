@@ -271,10 +271,11 @@ def sweep_checks(db: Session, settings: Settings) -> int:
 
 def fleet_orders(db: Session, p: Principal) -> List[Order]:
     p.require("order.read_fleet")
+    from . import orders as orders_mod
     return list(db.execute(
         select(Order).join(Drone, Drone.id == Order.drone_id).join(Fleet, Fleet.id == Drone.fleet_id)
         .where(Fleet.technician_id == p.user_id, Order.status.in_(FLEET_ORDER_STATUSES))
-        .order_by(Order.created_at.desc()).limit(200)).unique().scalars())
+        .order_by(orders_mod.PRIORITY_FIRST, Order.created_at.desc()).limit(200)).unique().scalars())
 
 
 def readiness_reasons(db: Session, settings: Settings, order: Order, drone: Drone) -> List[str]:

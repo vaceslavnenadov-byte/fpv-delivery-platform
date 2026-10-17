@@ -584,3 +584,13 @@ label.check { flex-direction: row; align-items: center; }
 .org-branch { color: var(--muted); width: 14px; text-align: center; }
 .group-edit { margin: 12px 0; }
 .suspended-banner { margin: 0 0 12px; }
+
+/* Повторный вылет */
+.flag-red { display: inline-block; background: #c62828; color: #fff; font-weight: 700; font-size: 0.72rem; letter-spacing: .02em;
+  text-transform: uppercase; padding: 2px 8px; border-radius: 4px; margin-right: 4px; vertical-align: middle; }
+.repeat-badges { white-space: nowrap; }
+.repeat-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px; border-radius: var(--radius);
+  background: var(--danger-bg); border: 2px solid #c62828; color: var(--text); font-weight: 600; }
+.priority-row td:first-child { box-shadow: inset 4px 0 0 #c62828; }
+.repeat-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 10px; }
+.repeat-list li { border-bottom: 1px solid var(--row-line); padding-bottom: 8px; }

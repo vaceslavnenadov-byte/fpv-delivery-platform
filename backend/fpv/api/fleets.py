@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from .. import runtime
 from ..errors import ServiceUnavailable
 from ..models import Drone, Fleet
+from ..services import orders as orders_svc
 from ..services import audit, fleets, live
 from ..services.identity import Principal
 from . import schemas, serialize
@@ -191,7 +192,7 @@ def coordinator_wall(p: Principal = Depends(current_principal), db: Session = De
     settings = runtime.settings()
     statuses = coordination.ACTIVE + ("awaiting_delivery_confirmation",)
     orders = list(db.execute(select(Order).where(Order.coordinator_id == p.user_id, Order.status.in_(statuses))
-                             .order_by(Order.accepted_at)).unique().scalars())
+                             .order_by(orders_svc.PRIORITY_FIRST, Order.accepted_at)).unique().scalars())
     orders.sort(key=lambda o: o.status != "in_progress")     # в полёте — первыми
     items = []
     for o in orders[:settings.coordinator_max_orders]:

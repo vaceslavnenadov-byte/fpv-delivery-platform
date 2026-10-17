@@ -1,18 +1,19 @@
 import { useState, type FormEvent } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
 import { appUrl } from "../base";
 import { useAuth } from "../auth";
 import { CUSTOMER_STREAM_STATUSES, CustomerCameraPublisher, CustomerCameraViewer } from "../components/CustomerCamera";
 import { LiveVideo } from "../components/LiveVideo";
 import { OrderChat } from "../components/OrderChat";
+import { RepeatBadges, RepeatBanner } from "../components/RepeatBadges";
 import { RouteMap } from "../components/RouteMap";
 import { ScoreCard } from "../components/ScoreCard";
 import { Timeline } from "../components/Timeline";
 import { Alert, Badge, Card, KV, Pending, Tone } from "../components/ui";
 import { CARGO_TYPES, fmtDate, fmtDistance } from "../labels";
 import { useLive } from "../realtime";
-import type { Complaint, HistoryItem, Note, Order, Score, Telemetry, UserBrief } from "../types";
+import type { Complaint, HistoryItem, Note, Order, RepeatRequest, Score, Telemetry, UserBrief } from "../types";
 
 interface Confirmation { kind: string; decision: string; comment: string; report: Record<string, string>; actor: UserBrief | null; created_at: string }
 
@@ -76,6 +77,20 @@ export function OrderDetailPage() {
     }
   }
 
+  async function decideRepeat(id: number, approve: boolean, comment: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await api.post<RepeatRequest>(`/api/v1/orders/repeat-requests/${id}/decision`, { approve, comment });
+      setMsg({ tone: "ok", text: approve ? `Повторный вылет согласован — создан приоритетный заказ №${r.new_order?.number}` : "Повторный вылет отклонён" });
+      reloadAll();
+    } catch (err) {
+      setMsg({ tone: "danger", text: errorText(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function readiness() {
     setBusy(true);
     try {
@@ -97,9 +112,10 @@ export function OrderDetailPage() {
 
   return (
     <div className="stack">
+      <RepeatBanner o={o} />
       <div className="row between">
         <div>
-          <h1>Заказ №{o.number} <Badge kind="order" value={o.status} /></h1>
+          <h1>Заказ №{o.number} <Badge kind="order" value={o.status} /> <RepeatBadges o={o} /></h1>
           <div className="muted small">Создан {fmtDate(o.created_at)} · версия {o.version}{o.receipt_overdue && " · получение не подтверждено в срок"}</div>
         </div>
         {canTelemetry && MONITOR_STATUSES.includes(o.status) && (
@@ -107,6 +123,13 @@ export function OrderDetailPage() {
         )}
       </div>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+
+      {(REPEATABLE.includes(o.status) && isCustomer && can("order.repeat.request")) || (o.repeat_requests ?? []).length > 0 ? (
+        <RepeatCard o={o} busy={busy} canRequest={REPEATABLE.includes(o.status) && isCustomer && can("order.repeat.request")}
+                    canDecide={can("order.repeat.decide") && (o.coordinator_id === me?.id || can("order.read_all"))}
+                    onRequest={(comment) => act("repeat", { comment }, "Запрос повторного вылета отправлен координатору", false)}
+                    onDecide={(id, approve, comment) => decideRepeat(id, approve, comment)} />
+      ) : null}
 
       {o.dispute && (
         <DisputeCard d={o.dispute} busy={busy}
@@ -339,6 +362,68 @@ export function OrderDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+const REPEATABLE = ["in_progress", "awaiting_delivery_confirmation", "admin_review", "completed", "disputed"];
+const REPEAT_STATUS: Record<RepeatRequest["status"], [string, string]> = {
+  pending: ["ждёт решения координатора", "warn"], approved: ["согласован", "ok"], rejected: ["отклонён", "danger"],
+};
+
+/** Повторный вылет: кнопка заказчика и запросы с решениями координатора. */
+function RepeatCard({ o, busy, canRequest, canDecide, onRequest, onDecide }: {
+  o: Order; busy: boolean; canRequest: boolean; canDecide: boolean;
+  onRequest: (comment: string) => void; onDecide: (id: number, approve: boolean, comment: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [comment, setComment] = useState("");
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const reqs = o.repeat_requests ?? [];
+  return (
+    <Card title="🔁 Повторный вылет">
+      {canRequest && (open ? (
+        <form className="inline-form" onSubmit={(e) => { e.preventDefault(); onRequest(comment); setOpen(false); setComment(""); }}>
+          <input value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000} autoFocus
+                 placeholder="Комментарий координатору (необязательно)" aria-label="Комментарий к повторному вылету" />
+          <button className="btn primary" disabled={busy}>Отправить запрос</button>
+          <button type="button" className="btn ghost" onClick={() => setOpen(false)}>Отмена</button>
+        </form>
+      ) : (
+        <div className="row wrap">
+          <button className="btn primary" disabled={busy} onClick={() => setOpen(true)}>Повторный вылет</button>
+          <span className="muted small">Запрос уйдёт координатору заказа; после согласования будет создан новый приоритетный заказ
+            с тем же маршрутом и грузом. Число запросов не ограничено.</span>
+        </div>
+      ))}
+      {reqs.length > 0 && (
+        <ul className="repeat-list">
+          {reqs.map((r) => {
+            const [label, tone] = REPEAT_STATUS[r.status];
+            return (
+              <li key={r.id}>
+                <div className="row wrap">
+                  <Tone tone={tone}>{label}</Tone>
+                  <span className="small">{r.requested_by?.display_name ?? "—"}, {fmtDate(r.created_at)}</span>
+                  {r.new_order && <Link to={`/orders/${r.new_order.id}`}>новый заказ №{r.new_order.number}</Link>}
+                </div>
+                {r.comment && <div className="small">«{r.comment}»</div>}
+                {r.decided_by && <div className="muted small">Решение: {r.decided_by.display_name}, {fmtDate(r.decided_at)}
+                  {r.decision_comment && <> — {r.decision_comment}</>}</div>}
+                {canDecide && r.status === "pending" && (
+                  <div className="row wrap">
+                    <input value={answers[r.id] ?? ""} onChange={(e) => setAnswers({ ...answers, [r.id]: e.target.value })}
+                           placeholder="Комментарий (для отказа — обязателен)" aria-label="Комментарий к решению" maxLength={2000} />
+                    <button className="btn primary" disabled={busy} onClick={() => onDecide(r.id, true, answers[r.id] ?? "")}>Согласовать</button>
+                    <button className="btn danger" disabled={busy || (answers[r.id] ?? "").trim().length < 3}
+                            onClick={() => onDecide(r.id, false, answers[r.id] ?? "")}>Отклонить</button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
   );
 }
 

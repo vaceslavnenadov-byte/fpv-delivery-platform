@@ -78,6 +78,8 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
         } if r else None,
         "tech_ready_at": ts(o.tech_ready_at),
         "map_provider_id": str(o.map_provider_id) if o.map_provider_id else None,
+        "priority": bool(o.priority),
+        "repeat_of": _repeat_of(db, o),
     }
     if brief:
         return data
@@ -95,7 +97,16 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
     from ..services import complaints
     c = complaints.latest_dispute(db, o.id)
     data["dispute"] = complaint(db, c) if c else None
+    from ..services import repeats
+    data["repeat_requests"] = [repeats.serialize(db, r) for r in repeats.for_order(db, o.id)]
     return data
+
+
+def _repeat_of(db: Session, o: Order) -> Optional[Dict[str, Any]]:
+    if not o.repeat_of:
+        return None
+    src = db.get(Order, o.repeat_of)
+    return {"id": str(o.repeat_of), "number": src.number if src else None}
 
 
 def complaint(db: Session, c: Any) -> Dict[str, Any]:

@@ -197,6 +197,15 @@ class AssignCoordinatorIn(StrictModel):
     coordinator_id: uuid.UUID
 
 
+class RepeatRequestIn(StrictModel):
+    comment: str = Field(default="", max_length=2000)
+
+
+class RepeatDecisionIn(StrictModel):
+    approve: bool
+    comment: str = Field(default="", max_length=2000)
+
+
 class DisputeReviewIn(StrictModel):
     upheld: bool
     comment: str = Field(min_length=5, max_length=4000)

@@ -13,6 +13,7 @@ from .. import runtime
 from ..errors import NotFound
 from ..models import DeliveryConfirmation, Order, OrderNote, Route, TelemetryRecord, User
 from ..services import complaints as complaint_svc
+from ..services import repeats as repeat_svc
 from ..services import orders as svc
 from ..services import chat, scoring, video
 from ..services.identity import Principal
@@ -44,10 +45,20 @@ def list_orders(scope: str = Query("mine", pattern="^(mine|all)$"), status: Opti
         stmt = select(Order)
         if status:
             stmt = stmt.where(Order.status == status)
-        rows = list(db.execute(stmt.order_by(Order.created_at.desc()).limit(limit)).unique().scalars())
+        rows = list(db.execute(stmt.order_by(svc.PRIORITY_FIRST, Order.created_at.desc()).limit(limit)).unique().scalars())
     else:
         rows = svc.my_orders(db, p, status, as_role)
     return {"items": [serialize.order(db, o, p, brief=True) for o in rows]}
+
+
+@router.get("/repeat-requests")
+def repeat_pending(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    """Запросы повторного вылета, ждущие решения (координатор — по своим заказам)."""
+    out = []
+    for r in repeat_svc.pending_for(db, p):
+        o = db.get(Order, r.order_id)
+        out.append({**repeat_svc.serialize(db, r), "order_number": o.number if o else None})
+    return {"items": out}
 
 
 @router.get("/queue")
@@ -241,6 +252,32 @@ def dispute_review(order_id: uuid.UUID, body: schemas.DisputeReviewIn, p: Princi
     c = complaint_svc.coordinator_review(db, p, order_id, upheld=body.upheld, comment=body.comment)
     db.commit()
     return {"complaint_id": c.id, "status": c.status, "coordinator_verdict": c.coordinator_verdict}
+
+
+@router.post("/{order_id}/repeat", status_code=201)
+def repeat_request(order_id: uuid.UUID, body: schemas.RepeatRequestIn, p: Principal = Depends(current_principal),
+                   db: Session = Depends(get_db)):
+    """Заказчик: запрос повторного вылета (координатору заказа)."""
+    r = repeat_svc.request(db, p, order_id, body.comment)
+    data = repeat_svc.serialize(db, r)
+    db.commit()
+    return data
+
+
+@router.get("/{order_id}/repeat")
+def repeat_list(order_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    svc.visible_order(db, p, order_id)
+    return {"items": [repeat_svc.serialize(db, r) for r in repeat_svc.for_order(db, order_id)]}
+
+
+@router.post("/repeat-requests/{request_id}/decision")
+def repeat_decide(request_id: int, body: schemas.RepeatDecisionIn, p: Principal = Depends(current_principal),
+                  db: Session = Depends(get_db)):
+    """Координатор заказа (или администратор) согласует или отклоняет повторный вылет."""
+    r = repeat_svc.decide(db, runtime.settings(), p, request_id, body.approve, body.comment)
+    data = repeat_svc.serialize(db, r)
+    db.commit()
+    return data
 
 
 @router.post("/{order_id}/appeal", status_code=201)

@@ -1,3 +1,4 @@
+import { RepeatBadges } from "../components/RepeatBadges";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../api";
@@ -131,7 +132,7 @@ export function FlightMonitorPage() {
           <span className="mon-drone-icon" aria-hidden>✣</span>
           <div>
             <div className="mon-title">{o.drone ? `${o.drone.model} ${o.drone.registration_number}` : "Дрон"}</div>
-            <div className="mon-sub">Заказ №{o.number} · {CARGO_TYPES[o.cargo_type] ?? o.cargo_type}</div>
+            <div className="mon-sub">Заказ №{o.number} · {CARGO_TYPES[o.cargo_type] ?? o.cargo_type} <RepeatBadges o={o} /></div>
           </div>
         </div>
         <div className="mon-stat">

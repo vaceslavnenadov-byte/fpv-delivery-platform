@@ -150,6 +150,9 @@ export interface Order {
   coordinator_id: string | null;
   tech_ready_at?: string | null;
   map_provider_id?: string | null;   // онлайн-карта, выбранная заказчиком
+  priority?: boolean;                // повторный вылет — первым в списках
+  repeat_of?: { id: string; number: number | null } | null;
+  repeat_requests?: RepeatRequest[];
   tech_ready_by?: UserBrief | null;
   started_at?: string | null;
   created_at: string;
@@ -313,4 +316,17 @@ export interface Complaint {
   coordinator_comment: string | null;
   coordinator: UserBrief | null;
   coordinator_at: string | null;
+}
+
+export interface RepeatRequest {
+  id: number;
+  order_id: string;
+  status: "pending" | "approved" | "rejected";
+  comment: string;
+  requested_by: UserBrief | null;
+  created_at: string | null;
+  decided_by: UserBrief | null;
+  decided_at: string | null;
+  decision_comment: string | null;
+  new_order: { id: string; number: number | null } | null;
 }

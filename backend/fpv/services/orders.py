@@ -12,7 +12,7 @@ import uuid
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, case, or_, select
 from sqlalchemy.orm import Session
 
 from .. import clock
@@ -76,6 +76,11 @@ def get_order(db: Session, order_id: uuid.UUID, *, for_update: bool = False) -> 
     if order is None:
         raise NotFound("Заказ не найден")
     return order
+
+
+# Приоритетные (повторные) заказы в работе — первыми во всех списках.
+PRIORITY_FIRST = case((and_(Order.priority.is_(True), Order.status.in_(
+    ("awaiting_operator", "accepted", "awaiting_readiness", "ready", "in_progress"))), 0), else_=1)
 
 
 def can_view(db: Session, p: Principal, order: Order) -> bool:
@@ -420,7 +425,7 @@ def queue(db: Session, p: Principal, *, max_distance_m: Optional[int] = None,
         stmt = stmt.where(Route.distance_m <= max_distance_m)
     if cargo_type:
         stmt = stmt.where(Order.cargo_type == cargo_type)
-    return list(db.execute(stmt.order_by(Order.window_start)).unique().scalars())
+    return list(db.execute(stmt.order_by(PRIORITY_FIRST, Order.window_start)).unique().scalars())
 
 
 def my_orders(db: Session, p: Principal, status: Optional[str] = None, as_role: Optional[str] = None) -> List[Order]:
@@ -439,7 +444,7 @@ def my_orders(db: Session, p: Principal, status: Optional[str] = None, as_role: 
     stmt = select(Order).where(or_(*conds))
     if status:
         stmt = stmt.where(Order.status == status)
-    return list(db.execute(stmt.order_by(Order.created_at.desc()).limit(500)).unique().scalars())
+    return list(db.execute(stmt.order_by(PRIORITY_FIRST, Order.created_at.desc()).limit(500)).unique().scalars())
 
 
 def _active_assignment(db: Session, order: Order, role: str) -> Optional[Assignment]:
