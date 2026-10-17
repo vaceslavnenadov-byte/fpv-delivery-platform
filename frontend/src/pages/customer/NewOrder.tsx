@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../../api";
+import { MapPointsEditor } from "../../components/MapPointsEditor";
 import { RouteMap } from "../../components/RouteMap";
 import { Alert, Card, Pending } from "../../components/ui";
 import { CARGO_TYPES } from "../../labels";
@@ -35,6 +36,7 @@ export function NewOrderPage() {
     window_end: localInput(new Date(now.getTime() + 120 * 60000)),
   });
   const [order, setOrder] = useState<Order | null>(null);
+  const [activePin, setActivePin] = useState("origin");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // Ключ идемпотентности живёт, пока форма не изменена: повторная отправка не создаёт дубликат.
@@ -46,14 +48,22 @@ export function NewOrderPage() {
     setF((s) => ({ ...s, [k]: numeric ? Number(e.target.value) : e.target.value }));
   };
 
+  // Перетаскивание метки Б/В: координаты берутся с карты; название из списка больше не подходит —
+  // адрес заменяется на «Точка на карте», заказчик может уточнить его в поле «Адрес».
+  const movePin = (key: string, p: { lat: number; lon: number }) => {
+    idemKey.current = newIdempotencyKey();
+    const pre = key === "origin" ? "origin" : "dest";
+    setF((s) => {
+      const addr = s[`${pre}_address`];
+      const stale = !addr.trim() || PRESETS.some((x) => x.name === addr) || addr.startsWith("Точка на карте");
+      return { ...s, [`${pre}_lat`]: p.lat, [`${pre}_lon`]: p.lon,
+               [`${pre}_address`]: stale ? `Точка на карте (${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})` : addr };
+    });
+  };
+
   const usable = (drones.data?.items ?? []).filter((d) => !d.busy);
   const chosen = usable.find((d) => d.id === f.drone_id) ?? usable[0];
   const base = chosen?.fleet.base;
-  const preview = useMemo(() => ({
-    base: base ?? null,
-    origin: { lat: f.origin_lat, lon: f.origin_lon }, destination: { lat: f.dest_lat, lon: f.dest_lon },
-    distance_m: 0, max_altitude_m: 120, checkpoints: [], approval_status: "pending", approval_notes: [],
-  }), [base, f.origin_lat, f.origin_lon, f.dest_lat, f.dest_lon]);
   const fleets = Array.from(new Map(usable.map((d) => [d.fleet.id, d.fleet.name])).entries());
 
   async function create(e: FormEvent) {
@@ -166,11 +176,18 @@ export function NewOrderPage() {
             </div>
           </Card>
           <Card title="Маршрут">
-            <RouteMap route={preview} height={200} />
+            <MapPointsEditor active={activePin} onActiveChange={setActivePin} onChange={movePin} height={340}
+              emptyHint="Карт района нет — выберите точки из списка или укажите координаты (карту загружает администратор)."
+              pins={[
+                ...(base ? [{ key: "base", label: "А", title: "А — база парка", point: base, className: "map-base-pin", locked: true }] : []),
+                { key: "origin", label: "Б", title: "Б — где забрать груз", point: { lat: f.origin_lat, lon: f.origin_lon }, className: "map-pickup" },
+                { key: "dest", label: "В", title: "В — получатель", point: { lat: f.dest_lat, lon: f.dest_lon }, className: "map-b" },
+              ]} />
             <div className="form grid2">
               <div className="span2 muted small">
                 <b>А — база парка:</b> {base ? `${base.address} (${base.lat.toFixed(4)}, ${base.lon.toFixed(4)})` : "—"}.
                 Дрон вылетает с базы, забирает груз в точке Б и доставляет получателю в точку В.
+                Базу парка меняет техник, поэтому метка А закреплена.
               </div>
               <label className="span2">Точка Б — где забрать груз
                 <select onChange={(e) => { const p = PRESETS[Number(e.target.value)]; idemKey.current = newIdempotencyKey();

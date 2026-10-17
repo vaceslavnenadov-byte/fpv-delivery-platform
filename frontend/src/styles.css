@@ -511,3 +511,25 @@ label.check { flex-direction: row; align-items: center; }
 .role-chips .chip button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 0 0 2px; font-size: 1.1em; line-height: 1; }
 .profile-review { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 @media (max-width: 760px) { .recruit-form { grid-template-columns: 1fr; } }
+
+/* Редактор точек на карте: метки перетаскиваются (мышь, палец, стрелки) */
+.point-picker svg { touch-action: none; user-select: none; }
+.point-picker .pin.movable { cursor: grab; }
+.point-picker .pin.drag, .point-picker svg.dragging { cursor: grabbing; }
+.point-picker .pin.locked { cursor: not-allowed; }
+.point-picker .pin-hit { fill: transparent; }
+.point-picker .pin circle:not(.pin-hit) { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .45)); transition: r .1s; }
+.point-picker .pin.drag circle:not(.pin-hit), .point-picker .pin.movable:hover circle:not(.pin-hit) { r: 15; }
+.point-picker .pin.active circle:not(.pin-hit) { stroke: var(--accent); stroke-width: 3; }
+.point-picker .pin:focus-visible { outline: none; }
+.point-picker .pin:focus-visible circle:not(.pin-hit) { stroke: var(--accent); stroke-width: 4; }
+.point-picker .pin text { pointer-events: none; }
+.pin-lock { font-size: 11px; }
+.pin-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.pin-tabs button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); border-radius: 999px; padding: 4px 12px 4px 4px; cursor: pointer; font: inherit; }
+.pin-tabs button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pin-dot { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 12px; }
+.pin-dot.map-pickup { background: #d97706; }
+.pin-dot.map-b { background: var(--danger); }
+.pin-dot.map-base-pin { background: #475467; }
