@@ -130,6 +130,7 @@ def card(db: Session, p: Principal, user_id: uuid.UUID) -> Dict[str, Any]:
 
 
 HISTORY_LABELS = {
+    "work.readiness_changed": "Изменена готовность к работе",
     "user.provisioned": "Учётная запись создана при первом входе (домен)",
     "user.created_local": "Создана учётная запись приложения",
     "user.registered": "Добавлен из домена",

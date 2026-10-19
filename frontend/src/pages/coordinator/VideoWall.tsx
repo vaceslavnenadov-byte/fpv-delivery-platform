@@ -6,6 +6,7 @@ import { Alert, Badge, Pending } from "../../components/ui";
 import { useLive } from "../../realtime";
 import type { Order, Telemetry } from "../../types";
 import { openFlightMonitor } from "../OrderDetail";
+import { useReadiness } from "../../components/Readiness";
 
 interface WallItem extends Order {
   drone: { registration_number: string | null; link_status: string; battery_pct: number | null } & Order["drone"];
@@ -28,6 +29,7 @@ export function VideoWallPage() {
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const readiness = useReadiness("coordinator");
   if (wall.error) return <Alert>{errorText(wall.error)}</Alert>;
   if (!wall.data) return <Pending />;
   const { items, load, capacity, total } = wall.data;
@@ -38,6 +40,8 @@ export function VideoWallPage() {
         <h1>Видеостена</h1>
         <span className="muted">Сопровождаю: <b>{load}</b> из {capacity} · заказы назначаются автоматически с учётом нагрузки</span>
       </div>
+      {readiness?.ready === false && <Alert tone="warn">Вы отметили «Не готов к работе» — новые заказы назначаются другим
+        координаторам. Заказы, которые уже у вас, остаются за вами.</Alert>}
       {total > capacity && <Alert tone="warn">Назначено больше заказов, чем помещается на стене ({total}) — остальные в «Назначенных заказах».</Alert>}
       <div className="wall">
         {slots.map((o, i) => o ? <WallTile key={o.id} o={o} /> : (

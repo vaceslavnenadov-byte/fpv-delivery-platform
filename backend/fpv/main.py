@@ -31,7 +31,7 @@ def create_app(settings: Optional[Settings] = None, *, init_db: bool = True,
 
     # Регистрация обработчиков outbox (импорт модулей с декораторами @events.handler).
     from .services import notifications, video  # noqa: F401
-    from .api import admin, auth, deps, drone_link, drones, fleets, maps, misc, orders, people, realtime, recruitment, support, catalogs, licenses
+    from .api import admin, auth, deps, drone_link, drones, fleets, maps, misc, orders, people, realtime, recruitment, support, catalogs, licenses, readiness
 
     deps.init_limiters(settings.login_rate_per_min, settings.mutation_rate_per_min)
 
@@ -71,7 +71,7 @@ def create_app(settings: Optional[Settings] = None, *, init_db: bool = True,
             response.headers.setdefault("Cache-Control", "no-store")
         return response
 
-    for module in (auth, orders, drones, admin, drone_link, misc, realtime, maps, fleets, recruitment, people, support, catalogs, licenses):
+    for module in (auth, orders, drones, admin, drone_link, misc, realtime, maps, fleets, recruitment, people, support, catalogs, licenses, readiness):
         app.include_router(module.router)
 
     return app

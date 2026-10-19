@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { ROLE_LABELS, fmtDate } from "../labels";
 import { realtime, useLive, useRealtimeStatus } from "../realtime";
 import { ThemeSwitch } from "../theme";
+import { ReadinessSwitch, type WorkRole } from "./Readiness";
 import type { Notification } from "../types";
 
 const MENU_PREF = "fpv.menuCollapsed";
@@ -72,6 +73,9 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
 
   if (!me) return null;
   const suspended = me.account_status === "suspended" || me.profile_verified === false;
+  // «Готов / Не готов к работе» — в клиентах оператора, координатора и техника, для своей роли.
+  const workRole = (["operator", "coordinator", "technician"] as WorkRole[])
+    .find((r) => r === app.key && me.roles.includes(r) && can("work.readiness") && !suspended) ?? null;
   // Рекрутёрский раздел администратору не нужен: его страницы — в меню администратора.
   const others = suspended ? [] : accessibleApps(can).filter((a) => a.key !== app.key && !(app.key === "admin" && a.key === "recruiter"));
 
@@ -138,16 +142,19 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
             <span className={`dot ${online ? "ok" : "off"}`} /> {online ? "Обновления в реальном времени" : "Переподключение…"}
           </div>
           <div className="topbar-right">
+            {workRole && <ReadinessSwitch role={workRole} />}
             <ThemeSwitch />
             {can("support.use") && <Link to="/support/new" className="btn ghost support-btn" title="Написать в техподдержку">🛟 Техподдержка</Link>}
             <button className="btn ghost" onClick={() => setPanel((v) => !v)} aria-expanded={panel}>
               Уведомления {notes.data && notes.data.unread > 0 && <span className="counter">{notes.data.unread}</span>}
             </button>
-            <div className="who">
-              <strong>{me.display_name}</strong>
-              <span className="muted small">{me.roles.map((r) => ROLE_LABELS[r] ?? r).join(", ")} · {me.username}</span>
+            <div className="topbar-user">
+              <div className="who">
+                <strong>{me.display_name}</strong>
+                <span className="muted small">{me.roles.map((r) => ROLE_LABELS[r] ?? r).join(", ")} · {me.username}</span>
+              </div>
+              <button className="btn ghost" onClick={async () => { await logout(); window.location.href = "/"; }}>Выйти</button>
             </div>
-            <button className="btn ghost" onClick={async () => { await logout(); window.location.href = "/"; }}>Выйти</button>
           </div>
         </header>
         {me.account_status !== "suspended" && me.profile_verified === false && (

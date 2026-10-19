@@ -8,7 +8,10 @@
 * назначает координаторов заказам, которым их не хватило (все были заняты);
 * снимает заказы с координаторов, которые больше не активны (учётная запись отключена, роль снята);
 * выравнивает нагрузку: пока разница между самым загруженным и самым свободным координатором —
-  2 и больше, один заказ переходит к свободному (сначала заказы, которые ещё не начаты).
+  2 и больше, один заказ переходит к свободному (сначала не начатые, из них — последние поступившие).
+
+Координатор, отметивший «Не готов к работе» (services/readiness.py), новые заказы не получает и в
+выравнивании не участвует; заказы, которые уже у него, остаются за ним.
 
 Администратор по-прежнему может переназначить координатора вручную.
 """
@@ -25,7 +28,7 @@ from sqlalchemy.orm import Session
 from .. import clock
 from ..config import Settings
 from ..models import Assignment, Order
-from . import audit, events, notifications
+from . import audit, events, notifications, readiness
 
 ACTIVE = ("awaiting_coordinator", "awaiting_operator", "accepted", "awaiting_readiness", "ready", "in_progress")
 PREFLIGHT = ("awaiting_coordinator", "awaiting_operator", "accepted", "awaiting_readiness", "ready")
@@ -38,8 +41,13 @@ def active_coordinators(db: Session) -> List[uuid.UUID]:
     return notifications.users_with_role(db, "coordinator")
 
 
+def ready_coordinators(db: Session) -> List[uuid.UUID]:
+    """Активные координаторы, готовые к работе, — только им назначаются заказы."""
+    return readiness.only_ready(db, "coordinator", active_coordinators(db))
+
+
 def loads(db: Session, coordinators: Optional[List[uuid.UUID]] = None) -> Dict[uuid.UUID, int]:
-    coordinators = coordinators if coordinators is not None else active_coordinators(db)
+    coordinators = coordinators if coordinators is not None else ready_coordinators(db)
     counts = Counter(db.execute(select(Order.coordinator_id).where(
         Order.status.in_(ACTIVE), Order.coordinator_id.in_(coordinators))).scalars())
     return {c: counts.get(c, 0) for c in coordinators}
@@ -89,7 +97,8 @@ def auto_assign(db: Session, settings: Settings, order: Order) -> Optional[uuid.
 def sweep(db: Session, settings: Settings) -> Dict[str, int]:
     """Назначение недостающих, снятие с неактивных, выравнивание нагрузки."""
     stats = {"assigned": 0, "moved": 0}
-    coordinators = active_coordinators(db)
+    active = set(active_coordinators(db))
+    coordinators = readiness.only_ready(db, "coordinator", active)
     if not coordinators:
         return stats
     cap = settings.coordinator_max_orders
@@ -100,9 +109,9 @@ def sweep(db: Session, settings: Settings) -> Dict[str, int]:
     for o in orders:
         if o.coordinator_id in load:
             load[o.coordinator_id] += 1
-    # 1) без координатора или с неактивным координатором
+    # 1) без координатора или с неактивным координатором (у неготового заказы остаются)
     for o in orders:
-        if o.coordinator_id in load:
+        if o.coordinator_id in load or o.coordinator_id in active:
             continue
         chosen = _pick(load, cap)
         if chosen is None:
@@ -118,7 +127,9 @@ def sweep(db: Session, settings: Settings) -> Dict[str, int]:
         if load[busiest] - least < 2:
             break
         mine = [o for o in orders if o.coordinator_id == busiest]
-        mine.sort(key=lambda o: (o.status not in PREFLIGHT, -(o.accepted_at.timestamp() if o.accepted_at else 0)))
+        # сначала не начатые, из них — последние поступившие
+        mine.sort(key=lambda o: (o.status not in PREFLIGHT,
+                                 -(o.submitted_at or o.created_at).timestamp()))
         target = _pick(load, cap, exclude=busiest)
         if not mine or target is None or load[target] != least:
             break

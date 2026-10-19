@@ -27,7 +27,7 @@ from .. import clock
 from ..config import Settings
 from ..errors import Conflict, NotFound, ValidationFailed
 from ..models import Drone, Fleet, Order, TelemetryRecord
-from . import audit, drones, events, notifications, video, video_sources
+from . import audit, drones, events, notifications, readiness, video, video_sources
 from .identity import Principal
 
 CHECK_SOURCE = "check"            # буфер пробной трансляции: <spool>/<drone_id>/check/ring
@@ -165,7 +165,8 @@ def available_drones(db: Session, p: Principal) -> List[Tuple[Drone, Fleet, bool
                              Drone.health_status == "serviceable", Fleet.active.is_(True))
                       .order_by(Fleet.name, Drone.registration_number)).all()
     busy = {d for (d,) in db.execute(select(Order.drone_id).where(Order.status.in_(ACTIVE_EXECUTION))).all()}
-    return [(d, f, d.id in busy) for d, f in rows]
+    paused = readiness.not_ready(db, "technician")          # «Не готов к работе» — парк на паузе
+    return [(d, f, d.id in busy) for d, f in rows if f.technician_id not in paused]
 
 
 # --- архив БПЛА ----------------------------------------------------------------------------------

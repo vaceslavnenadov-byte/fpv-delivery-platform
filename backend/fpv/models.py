@@ -246,6 +246,15 @@ class Consignee(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 
+class WorkReadiness(Base):
+    """Готовность к работе пользователя в роли; нет записи — готов."""
+    __tablename__ = "work_readiness"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    role: Mapped[str] = mapped_column(Text, primary_key=True)
+    ready: Mapped[bool] = mapped_column(Boolean, default=True)
+    changed_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
 class OperatorLicense(Base):
     """Лицензия оператора на тип БПЛА (квалификация)."""
     __tablename__ = "operator_licenses"

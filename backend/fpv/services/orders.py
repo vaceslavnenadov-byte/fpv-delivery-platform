@@ -250,6 +250,14 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
 # Действия заказчика
 # ---------------------------------------------------------------------------
 
+def _check_fleet_ready(db: Session, fleet: Optional[Fleet]) -> None:
+    """Техник парка отметил «Не готов к работе» — парк на паузе, новые заказы на его дроны не принимаются."""
+    from . import readiness
+    if fleet is not None and not readiness.is_ready(db, fleet.technician_id, "technician"):
+        raise ValidationFailed("Парк этого дрона временно не принимает заказы — выберите другой дрон",
+                               code="fleet_paused")
+
+
 def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, Any]) -> Order:
     p.require("order.create")
     drone = db.get(Drone, data["drone_id"])
@@ -259,6 +267,7 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     legacy_ok = drone is not None and fleet is None and drone.owner_id == p.user_id
     if drone is None or not (fleet_ok or legacy_ok):
         raise ValidationFailed("Выберите дрон из открытых для заказов парков", code="drone_invalid")
+    _check_fleet_ready(db, fleet)
     def point(x: Dict[str, Any]) -> Dict[str, Any]:
         return {"lat": round(x["lat"], 6), "lon": round(x["lon"], 6), "address": x["address"].strip(),
                 "note": (x.get("note") or "").strip()}
@@ -456,6 +465,7 @@ def confirm(db: Session, settings: Settings, p: Principal, order_id: uuid.UUID,
     ok, reasons = drones.readiness(db, settings, drone, require_online=False)
     if not ok:
         raise ValidationFailed("Дрон больше не допущен к выполнению: " + "; ".join(reasons), code="drone_not_ready")
+    _check_fleet_ready(db, db.get(Fleet, drone.fleet_id) if drone.fleet_id else None)
     transition(db, order, "awaiting_coordinator", p.actor, reason="Заказ размещён, ждёт согласования координатором")
     _post_customer_comment(db, order)
     # Согласующий координатор — с наименьшей нагрузкой (services/coordination.py).
@@ -647,6 +657,9 @@ def open_dispute(db: Session, settings: Settings, p: Principal, order_id: uuid.U
 def queue(db: Session, p: Principal, *, max_distance_m: Optional[int] = None,
           cargo_type: Optional[str] = None) -> List[Order]:
     p.require("order.queue.read")
+    from . import readiness
+    if not readiness.is_ready(db, p.user_id, "operator"):
+        return []                                         # «Не готов к работе» — заказы берут другие
     declined = select(Assignment.order_id).where(Assignment.user_id == p.user_id, Assignment.role == "operator",
                                                  Assignment.status == "declined")
     from . import licenses
@@ -705,6 +718,10 @@ def accept(db: Session, p: Principal, order_id: uuid.UUID, expected_version: Opt
     _check_version(order, expected_version)
     if order.status != "awaiting_operator":
         raise Conflict("Заказ уже принят или недоступен", code="invalid_transition")
+    from . import readiness
+    if not readiness.is_ready(db, p.user_id, "operator"):
+        raise Conflict("Вы отметили «Не готов к работе» — чтобы принимать заказы, отметьте «Готов к работе»",
+                       code="not_ready_for_work")
     busy = db.execute(select(Order.id).where(Order.operator_id == p.user_id,
                                              Order.status.in_(ACTIVE_EXECUTION))).first()
     if busy:

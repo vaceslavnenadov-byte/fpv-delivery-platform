@@ -1,5 +1,5 @@
 import { RepeatBadges, priorityClass } from "../../components/RepeatBadges";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { openFlightMonitor } from "../OrderDetail";
 import { api, errorText, newIdempotencyKey } from "../../api";
@@ -10,6 +10,7 @@ import { useLive } from "../../realtime";
 import type { Order } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
 import { routeRows } from "../../components/OrderCargo";
+import { useReadiness } from "../../components/Readiness";
 
 export function OperatorQueuePage() {
   const [maxDist, setMaxDist] = useState("");
@@ -21,6 +22,9 @@ export function OperatorQueuePage() {
   if (cargo) params.set("cargo_type", cargo);
   const q = useLive(() => api.get<{ items: Order[] }>(`/api/v1/orders/queue?${params}`), [maxDist, cargo],
     (m) => m.kind.startsWith("order."));
+  const readiness = useReadiness("operator");
+  const notReady = readiness?.ready === false;
+  useEffect(() => { if (readiness) q.reload(); }, [readiness?.ready]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   async function accept(o: Order) {
     try {
@@ -45,6 +49,8 @@ export function OperatorQueuePage() {
   return (
     <div className="stack">
       <h1>Очередь заказов</h1>
+      {notReady && <Alert tone="warn">Вы отметили «Не готов к работе» — очередь скрыта, заказы принимают другие операторы.
+        Чтобы снова получать заказы, нажмите «Готов к работе» вверху экрана.</Alert>}
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
       <Card title="Фильтры">
         <div className="form row">

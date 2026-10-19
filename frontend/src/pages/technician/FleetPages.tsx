@@ -13,6 +13,7 @@ import { useLive } from "../../realtime";
 import { loadDroneModels } from "../../catalogs";
 import type { Zone } from "../../serviceArea";
 import type { Drone, Fleet, Order } from "../../types";
+import { useReadiness } from "../../components/Readiness";
 
 // --- Мой парк: парки, дроны, ключи, открытие для заказов, подключение ---
 
@@ -21,6 +22,7 @@ export function FleetPage() {
   const zones = useLive(() => api.get<{ items: (Zone & { open_to_all?: boolean })[] }>("/api/v1/service-zones"), [],
     (m) => m.kind === "platform.zones_changed");
   const [active, setActive] = useState<string>("");
+  const readiness = useReadiness("technician");
   if (fleets.error) return <Alert>{errorText(fleets.error)}</Alert>;
   if (!fleets.data) return <Pending />;
   const list = fleets.data.items;
@@ -28,6 +30,8 @@ export function FleetPage() {
   return (
     <div className="stack">
       <h1>Мой парк</h1>
+      {readiness?.ready === false && <Alert tone="warn">Вы отметили «Не готов к работе» — парк на паузе: заказчики не видят ваши
+        дроны и не могут разместить на них новые заказы. Уже размещённые заказы остаются за вами.</Alert>}
       <p className="muted">Вы заводите дроны в свой парк, проверяете их состояние и подключение (телеметрия и видео),
         открываете для заказов и подтверждаете готовность дрона к каждому заказу. База парка — точка А маршрута.</p>
       {zones.data && (zones.data.items.length === 0

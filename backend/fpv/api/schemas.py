@@ -543,3 +543,8 @@ class VideoSourceSelectIn(StrictModel):
 class DeviceEventIn(StrictModel):
     kind: Literal["delivery_completed", "cargo_picked_up", "error", "self_check"]
     data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ReadinessIn(StrictModel):
+    role: Literal["operator", "coordinator", "technician"]
+    ready: bool
