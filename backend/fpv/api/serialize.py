@@ -88,6 +88,9 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
         "consignee": o.consignee, "recipient_name": o.recipient_name,
         "asap": bool(o.asap), "coordinator_approved_at": ts(o.coordinator_approved_at),
         "repeat_of": _repeat_of(db, o),
+        # кому система предложила заказ и кто ведёт его со стороны парка вместо неготового техника
+        "offered_operator": user_brief(db, o.offered_operator_id) if o.status == "awaiting_operator" else None,
+        "duty_technician": user_brief(db, o.duty_technician_id),
     }
     if brief:
         return data

@@ -172,7 +172,7 @@ def drone_video_source(drone_id: uuid.UUID, body: schemas.VideoSourceSelectIn,
 # Пробная трансляция (проверка видео техником до заказа) — тот же конвейер HLS, буфер дрона.
 
 def _check_drone(db: Session, p: Principal, drone_id: uuid.UUID) -> Drone:
-    return fleets.fleet_drone(db, p, drone_id)
+    return fleets.served_drone(db, p, drone_id)
 
 
 @router.post("/api/v1/drones/{drone_id}/live/check")

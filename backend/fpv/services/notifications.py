@@ -79,10 +79,7 @@ def on_order_status_changed(db: Session, payload: Dict[str, Any], event_id: uuid
     severity = "warning" if to_status in ("aborted_technical", "rejected", "disputed") else "info"
     parties = [order.customer_id, order.operator_id, order.coordinator_id]
     create(db, parties, "order.status", title, body, order_id=order.id, severity=severity, dedup_key=key)
-    if to_status == "awaiting_operator":
-        from . import readiness
-        create(db, readiness.only_ready(db, "operator", approved_operators(db)), "order.queue", f"Новый заказ №{order.number} в очереди",
-               order_id=order.id, dedup_key=key)
+    # Оператору заказ предлагает services/operator_dispatch.py — уведомление приходит только ему.
     if to_status in ("disputed", "aborted_technical"):
         create(db, users_with_role(db, "admin"), "order.attention", title, body, order_id=order.id,
                severity=severity, dedup_key=key)

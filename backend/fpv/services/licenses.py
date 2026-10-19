@@ -220,6 +220,9 @@ def decide(db: Session, p: Principal, license_id: int, status: str, comment: str
                          f"{title}: {lic.model.get('manufacturer')} {lic.model.get('model')}", comment,
                          severity="info" if status == "approved" else "warning")
     events.notify(db, "operator.license", {"license_id": lic.id}, users=[lic.user_id], roles=["admin", "recruiter"])
+    db.flush()
+    from . import operator_dispatch
+    operator_dispatch.sweep(db)          # ждущие заказы — получившему допуск; отозван — заказы другим
     return lic
 
 

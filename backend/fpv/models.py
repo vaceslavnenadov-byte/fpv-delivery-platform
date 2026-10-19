@@ -381,6 +381,9 @@ class Order(Base):
     # Первичная готовность дрона к заказу, подтверждённая техником парка
     tech_ready_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     tech_ready_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    offered_operator_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))   # предложен оператору
+    offered_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    duty_technician_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))    # замещающий техник
     map_provider_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("map_providers.id"))   # карта заказчика
     repeat_of: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("orders.id"))      # повторный вылет заказа
     priority: Mapped[bool] = mapped_column(Boolean, default=False)

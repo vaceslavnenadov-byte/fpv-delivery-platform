@@ -5,22 +5,17 @@ import { openFlightMonitor } from "../OrderDetail";
 import { api, errorText, newIdempotencyKey } from "../../api";
 import { Alert, Badge, Card, Empty, Pending, Stat } from "../../components/ui";
 import { cargoName, fmtDate, fmtDistance } from "../../labels";
-import { loadCargoTypes } from "../../catalogs";
 import { useLive } from "../../realtime";
 import type { Order } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
 import { routeRows } from "../../components/OrderCargo";
 import { useReadiness } from "../../components/Readiness";
 
+// Заказы назначает система (готовому оператору с квалификацией и наименьшей нагрузкой);
+// оператор принимает предложение или отклоняет — тогда заказ уходит другому оператору.
 export function OperatorQueuePage() {
-  const [maxDist, setMaxDist] = useState("");
-  const [cargo, setCargo] = useState("");
-  const cargoTypes = useLive(loadCargoTypes, []);
   const [msg, setMsg] = useState<{ tone: string; text: string } | null>(null);
-  const params = new URLSearchParams();
-  if (maxDist) params.set("max_distance_m", String(Number(maxDist) * 1000));
-  if (cargo) params.set("cargo_type", cargo);
-  const q = useLive(() => api.get<{ items: Order[] }>(`/api/v1/orders/queue?${params}`), [maxDist, cargo],
+  const q = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders/queue"), [],
     (m) => m.kind.startsWith("order."));
   const readiness = useReadiness("operator");
   const notReady = readiness?.ready === false;
@@ -37,9 +32,11 @@ export function OperatorQueuePage() {
   }
 
   async function decline(o: Order) {
-    const reason = prompt("Причина отклонения") ?? "";
+    const reason = prompt("Причина отклонения (заказ будет предложен другому оператору)");
+    if (reason === null) return;
     try {
       await api.post(`/api/v1/orders/${o.id}/decline`, { reason, expected_version: o.version });
+      setMsg({ tone: "ok", text: `Заказ №${o.number} отклонён — он предложен другому оператору.` });
       q.reload();
     } catch (err) {
       setMsg({ tone: "danger", text: errorText(err) });
@@ -48,23 +45,14 @@ export function OperatorQueuePage() {
 
   return (
     <div className="stack">
-      <h1>Очередь заказов</h1>
-      {notReady && <Alert tone="warn">Вы отметили «Не готов к работе» — очередь скрыта, заказы принимают другие операторы.
-        Чтобы снова получать заказы, нажмите «Готов к работе» вверху экрана.</Alert>}
+      <h1>Предложенные заказы</h1>
+      <p className="muted">Заказы распределяет система: среди операторов на смене, с квалификацией на тип БПЛА, с учётом
+        нагрузки. Примите заказ в работу или отклоните его — тогда он уйдёт другому оператору.</p>
+      {notReady && <Alert tone="warn">Вы отметили «Не готов к работе» — новые заказы вам не предлагаются, непринятые переданы
+        другим операторам. Чтобы снова получать заказы, нажмите «Готов к работе» вверху экрана.</Alert>}
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
-      <Card title="Фильтры">
-        <div className="form row">
-          <label>Расстояние до, км<input type="number" min={1} value={maxDist} onChange={(e) => setMaxDist(e.target.value)} /></label>
-          <label>Тип груза
-            <select value={cargo} onChange={(e) => setCargo(e.target.value)}>
-              <option value="">Любой</option>
-              {(cargoTypes.data ?? []).map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
-            </select>
-          </label>
-        </div>
-      </Card>
-      <Card title={`Доступные заказы${q.data ? ` (${q.data.items.length})` : ""}`}>
-        {!q.data ? <Pending /> : q.data.items.length === 0 ? <Empty>Нет доступных заказов</Empty> : (
+      <Card title={`Предложены вам${q.data ? ` (${q.data.items.length})` : ""}`}>
+        {!q.data ? <Pending /> : q.data.items.length === 0 ? <Empty>Сейчас вам не предложено ни одного заказа</Empty> : (
           <div className="cards">
             {q.data.items.map((o) => (
               <article key={o.id} className={`order-card ${priorityClass(o)}`}>

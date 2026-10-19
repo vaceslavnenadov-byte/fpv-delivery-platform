@@ -20,14 +20,14 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .. import clock
 from ..config import Settings
 from ..errors import Conflict, NotFound, ValidationFailed
 from ..models import Drone, Fleet, Order, TelemetryRecord
-from . import audit, drones, events, notifications, readiness, video, video_sources
+from . import audit, drones, events, notifications, video, video_sources
 from .identity import Principal
 
 CHECK_SOURCE = "check"            # буфер пробной трансляции: <spool>/<drone_id>/check/ring
@@ -118,6 +118,25 @@ def fleet_drone(db: Session, p: Principal, drone_id: uuid.UUID, *, for_update: b
     return drone
 
 
+def covers_drone(db: Session, user_id: uuid.UUID, drone_id: uuid.UUID) -> bool:
+    """Техник ведёт заказ на этом дроне вместо неготового техника парка (services/tech_cover.py)."""
+    return db.execute(select(Order.id).where(Order.drone_id == drone_id, Order.duty_technician_id == user_id,
+                                             Order.status.in_(FLEET_ORDER_STATUSES)).limit(1)).first() is not None
+
+
+def served_drone(db: Session, p: Principal, drone_id: uuid.UUID, *, for_update: bool = False) -> Drone:
+    """Дрон, с которым техник работает по заказу: своего парка или парка, который он замещает."""
+    p.require("fleet.manage")
+    drone = drones.get_drone(db, drone_id, for_update=for_update)
+    if fleet_technician(db, drone) != p.user_id and not covers_drone(db, p.user_id, drone.id):
+        raise NotFound("Дрон не найден в вашем парке")
+    return drone
+
+
+def _serves(db: Session, p: Principal, order: Order, drone: Drone) -> bool:
+    return p.user_id in (fleet_technician(db, drone), order.duty_technician_id)
+
+
 def assign_to_fleet(db: Session, p: Principal, drone_id: uuid.UUID, fleet_id: uuid.UUID) -> Drone:
     """Администратор переводит дрон (например, зарегистрированный заказчиком до появления парков) в парк."""
     p.require("drone.approve")
@@ -165,8 +184,7 @@ def available_drones(db: Session, p: Principal) -> List[Tuple[Drone, Fleet, bool
                              Drone.health_status == "serviceable", Fleet.active.is_(True))
                       .order_by(Fleet.name, Drone.registration_number)).all()
     busy = {d for (d,) in db.execute(select(Order.drone_id).where(Order.status.in_(ACTIVE_EXECUTION))).all()}
-    paused = readiness.not_ready(db, "technician")          # «Не готов к работе» — парк на паузе
-    return [(d, f, d.id in busy) for d, f in rows if f.technician_id not in paused]
+    return [(d, f, d.id in busy) for d, f in rows]
 
 
 # --- архив БПЛА ----------------------------------------------------------------------------------
@@ -253,7 +271,7 @@ def check_active(drone: Drone, now: Optional[dt.datetime] = None) -> bool:
 
 
 def connection(db: Session, settings: Settings, p: Principal, drone_id: uuid.UUID) -> Dict[str, Any]:
-    drone = fleet_drone(db, p, drone_id)
+    drone = served_drone(db, p, drone_id)
     t = last_telemetry(db, drone)
     now = clock.now()
     buf = video.buffer_state(settings, drone.id, CHECK_SOURCE)
@@ -277,7 +295,7 @@ def connection(db: Session, settings: Settings, p: Principal, drone_id: uuid.UUI
 
 
 def start_video_check(db: Session, p: Principal, drone_id: uuid.UUID) -> Drone:
-    drone = fleet_drone(db, p, drone_id, for_update=True)
+    drone = served_drone(db, p, drone_id, for_update=True)
     if drone.api_key_hash is None:
         raise Conflict("Сначала выпустите ключ сервисного модуля", code="no_key")
     from .telemetry import current_order
@@ -289,7 +307,7 @@ def start_video_check(db: Session, p: Principal, drone_id: uuid.UUID) -> Drone:
 
 
 def stop_video_check(db: Session, settings: Settings, p: Principal, drone_id: uuid.UUID) -> Drone:
-    drone = fleet_drone(db, p, drone_id, for_update=True)
+    drone = served_drone(db, p, drone_id, for_update=True)
     drone.video_check_until = None
     remove_check_buffer(settings, drone.id)
     return drone
@@ -297,7 +315,7 @@ def stop_video_check(db: Session, settings: Settings, p: Principal, drone_id: uu
 
 def select_video_source(db: Session, p: Principal, drone_id: uuid.UUID, source_id: str) -> Drone:
     """Источник видео дрона по умолчанию (выбирает техник при подключении)."""
-    drone = fleet_drone(db, p, drone_id, for_update=True)
+    drone = served_drone(db, p, drone_id, for_update=True)
     video_sources.apply_selection(db, p, drone, source_id, entity_type="drone", entity_id=drone.id)
     return drone
 
@@ -349,7 +367,8 @@ def fleet_orders(db: Session, p: Principal) -> List[Order]:
     from . import orders as orders_mod
     return list(db.execute(
         select(Order).join(Drone, Drone.id == Order.drone_id).join(Fleet, Fleet.id == Drone.fleet_id)
-        .where(Fleet.technician_id == p.user_id, Order.status.in_(FLEET_ORDER_STATUSES))
+        .where(or_(Fleet.technician_id == p.user_id, Order.duty_technician_id == p.user_id),
+               Order.status.in_(FLEET_ORDER_STATUSES))
         .order_by(orders_mod.PRIORITY_FIRST, Order.created_at.desc()).limit(200)).unique().scalars())
 
 
@@ -372,7 +391,7 @@ def confirm_order_ready(db: Session, settings: Settings, p: Principal, order_id:
     p.require("fleet.manage")
     order = get_order(db, order_id, for_update=True)
     drone = drones.get_drone(db, order.drone_id)
-    if fleet_technician(db, drone) != p.user_id:
+    if not _serves(db, p, order, drone):
         raise NotFound("Заказ не найден")
     if order.status not in PREP_STATUSES:
         raise Conflict("Подтверждение готовности доступно до начала выполнения заказа", code="invalid_transition")
@@ -398,7 +417,7 @@ def revoke_order_ready(db: Session, p: Principal, order_id: uuid.UUID, reason: s
     p.require("fleet.manage")
     order = get_order(db, order_id, for_update=True)
     drone = drones.get_drone(db, order.drone_id)
-    if fleet_technician(db, drone) != p.user_id:
+    if not _serves(db, p, order, drone):
         raise NotFound("Заказ не найден")
     if order.status not in PREP_STATUSES:
         raise Conflict("Отозвать подтверждение можно только до начала выполнения", code="invalid_transition")
@@ -421,4 +440,4 @@ def is_fleet_technician_of(db: Session, p: Principal, order: Order) -> bool:
     if not p.has("order.read_fleet"):
         return False
     drone = db.get(Drone, order.drone_id)
-    return drone is not None and fleet_technician(db, drone) == p.user_id
+    return drone is not None and _serves(db, p, order, drone)

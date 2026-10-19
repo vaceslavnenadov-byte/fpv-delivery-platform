@@ -18,7 +18,8 @@ from sqlalchemy import select, text
 from . import clock, db, runtime
 from .config import load_settings
 from .models import Order
-from .services import audit, coordination, customer_stream, events, fleets, orders, telemetry, video
+from .services import (audit, coordination, customer_stream, events, fleets, operator_dispatch, orders, tech_cover,
+                       telemetry, video)
 from .services import directory as directory_mod
 from .services import storage
 
@@ -75,6 +76,8 @@ def customer_stream_sweep_once() -> int:
         if not _locked(s, 7243104):
             return 0
         coordination.sweep(s, runtime.settings())        # недостающие координаторы, выравнивание нагрузки
+        operator_dispatch.sweep(s)                       # предложения операторам, выравнивание нагрузки
+        tech_cover.sweep(s)                              # подмена неготовых техников техниками зоны
         removed = customer_stream.sweep(s, runtime.settings())
         return removed + fleets.sweep_checks(s, runtime.settings())   # буферы проверки видео техником
 

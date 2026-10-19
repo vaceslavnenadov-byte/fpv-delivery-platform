@@ -54,7 +54,7 @@ export const APPS: Record<string, AppConfig> = {
     hasOrders: true,
     hasMonitor: true,
     nav: [
-      { to: "/", label: "Очередь заказов", section: "Заказы" },
+      { to: "/", label: "Предложенные заказы", section: "Заказы" },
       { to: "/mine", label: "Мои задания", section: "Заказы" },
       { to: "/qualification", label: "Квалификация", section: "Допуск" },
       { to: "/scores", label: "Баллы и рейтинг", section: "Результаты" },

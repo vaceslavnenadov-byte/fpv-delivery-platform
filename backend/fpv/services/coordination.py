@@ -11,7 +11,8 @@
   2 и больше, один заказ переходит к свободному (сначала не начатые, из них — последние поступившие).
 
 Координатор, отметивший «Не готов к работе» (services/readiness.py), новые заказы не получает и в
-выравнивании не участвует; заказы, которые уже у него, остаются за ним.
+выравнивании не участвует; его заказы, которые ещё не вылетели, сразу переходят к готовым координаторам,
+заказы в полёте остаются за ним.
 
 Администратор по-прежнему может переназначить координатора вручную.
 """
@@ -109,15 +110,15 @@ def sweep(db: Session, settings: Settings) -> Dict[str, int]:
     for o in orders:
         if o.coordinator_id in load:
             load[o.coordinator_id] += 1
-    # 1) без координатора или с неактивным координатором (у неготового заказы остаются)
+    # 1) без координатора, с неактивным или неготовым (у неготового остаются только заказы в полёте)
     for o in orders:
-        if o.coordinator_id in load or o.coordinator_id in active:
+        if o.coordinator_id in load or (o.coordinator_id in active and o.status not in PREFLIGHT):
             continue
         chosen = _pick(load, cap)
         if chosen is None:
             break
-        _set(db, o, chosen, "Автоматическое назначение: наименьшая нагрузка"
-             if o.coordinator_id is None else "Прежний координатор недоступен")
+        _set(db, o, chosen, "Автоматическое назначение: наименьшая нагрузка" if o.coordinator_id is None
+             else "Координатор не готов к работе" if o.coordinator_id in active else "Прежний координатор недоступен")
         load[chosen] += 1
         stats["assigned"] += 1
     # 2) выравнивание: разница между самым загруженным и самым свободным — не больше 1

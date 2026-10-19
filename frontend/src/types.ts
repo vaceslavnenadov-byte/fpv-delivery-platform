@@ -186,6 +186,8 @@ export interface Order {
   operator_id: string | null;
   coordinator_id: string | null;
   tech_ready_at?: string | null;
+  offered_operator?: UserBrief | null;    // кому система предложила заказ (ждёт подтверждения оператора)
+  duty_technician?: UserBrief | null;     // техник зоны, который ведёт заказ вместо техника парка
   map_provider_id?: string | null;   // онлайн-карта, выбранная заказчиком
   priority?: boolean;
   priority_level?: "low" | "normal" | "high" | "highest";

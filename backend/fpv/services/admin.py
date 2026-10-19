@@ -101,6 +101,9 @@ def decide_operator(db: Session, p: Principal, user_id: uuid.UUID, approve: bool
                  details={"before": before, "after": op.status, "notes": notes})
     notifications.create(db, [user_id], "operator.decision",
                          "Допуск оператора подтверждён" if approve else "Заявка оператора отклонена", notes)
+    db.flush()
+    from . import operator_dispatch
+    operator_dispatch.sweep(db)          # допущенному — ждущие заказы, отклонённому — больше не предлагать
     return op
 
 
@@ -114,6 +117,9 @@ def suspend_operator(db: Session, p: Principal, user_id: uuid.UUID, notes: str) 
     op.decided_by, op.decided_at = p.user_id, clock.now()
     audit.record(db, p.actor, "operator.suspended", entity_type="user", entity_id=user_id,
                  details={"before": before, "notes": notes})
+    db.flush()
+    from . import operator_dispatch
+    operator_dispatch.sweep(db)
     return op
 
 

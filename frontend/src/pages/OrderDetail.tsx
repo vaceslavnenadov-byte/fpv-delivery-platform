@@ -188,7 +188,10 @@ export function OrderDetailPage() {
             ["Стоимость", o.quote_amount ? `${o.quote_amount} ₽` : "—"],
             ["Дрон", o.drone ? <>{o.drone.registration_number} <Badge kind="health" value={o.drone.health_status} /> <Badge kind="link" value={o.drone.link_status} /></> : "—"],
             ["Заказчик", o.customer?.display_name],
-            ["Оператор", o.operator?.display_name ?? "не назначен"],
+            ["Оператор", o.operator?.display_name
+              ?? (o.offered_operator ? <>предложен: {o.offered_operator.display_name} <Tone tone="warn">ждёт подтверждения</Tone></>
+                : o.status === "awaiting_operator" ? <Tone tone="warn">ждёт оператора с нужной квалификацией на смене</Tone> : "не назначен")],
+            ...(o.duty_technician ? [["Техник (замена)", o.duty_technician.display_name] as [string, string]] : []),
             ["Координатор", o.coordinator?.display_name ?? "не назначен"],
             ["Завершение доставки", fmtDate(o.delivered_at)],
             ["Причина закрытия", o.closed_reason],

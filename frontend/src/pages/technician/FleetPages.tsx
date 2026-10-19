@@ -14,6 +14,7 @@ import { loadDroneModels } from "../../catalogs";
 import type { Zone } from "../../serviceArea";
 import type { Drone, Fleet, Order } from "../../types";
 import { useReadiness } from "../../components/Readiness";
+import { useAuth } from "../../auth";
 
 // --- Мой парк: парки, дроны, ключи, открытие для заказов, подключение ---
 
@@ -30,8 +31,8 @@ export function FleetPage() {
   return (
     <div className="stack">
       <h1>Мой парк</h1>
-      {readiness?.ready === false && <Alert tone="warn">Вы отметили «Не готов к работе» — парк на паузе: заказчики не видят ваши
-        дроны и не могут разместить на них новые заказы. Уже размещённые заказы остаются за вами.</Alert>}
+      {readiness?.ready === false && <Alert tone="warn">Вы отметили «Не готов к работе» — заказы на дронах вашего парка ведут
+        готовые техники вашей зоны обслуживания. Когда отметите «Готов к работе», заказы вернутся к вам.</Alert>}
       <p className="muted">Вы заводите дроны в свой парк, проверяете их состояние и подключение (телеметрия и видео),
         открываете для заказов и подтверждаете готовность дрона к каждому заказу. База парка — точка А маршрута.</p>
       {zones.data && (zones.data.items.length === 0
@@ -278,19 +279,28 @@ function RegisterDrone({ fleetId, onDone }: { fleetId: string; onDone: () => voi
 // --- Заказы на дронах парка ---
 
 export function FleetOrdersPage() {
+  const { me } = useAuth();
   const orders = useLive(() => api.get<{ items: Order[] }>("/api/v1/fleet-orders"), [],
     (m) => m.kind.startsWith("order."));
+  const items = orders.data?.items ?? [];
+  const covering = items.filter((o) => o.duty_technician?.id === me?.id);
+  const covered = items.filter((o) => o.duty_technician && o.duty_technician.id !== me?.id);
   return (
     <div className="stack">
       <h1>Заказы на дронах парка</h1>
       <p className="muted">По каждому заказу проверьте подключение дрона и видео и подтвердите первичную готовность к полёту —
         без этого оператор не сможет начать задание.</p>
+      {covering.length > 0 && <Alert tone="info">Вы замещаете техника другого парка вашей зоны (он не на смене) — заказы{" "}
+        {covering.map((o) => `№${o.number}`).join(", ")}. Подготовьте эти дроны так же, как свои.</Alert>}
+      {covered.length > 0 && <Alert tone="warn">Пока вы не на смене, заказы вашего парка ведут техники зоны:{" "}
+        {covered.map((o) => `№${o.number} — ${o.duty_technician!.display_name}`).join("; ")}.</Alert>}
       <Card>{!orders.data ? <Pending /> : <OrderTable orders={orders.data.items} />}</Card>
     </div>
   );
 }
 
 export function TechOrderPage() {
+  const { me } = useAuth();
   const { id = "" } = useParams();
   const order = useLive(() => api.get<Order>(`/api/v1/orders/${id}`), [id],
     (m) => m.data.order_id === id);
@@ -334,6 +344,9 @@ export function TechOrderPage() {
         <h1>Заказ №{o.number} <Badge kind="order" value={o.status} /> <RepeatBadges o={o} /></h1>
         <Link to="/orders" className="btn ghost">← Заказы парка</Link>
       </div>
+      {o.duty_technician && (o.duty_technician.id === me?.id
+        ? <Alert tone="info">Вы ведёте этот заказ вместо техника парка, который не на смене.</Alert>
+        : <Alert tone="warn">Заказ ведёт техник зоны {o.duty_technician.display_name} — вы отметили «Не готов к работе».</Alert>)}
       <div className="grid2">
         <Card title="Маршрут">
           {o.route && <RouteMap route={o.route} height={240} providerId={o.map_provider_id} orderId={o.id} />}

@@ -1,11 +1,13 @@
 """Готовность к работе: «Готов к работе» / «Не готов к работе» у оператора, координатора и техника.
 
-* Координатор «не готов» — новые заказы ему не назначаются, их распределяют между готовыми; заказы,
-  которые уже у него, остаются за ним. Выравнивание нагрузки — только между готовыми. Стал «готов» —
-  на него сразу переводятся последние поступившие заказы, пока нагрузка не выровняется.
-* Оператор «не готов» — очередь ему не показывается и принять заказ нельзя; заказы берут другие.
-* Техник «не готов» — его парк на паузе: дроны парка не видны заказчику и не принимают новые заказы;
-  уже размещённые заказы остаются за ним.
+* Координатор «не готов» — новые заказы ему не назначаются; его заказы, которые ещё не вылетели, сразу
+  переходят к готовым координаторам, заказы в полёте остаются за ним (services/coordination.py).
+  Стал «готов» — на него переводятся последние поступившие заказы, пока нагрузка не выровняется.
+* Оператор «не готов» — предложенные ему, но не принятые заказы переходят к другим готовым операторам
+  с нужной квалификацией; нет таких — заказы ждут первого подходящего (services/operator_dispatch.py).
+  Стал «готов» — получает ждущие заказы и последние поступившие с выравниванием нагрузки.
+* Техник «не готов» — заказы на дронах его парка ведёт готовый техник той же зоны обслуживания
+  (services/tech_cover.py); стал «готов» — заказы возвращаются к нему.
 
 Нет записи в ``work_readiness`` — пользователь готов (так работает и установка до этой версии).
 """
@@ -67,17 +69,52 @@ def set_ready(db: Session, p: Principal, role: str, ready: bool) -> Dict[str, ob
     else:
         row.ready, row.changed_at = ready, clock.now()
     db.flush()
-    moved = 0
     if before != ready:
         audit.record(db, p.actor, "work.readiness_changed", entity_type="user", entity_id=p.user_id,
                      details={"role": role, "before": before, "after": ready})
         events.publish(db, "work.readiness", {"user_id": str(p.user_id), "role": role, "ready": ready},
                        users=[p.user_id], roles=["admin"])
-        if role == "coordinator" and ready:
-            # Вернулся к работе — на него переводятся последние поступившие заказы (выравнивание).
-            from .. import runtime
-            from . import coordination
-            moved = coordination.sweep(db, runtime.settings())["moved"]
+        before_n = _count(db, p.user_id, role)
+        note = _redistribute(db, role, p.user_id, ready)
+        after_n = _count(db, p.user_id, role)
+        moved = abs(after_n - before_n)
+        out = mine(db, p, role)
+        out["moved"] = moved
+        out["note"] = note.format(n=moved) if moved else ""
+        return out
     out = mine(db, p, role)
-    out["moved"] = moved
+    out["moved"], out["note"] = 0, ""
     return out
+
+
+def _count(db: Session, user_id: uuid.UUID, role: str) -> int:
+    """Заказы, которые сейчас за пользователем в этой роли (для сообщения о передаче)."""
+    from sqlalchemy import func
+    from ..models import Drone, Fleet, Order
+    from . import coordination, tech_cover
+    if role == "coordinator":
+        cond = (Order.coordinator_id == user_id, Order.status.in_(coordination.ACTIVE))
+    elif role == "operator":
+        cond = (Order.offered_operator_id == user_id, Order.status == "awaiting_operator")
+    else:                                    # заказы своего парка, которые ведёт он сам
+        return db.execute(select(func.count()).select_from(Order).join(Drone, Drone.id == Order.drone_id)
+                          .join(Fleet, Fleet.id == Drone.fleet_id)
+                          .where(Fleet.technician_id == user_id, Order.duty_technician_id.is_(None),
+                                 Order.status.in_(tech_cover.STATUSES))).scalar_one()
+    return db.execute(select(func.count()).select_from(Order).where(*cond)).scalar_one()
+
+
+def _redistribute(db: Session, role: str, user_id: uuid.UUID, ready: bool) -> str:
+    """Сразу перераспределить заказы после смены готовности; шаблон сообщения пользователю."""
+    from .. import runtime
+    from . import coordination, operator_dispatch, tech_cover
+    if role == "coordinator":
+        coordination.sweep(db, runtime.settings())
+        return "На вас переведено заказов: {n}" if ready else "Передано другим координаторам заказов: {n}"
+    if role == "operator":
+        if not ready:
+            operator_dispatch.release_operator(db, user_id)
+        operator_dispatch.sweep(db)
+        return "Вам предложено заказов: {n}" if ready else "Передано другим операторам заказов: {n}"
+    tech_cover.sweep(db)
+    return "Вернулось к вам заказов вашего парка: {n}" if ready else "Заказы вашего парка ведут техники зоны: {n}"

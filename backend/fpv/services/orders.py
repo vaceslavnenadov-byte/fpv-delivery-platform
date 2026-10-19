@@ -104,11 +104,8 @@ def can_view(db: Session, p: Principal, order: Order) -> bool:
         return True
     if p.has("order.read_assigned") and p.user_id in (order.operator_id, order.coordinator_id):
         return True
-    if p.has("order.queue.read") and order.status == "awaiting_operator":
-        from . import licenses
-        drone = db.get(Drone, order.drone_id)
-        if drone is None or drone.drone_model_id is None or drone.drone_model_id in licenses.approved_models(db, p.user_id):
-            return True
+    if p.has("order.queue.read") and order.status == "awaiting_operator" and order.offered_operator_id == p.user_id:
+        return True                                       # заказ предложен этому оператору
     if p.has("order.approve") and order.status == "awaiting_coordinator" and order.coordinator_id is None:
         return True           # ждёт согласования, свободных координаторов не было — может взять любой
     if p.has("order.read_fleet"):
@@ -156,6 +153,13 @@ def transition(db: Session, order: Order, to_status: str, actor: audit.Actor, *,
                     "reason": reason, "version": order.version},
                    users=[order.customer_id, order.operator_id, order.coordinator_id],
                    roles=["admin"] + (["operator"] if "awaiting_operator" in (from_status, to_status) else []))
+    if to_status == "awaiting_operator" or from_status == "awaiting_operator":
+        # Оператора назначает система: готовому, с квалификацией, с наименьшей нагрузкой.
+        from . import operator_dispatch
+        operator_dispatch.offer(db, order)
+    if to_status == "awaiting_operator":
+        from . import tech_cover
+        tech_cover.cover(db, order)                       # техник парка не на смене — технику зоны
 
 
 # ---------------------------------------------------------------------------
@@ -250,14 +254,6 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
 # Действия заказчика
 # ---------------------------------------------------------------------------
 
-def _check_fleet_ready(db: Session, fleet: Optional[Fleet]) -> None:
-    """Техник парка отметил «Не готов к работе» — парк на паузе, новые заказы на его дроны не принимаются."""
-    from . import readiness
-    if fleet is not None and not readiness.is_ready(db, fleet.technician_id, "technician"):
-        raise ValidationFailed("Парк этого дрона временно не принимает заказы — выберите другой дрон",
-                               code="fleet_paused")
-
-
 def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, Any]) -> Order:
     p.require("order.create")
     drone = db.get(Drone, data["drone_id"])
@@ -267,7 +263,6 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     legacy_ok = drone is not None and fleet is None and drone.owner_id == p.user_id
     if drone is None or not (fleet_ok or legacy_ok):
         raise ValidationFailed("Выберите дрон из открытых для заказов парков", code="drone_invalid")
-    _check_fleet_ready(db, fleet)
     def point(x: Dict[str, Any]) -> Dict[str, Any]:
         return {"lat": round(x["lat"], 6), "lon": round(x["lon"], 6), "address": x["address"].strip(),
                 "note": (x.get("note") or "").strip()}
@@ -465,7 +460,6 @@ def confirm(db: Session, settings: Settings, p: Principal, order_id: uuid.UUID,
     ok, reasons = drones.readiness(db, settings, drone, require_online=False)
     if not ok:
         raise ValidationFailed("Дрон больше не допущен к выполнению: " + "; ".join(reasons), code="drone_not_ready")
-    _check_fleet_ready(db, db.get(Fleet, drone.fleet_id) if drone.fleet_id else None)
     transition(db, order, "awaiting_coordinator", p.actor, reason="Заказ размещён, ждёт согласования координатором")
     _post_customer_comment(db, order)
     # Согласующий координатор — с наименьшей нагрузкой (services/coordination.py).
@@ -657,15 +651,9 @@ def open_dispute(db: Session, settings: Settings, p: Principal, order_id: uuid.U
 def queue(db: Session, p: Principal, *, max_distance_m: Optional[int] = None,
           cargo_type: Optional[str] = None) -> List[Order]:
     p.require("order.queue.read")
-    from . import readiness
-    if not readiness.is_ready(db, p.user_id, "operator"):
-        return []                                         # «Не готов к работе» — заказы берут другие
-    declined = select(Assignment.order_id).where(Assignment.user_id == p.user_id, Assignment.role == "operator",
-                                                 Assignment.status == "declined")
-    from . import licenses
+    # Заказы, которые система предложила этому оператору (services/operator_dispatch.py).
     stmt = select(Order).join(Route, Route.order_id == Order.id).where(
-        Order.status == "awaiting_operator", Order.id.notin_(declined),
-        licenses.admitted_condition(db, p.user_id))      # только типы БПЛА, к которым оператор допущен
+        Order.status == "awaiting_operator", Order.offered_operator_id == p.user_id)
     if max_distance_m:
         stmt = stmt.where(Route.distance_m <= max_distance_m)
     if cargo_type:
@@ -722,6 +710,8 @@ def accept(db: Session, p: Principal, order_id: uuid.UUID, expected_version: Opt
     if not readiness.is_ready(db, p.user_id, "operator"):
         raise Conflict("Вы отметили «Не готов к работе» — чтобы принимать заказы, отметьте «Готов к работе»",
                        code="not_ready_for_work")
+    if order.offered_operator_id != p.user_id:
+        raise Conflict("Заказ предложен другому оператору", code="not_offered")
     busy = db.execute(select(Order.id).where(Order.operator_id == p.user_id,
                                              Order.status.in_(ACTIVE_EXECUTION))).first()
     if busy:
@@ -745,24 +735,34 @@ def accept(db: Session, p: Principal, order_id: uuid.UUID, expected_version: Opt
     return order
 
 
+def _mark_declined(db: Session, p: Principal, order: Order, reason: str) -> None:
+    exists = db.execute(select(Assignment.id).where(
+        Assignment.order_id == order.id, Assignment.user_id == p.user_id, Assignment.role == "operator",
+        Assignment.status == "declined")).first()
+    if not exists:
+        db.add(Assignment(order_id=order.id, user_id=p.user_id, role="operator", status="declined",
+                          reason=reason, created_by=p.user_id, created_at=clock.now(), ended_at=clock.now()))
+        db.flush()
+
+
 def decline(db: Session, p: Principal, order_id: uuid.UUID, reason: str,
             expected_version: Optional[int] = None) -> Order:
     p.require("order.accept")
     order = visible_order(db, p, order_id, for_update=True)
     _check_version(order, expected_version)
     if order.status == "awaiting_operator":
-        exists = db.execute(select(Assignment.id).where(
-            Assignment.order_id == order.id, Assignment.user_id == p.user_id, Assignment.role == "operator",
-            Assignment.status == "declined")).first()
-        if not exists:
-            db.add(Assignment(order_id=order.id, user_id=p.user_id, role="operator", status="declined",
-                              reason=reason, created_by=p.user_id, created_at=clock.now(), ended_at=clock.now()))
+        if order.offered_operator_id != p.user_id:
+            raise Conflict("Заказ предложен другому оператору", code="not_offered")
+        _mark_declined(db, p, order, reason)
         audit.record(db, p.actor, "order.declined", entity_type="order", entity_id=order.id,
                      details={"reason": reason})
+        from . import operator_dispatch
+        operator_dispatch.offer(db, order, "Предыдущий оператор отклонил заказ")   # другому подходящему
         return order
     if order.status in ("accepted", "awaiting_readiness", "ready"):
         _require_own_operator(p, order)
         _end_assignments(db, order, "released", reason or "Оператор отказался от задания", role="operator")
+        _mark_declined(db, p, order, reason or "Оператор отказался от задания")   # больше ему не предлагать
         order.operator_id = None
         transition(db, order, "awaiting_operator", p.actor, reason=reason or "Оператор отказался от задания")
         return order
