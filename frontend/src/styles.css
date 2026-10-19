@@ -748,3 +748,20 @@ tr.priority-highest { outline: 2px solid #c62828; outline-offset: -2px; }
   .main { max-width: 100vw; overflow-x: hidden; }
 }
 .map-list-item .repeat-badges { white-space: normal; display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Разделы левого меню (сворачиваемые) */
+.sidebar nav { gap: 6px; }
+.nav-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 4px 6px; }
+.nav-role { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #8fb1e3; }
+.nav-all { background: none; border: 0; color: #8fb1e3; font-size: 0.72rem; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.nav-all:hover { color: #fff; background: rgba(255,255,255,.08); }
+.sidebar .nav-section { margin: 0; padding: 4px 0 6px; border-top: 1px solid rgba(255,255,255,.08); }
+.sidebar .nav-section.nav-top { border-top: 0; padding-top: 0; }
+.nav-toggle { display: flex; align-items: center; gap: 6px; width: calc(100% - 8px); background: none; border: 0; cursor: pointer;
+  text-align: left; padding: 6px 6px; margin: 2px 4px; border-radius: 6px; font: inherit; font-size: 0.74rem;
+  text-transform: uppercase; letter-spacing: 0.06em; color: #a9c4ea; }
+.nav-toggle:hover { background: rgba(255,255,255,.06); color: #fff; }
+.nav-caret { display: inline-block; width: 10px; font-size: 0.7rem; }
+.nav-items { display: flex; flex-direction: column; }
+.nav-section:not(.nav-top) .nav-items a { padding-left: 22px; }
+.nav-section.closed .nav-items a { opacity: .9; }

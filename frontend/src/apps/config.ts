@@ -5,6 +5,28 @@
 export interface NavItem {
   to: string;        // путь внутри клиента (basename подставляется роутером)
   label: string;
+  section?: string;  // раздел меню (сворачиваемый); без раздела — пункт вверху меню
+}
+
+export interface NavGroup {
+  title: string | null;
+  items: NavItem[];
+}
+
+/** Пункты меню по разделам — в порядке первого появления раздела. */
+export function navGroups(nav: NavItem[]): NavGroup[] {
+  const groups: NavGroup[] = [];
+  for (const item of nav) {
+    const title = item.section ?? null;
+    let g = groups.find((x) => x.title === title);
+    if (!g) {
+      g = { title, items: [] };
+      if (title === null) groups.unshift(g);
+      else groups.push(g);
+    }
+    g.items.push(item);
+  }
+  return groups;
 }
 
 export interface AppConfig {
@@ -23,8 +45,8 @@ export const APPS: Record<string, AppConfig> = {
     hasOrders: true,
     hasMonitor: false,
     nav: [
-      { to: "/", label: "Мои заказы" },
-      { to: "/new", label: "Новый заказ" },
+      { to: "/", label: "Мои заказы", section: "Заказы" },
+      { to: "/new", label: "Новый заказ", section: "Заказы" },
     ],
   },
   operator: {
@@ -32,9 +54,9 @@ export const APPS: Record<string, AppConfig> = {
     hasOrders: true,
     hasMonitor: true,
     nav: [
-      { to: "/", label: "Очередь заказов" },
-      { to: "/mine", label: "Мои задания" },
-      { to: "/scores", label: "Баллы и рейтинг" },
+      { to: "/", label: "Очередь заказов", section: "Заказы" },
+      { to: "/mine", label: "Мои задания", section: "Заказы" },
+      { to: "/scores", label: "Баллы и рейтинг", section: "Результаты" },
     ],
   },
   coordinator: {
@@ -42,10 +64,10 @@ export const APPS: Record<string, AppConfig> = {
     hasOrders: true,
     hasMonitor: true,
     nav: [
-      { to: "/", label: "Видеостена" },
-      { to: "/map", label: "Карта заказов" },
-      { to: "/orders", label: "Назначенные заказы" },
-      { to: "/reviews", label: "Проверка выполнения" },
+      { to: "/", label: "Видеостена", section: "Наблюдение" },
+      { to: "/map", label: "Карта заказов", section: "Наблюдение" },
+      { to: "/orders", label: "Назначенные заказы", section: "Заказы" },
+      { to: "/reviews", label: "Проверка выполнения", section: "Заказы" },
     ],
   },
   technician: {
@@ -53,11 +75,11 @@ export const APPS: Record<string, AppConfig> = {
     hasOrders: true,
     hasMonitor: false,
     nav: [
-      { to: "/", label: "Мой парк" },
-      { to: "/orders", label: "Заказы на дронах парка" },
-      { to: "/service", label: "Обслуживание" },
-      { to: "/archive", label: "Архив БПЛА" },
-      { to: "/tech-report", label: "Отчёт о ТехСостоянии" },
+      { to: "/", label: "Мой парк", section: "Парк БПЛА" },
+      { to: "/orders", label: "Заказы на дронах парка", section: "Заказы" },
+      { to: "/service", label: "Обслуживание", section: "Парк БПЛА" },
+      { to: "/archive", label: "Архив БПЛА", section: "Парк БПЛА" },
+      { to: "/tech-report", label: "Отчёт о ТехСостоянии", section: "Отчёты" },
     ],
   },
   recruiter: {
@@ -65,10 +87,10 @@ export const APPS: Record<string, AppConfig> = {
     hasOrders: false,
     hasMonitor: false,
     nav: [
-      { to: "/", label: "Пользователи" },
-      { to: "/org-units", label: "Группы пользователей" },
-      { to: "/profiles", label: "Проверка профилей" },
-      { to: "/operators", label: "Допуск операторов" },
+      { to: "/", label: "Пользователи", section: "Пользователи" },
+      { to: "/org-units", label: "Группы пользователей", section: "Пользователи" },
+      { to: "/profiles", label: "Проверка профилей", section: "Проверки" },
+      { to: "/operators", label: "Допуск операторов", section: "Проверки" },
     ],
   },
   admin: {
@@ -77,24 +99,24 @@ export const APPS: Record<string, AppConfig> = {
     hasMonitor: true,
     nav: [
       { to: "/", label: "Обзор" },
-      { to: "/map", label: "Карта заказов" },
-      { to: "/orders", label: "Все заказы" },
-      { to: "/drones", label: "Дроны" },
-      { to: "/complaints", label: "Жалобы и споры" },
-      { to: "/support-admin", label: "Обращения в ТП" },
-      { to: "/people", label: "Пользователи" },
-      { to: "/org-units", label: "Группы пользователей" },
-      { to: "/profiles", label: "Проверка профилей" },
-      { to: "/operators", label: "Допуск операторов" },
-      { to: "/users", label: "Домен, операторы, устройства" },
-      { to: "/scoring", label: "Правила баллов" },
-      { to: "/cargo-types", label: "Типы грузов" },
-      { to: "/drone-models", label: "Типы БПЛА" },
-      { to: "/consignees", label: "Типы грузополучателей" },
-      { to: "/maps", label: "Карты" },
-      { to: "/service-zones", label: "Зоны обслуживания" },
-      { to: "/audit", label: "Журнал аудита" },
-      { to: "/monitoring", label: "Мониторинг" },
+      { to: "/map", label: "Карта заказов", section: "Заказы" },
+      { to: "/orders", label: "Все заказы", section: "Заказы" },
+      { to: "/complaints", label: "Жалобы и споры", section: "Заказы" },
+      { to: "/drones", label: "Дроны", section: "Парк и территория" },
+      { to: "/service-zones", label: "Зоны обслуживания", section: "Парк и территория" },
+      { to: "/maps", label: "Карты", section: "Парк и территория" },
+      { to: "/people", label: "Пользователи", section: "Пользователи и доступ" },
+      { to: "/org-units", label: "Группы пользователей", section: "Пользователи и доступ" },
+      { to: "/profiles", label: "Проверка профилей", section: "Пользователи и доступ" },
+      { to: "/operators", label: "Допуск операторов", section: "Пользователи и доступ" },
+      { to: "/users", label: "Домен, операторы, устройства", section: "Пользователи и доступ" },
+      { to: "/cargo-types", label: "Типы грузов", section: "Справочники" },
+      { to: "/consignees", label: "Типы грузополучателей", section: "Справочники" },
+      { to: "/drone-models", label: "Типы БПЛА", section: "Справочники" },
+      { to: "/scoring", label: "Правила баллов", section: "Справочники" },
+      { to: "/support-admin", label: "Обращения в ТП", section: "Контроль" },
+      { to: "/audit", label: "Журнал аудита", section: "Контроль" },
+      { to: "/monitoring", label: "Мониторинг", section: "Контроль" },
     ],
   },
 };

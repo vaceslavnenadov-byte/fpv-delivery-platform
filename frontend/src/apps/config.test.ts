@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { APPS, accessibleApps, roleHome, safeNext, suspendedApp } from "./config";
+import { APPS, accessibleApps, navGroups, roleHome, safeNext, suspendedApp } from "./config";
 
 const perms = (...p: string[]) => (x: string) => p.includes(x);
 const operator = perms("order.queue.read");
@@ -58,5 +58,21 @@ describe("меню администратора", () => {
   });
   it("у техника — архив и отчёт", () => {
     expect(APPS.technician.nav.map((i) => i.to)).toEqual(expect.arrayContaining(["/archive", "/tech-report"]));
+  });
+});
+
+describe("разделы меню", () => {
+  it("группирует пункты, пункты без раздела — вверху", () => {
+    const g = navGroups(APPS.admin.nav);
+    expect(g[0].title).toBeNull();
+    expect(g[0].items.map((i) => i.to)).toEqual(["/"]);
+    expect(g.map((x) => x.title)).toEqual([null, "Заказы", "Парк и территория", "Пользователи и доступ", "Справочники", "Контроль"]);
+    expect(g.flatMap((x) => x.items).length).toBe(APPS.admin.nav.length);
+  });
+  it("у каждой роли все пункты попадают в разделы", () => {
+    for (const app of Object.values(APPS)) {
+      expect(navGroups(app.nav).flatMap((x) => x.items).map((i) => i.to).sort()).toEqual(app.nav.map((i) => i.to).sort());
+    }
+    expect(navGroups(APPS.technician.nav).map((x) => x.title)).toEqual(["Парк БПЛА", "Заказы", "Отчёты"]);
   });
 });
