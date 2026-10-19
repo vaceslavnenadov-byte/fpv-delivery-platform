@@ -18,7 +18,7 @@ from . import events
 STATUS_LABELS = {
     "draft": "Черновик",
     "pending_confirmation": "Ожидает подтверждения",
-    "awaiting_operator": "Ожидает назначения оператора",
+    "awaiting_operator": "Ожидает оператора",
     "accepted": "Принят оператором",
     "awaiting_readiness": "Ожидает проверки готовности",
     "ready": "Готов к выполнению",

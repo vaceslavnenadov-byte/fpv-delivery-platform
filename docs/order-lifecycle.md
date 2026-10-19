@@ -49,7 +49,7 @@ stateDiagram-v2
 |---|---|
 | Черновик | `draft` |
 | Ожидает подтверждения | `pending_confirmation` |
-| Ожидает назначения оператора | `awaiting_operator` |
+| Ожидает оператора | `awaiting_operator` |
 | Принят оператором | `accepted` |
 | Ожидает проверки готовности | `awaiting_readiness` |
 | Готов к выполнению | `ready` |

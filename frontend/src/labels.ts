@@ -2,7 +2,7 @@ export const ORDER_STATUS: Record<string, { label: string; tone: string }> = {
   draft: { label: "Черновик", tone: "muted" },
   pending_confirmation: { label: "Ожидает подтверждения", tone: "info" },
   awaiting_coordinator: { label: "На согласовании координатора", tone: "warn" },
-  awaiting_operator: { label: "Ожидает назначения оператора", tone: "info" },
+  awaiting_operator: { label: "Ожидает оператора", tone: "info" },
   accepted: { label: "Принят оператором", tone: "info" },
   awaiting_readiness: { label: "Ожидает проверки готовности", tone: "warn" },
   ready: { label: "Готов к выполнению", tone: "ok" },
