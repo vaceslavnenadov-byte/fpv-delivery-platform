@@ -232,6 +232,11 @@ def compute_link_status(settings: Settings, drone: Drone, now: Optional[dt.datet
     return "lost"
 
 
+# Подписи статусов в причинах отказа — как в интерфейсе (labels.ts), без внутренних кодов.
+HEALTH_LABELS = {"serviceable": "Исправен", "requires_check": "Требует проверки", "grounded": "Не допущен к эксплуатации"}
+LINK_LABELS = {"online": "На связи", "degraded": "Связь нестабильна", "lost": "Связь потеряна", "offline": "Не подключён"}
+
+
 def readiness(db: Session, settings: Settings, drone: Drone, *, cargo_weight_g: Optional[int] = None,
               distance_m: Optional[int] = None, require_online: bool = True) -> Tuple[bool, List[str]]:
     """Проверка допуска дрона к заданию. Возвращает (готов, список причин отказа).
@@ -244,7 +249,8 @@ def readiness(db: Session, settings: Settings, drone: Drone, *, cargo_weight_g: 
     if drone.status != "active":
         reasons.append("Регистрация дрона не подтверждена или дрон заблокирован")
     if drone.health_status != "serviceable":
-        reasons.append("Дрон не допущен техником (статус: {})".format(drone.health_status))
+        reasons.append("Дрон не допущен техником (статус: {})".format(
+            HEALTH_LABELS.get(drone.health_status, drone.health_status)))
     last = db.execute(select(DroneHealthCheck).where(DroneHealthCheck.drone_id == drone.id)
                       .order_by(DroneHealthCheck.created_at.desc()).limit(1)).scalar_one_or_none()
     if last is None:
@@ -262,7 +268,8 @@ def readiness(db: Session, settings: Settings, drone: Drone, *, cargo_weight_g: 
     if require_online:
         status = compute_link_status(settings, drone)
         if status != "online":
-            reasons.append("Нет связи с сервисным модулем дрона (статус связи: {})".format(status))
+            reasons.append("Нет связи с сервисным модулем дрона (связь: {})".format(
+                LINK_LABELS.get(status, status)))
         if drone.battery_pct is None or drone.battery_pct < settings.min_battery_pct:
             reasons.append("Недостаточный заряд батареи (минимум {}%)".format(settings.min_battery_pct))
     return (not reasons), reasons
