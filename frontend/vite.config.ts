@@ -48,6 +48,12 @@ export default defineConfig({
         page("recruiter", "recruiter/index.html"),
         page("admin", "admin/index.html"),
       ]),
+      // Воркер pdf.js (*.mjs) — под расширением .js: nginx отдаёт .mjs не как JavaScript,
+      // и браузер отказался бы запускать модульный воркер.
+      output: {
+        assetFileNames: (a) => ((a.names?.[0] ?? a.name ?? "").endsWith(".mjs")
+          ? "assets/[name]-[hash].js" : "assets/[name]-[hash][extname]"),
+      },
     },
   },
   test: { environment: "node" },
