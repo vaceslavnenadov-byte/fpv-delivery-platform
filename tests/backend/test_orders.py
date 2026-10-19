@@ -78,7 +78,7 @@ def test_invalid_transitions_rejected(world):
     o = world.started_order()
     r = world.customer.post(f"/api/v1/orders/{o['id']}/cancel", json={"reason": "Передумал"})
     assert r.status_code == 409 and r.json()["error"]["code"] == "invalid_transition"
-    r = world.admin.post(f"/api/v1/orders/{o['id']}/review", json={"approve": True})
+    r = world.coordinator.post(f"/api/v1/orders/{o['id']}/review", json={"approve": True})
     assert r.status_code == 409
 
 

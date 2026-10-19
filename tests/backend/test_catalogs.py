@@ -54,7 +54,8 @@ def test_several_cargo_items_in_one_order(world):
     assert o["cargo_items"][1]["cargo_type_name"] == "Медицинские изделия"
     r = world.customer.post(f"/api/v1/orders/{o['id']}/submit", json={})
     assert r.json()["status"] == "pending_confirmation", r.json()["validation_result"]
-    assert world.customer.post(f"/api/v1/orders/{o['id']}/confirm", json={}).json()["status"] == "awaiting_operator"
+    assert world.customer.post(f"/api/v1/orders/{o['id']}/confirm", json={}).json()["status"] == "awaiting_coordinator"
+    world.coordinator_approve(o["id"])
     # Оператор и техник видят все грузы заказа.
     assert _items(world.operator.get(f"/api/v1/orders/{o['id']}").json()) == _items(o)
     assert _items(world.technician.get(f"/api/v1/orders/{o['id']}").json()) == _items(o)

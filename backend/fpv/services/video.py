@@ -261,15 +261,25 @@ def upload_clip(db: Session, payload: Dict[str, Any], event_id: uuid.UUID) -> No
     shutil.rmtree(pending_dir, ignore_errors=True)
 
 
+def can_read(db: Session, p: Principal, order_id: uuid.UUID) -> bool:
+    """Видео заказа: администратор (video.read) — любое, координатор — своих заказов."""
+    if p.has("video.read"):
+        return True
+    if p.has("video.read_assigned"):
+        order = db.get(Order, order_id)
+        return order is not None and order.coordinator_id == p.user_id
+    return False
+
+
 def evidence_for_order(db: Session, order_id: uuid.UUID) -> Optional[VideoEvidence]:
     return db.execute(select(VideoEvidence).where(VideoEvidence.order_id == order_id)).scalar_one_or_none()
 
 
 def stream(db: Session, p: Principal, evidence_id: uuid.UUID, variant: str) -> tuple:
     """Выдаёт содержимое клипа уполномоченному сотруднику и фиксирует факт просмотра."""
-    p.require("video.read")
     ev = db.get(VideoEvidence, evidence_id)
-    if ev is None:
+    if ev is None or not can_read(db, p, ev.order_id):
+        p.require("video.read")
         raise NotFound("Видеоподтверждение не найдено")
     if ev.status != "stored":
         raise Conflict("Видео недоступно для просмотра (статус: {})".format(ev.status), code="video_unavailable")
@@ -305,7 +315,6 @@ def verify_integrity(db: Session, ev: VideoEvidence, actor: audit.Actor,
 
 
 def review(db: Session, p: Principal, order_id: uuid.UUID, *, approved: bool, comment: str) -> VideoEvidence:
-    p.require("video.read")
     p.require("order.review")
     ev = evidence_for_order(db, order_id)
     if ev is None:

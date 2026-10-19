@@ -11,6 +11,7 @@ export interface Me {
   phone?: string | null;
   profile_status?: "pending" | "verified" | "rejected";
   account_status?: "active" | "suspended";
+  profile_verified?: boolean;          // false — добавлен администратором/рекрутером, профиль ещё не подтверждён
   profile_review_notes?: string | null;
   profile?: {
     first_name: string | null; last_name: string | null; middle_name: string | null; nickname: string | null;
@@ -38,6 +39,7 @@ export interface RouteInfo {
   stops?: Stop[];               // промежуточные точки между Б и В (по порядку)
   max_altitude_m: number;
   checkpoints: { name: string; lat: number; lon: number; kind?: string }[];
+  pickup_at_base?: boolean;     // груз забирается на базе (А); точки Б, В, … — маршрут заказчика
   approval_status: string;
   approval_notes: { code: string; ok: boolean; message: string }[];
 }
@@ -151,6 +153,18 @@ export interface CargoItem {
   dims_mm: number[];
 }
 
+export interface ConsigneeSnapshot {
+  id?: string;
+  name: string;
+  kind: string;
+  recommended_cargo: string | null;
+  recommended_cargo_name: string | null;
+  location: string;
+  priority: string;
+  priority_label: string;
+  comment: string;
+}
+
 export interface Order {
   id: string;
   number: number;
@@ -173,7 +187,14 @@ export interface Order {
   coordinator_id: string | null;
   tech_ready_at?: string | null;
   map_provider_id?: string | null;   // онлайн-карта, выбранная заказчиком
-  priority?: boolean;                // повторный вылет — первым в списках
+  priority?: boolean;
+  priority_level?: "low" | "normal" | "high" | "highest";
+  consignee?: ConsigneeSnapshot | null;
+  asap?: boolean;                    // время доставки не задано — как можно скорее
+  coordinator_approved_at?: string | null;
+  customer_comment?: string | null;
+  has_comment_photo?: boolean;
+  drone_waits_for?: number | null;   // в очереди: на этом дроне раньше вылетает заказ №…
   repeat_of?: { id: string; number: number | null } | null;
   repeat_requests?: RepeatRequest[];
   tech_ready_by?: UserBrief | null;
@@ -185,8 +206,8 @@ export interface Order {
   receipt_overdue: boolean;
   route: RouteInfo | null;
   validation_result?: { ok: boolean; checks: { code: string; ok: boolean; message: string }[] };
-  recipient_name?: string;
-  recipient_phone?: string;
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
   customer?: UserBrief | null;
   operator?: UserBrief | null;
   coordinator?: UserBrief | null;
@@ -298,6 +319,9 @@ export interface AvailableDrone {
   link_status: string;
   battery_pct: number | null;
   busy: boolean;
+  link_type?: string | null;
+  construction?: string | null;
+  engine_type?: string | null;
   fleet: { id: string; name: string; zone_id?: string | null; base: Point };
 }
 

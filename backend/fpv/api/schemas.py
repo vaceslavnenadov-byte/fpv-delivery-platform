@@ -54,6 +54,27 @@ class ArchiveIn(StrictModel):
     comment: str = Field(default="", max_length=500)
 
 
+PRIORITY = Literal["low", "normal", "high", "highest"]
+
+
+class ConsigneeIn(StrictModel):
+    name: str = Field(min_length=1, max_length=200)
+    kind: str = Field(default="", max_length=120)
+    recommended_cargo: Optional[str] = Field(default=None, max_length=40)
+    location: str = Field(default="", max_length=500)
+    priority: PRIORITY = "normal"
+    comment: str = Field(default="", max_length=2000)
+
+
+class ConsigneePatch(StrictModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    kind: Optional[str] = Field(default=None, max_length=120)
+    recommended_cargo: Optional[str] = Field(default=None, max_length=40)
+    location: Optional[str] = Field(default=None, max_length=500)
+    priority: Optional[PRIORITY] = None
+    comment: Optional[str] = Field(default=None, max_length=2000)
+
+
 class CargoTypeIn(StrictModel):
     name: str = Field(min_length=1, max_length=120)
     category: str = Field(default="", max_length=120)
@@ -185,31 +206,47 @@ class OrderIn(StrictModel):
     cargo_length_mm: Optional[int] = Field(default=None, ge=1, le=5000)
     cargo_width_mm: Optional[int] = Field(default=None, ge=1, le=5000)
     cargo_height_mm: Optional[int] = Field(default=None, ge=1, le=5000)
-    origin: PointIn
-    destination: PointIn
+    # Маршрут заказчика: точки Б, В, … по порядку (груз забирается на базе парка — точка А);
+    # последняя точка — грузополучатель. Прежний способ — origin (забор груза) и destination.
+    points: List[StopIn] = Field(default_factory=list, max_length=MAX_STOPS + 1)
+    origin: Optional[PointIn] = None
+    destination: Optional[PointIn] = None
     stops: List[StopIn] = Field(default_factory=list, max_length=MAX_STOPS)
     map_provider_id: Optional[uuid.UUID] = None       # онлайн-карта, выбранная заказчиком
-    recipient_name: str = Field(min_length=2, max_length=120)
-    recipient_phone: str = Field(pattern=PHONE_PATTERN)
-    window_start: dt.datetime
-    window_end: dt.datetime
+    consignee_id: Optional[uuid.UUID] = None          # из справочника «Типы грузополучателей»
+    recipient_name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    recipient_phone: Optional[str] = Field(default=None, pattern=PHONE_PATTERN)
+    window_start: Optional[dt.datetime] = None        # без окна — доставка как можно скорее
+    window_end: Optional[dt.datetime] = None
+    customer_comment: str = Field(default="", max_length=2000)
 
     @field_validator("window_start", "window_end")
     @classmethod
-    def _tz(cls, v: dt.datetime) -> dt.datetime:
-        if v.tzinfo is None:
+    def _tz(cls, v: Optional[dt.datetime]) -> Optional[dt.datetime]:
+        if v is not None and v.tzinfo is None:
             raise ValueError("Время должно содержать часовой пояс")
         return v
 
     @model_validator(mode="after")
     def _window(self) -> "OrderIn":
-        if self.window_end <= self.window_start:
+        if (self.window_start is None) != (self.window_end is None):
+            raise ValueError("Укажите и начало, и конец временного окна (или не указывайте его)")
+        if self.window_start is not None and self.window_end <= self.window_start:
             raise ValueError("Конец временного окна должен быть позже начала")
         single = (self.cargo_type, self.cargo_description, self.cargo_weight_g, self.cargo_length_mm,
                   self.cargo_width_mm, self.cargo_height_mm)
         if not self.cargo_items and any(v is None for v in single):
             raise ValueError("Добавьте хотя бы один груз")
+        if not self.points and (self.origin is None or self.destination is None):
+            raise ValueError("Добавьте хотя бы одну точку маршрута")
+        if self.consignee_id is None and not self.recipient_name:
+            raise ValueError("Выберите грузополучателя")
         return self
+
+
+class CoordinatorDecisionIn(StrictModel):
+    approve: bool
+    comment: str = Field(default="", max_length=1000)
 
 
 class VersionIn(StrictModel):
@@ -324,6 +361,13 @@ class LocalUserIn(StrictModel):
     phone: Optional[str] = Field(default=None, pattern=PHONE_PATTERN)
     org_unit_id: Optional[uuid.UUID] = None
     roles: List[ROLE_CODE] = Field(default_factory=list, max_length=6)
+    password_confirm: Optional[str] = Field(default=None, max_length=200)   # повтор пароля
+
+    @model_validator(mode="after")
+    def _confirm(self) -> "LocalUserIn":
+        if self.password_confirm is not None and self.password != self.password_confirm:
+            raise ValueError("Пароли не совпадают")
+        return self
 
 
 class PersonProfileIn(StrictModel):
@@ -342,6 +386,13 @@ class PersonProfileIn(StrictModel):
 class CredentialsIn(StrictModel):
     username: Optional[str] = Field(default=None, min_length=3, max_length=64)
     password: Optional[str] = Field(default=None, min_length=10, max_length=200)
+    password_confirm: Optional[str] = Field(default=None, max_length=200)   # повтор нового пароля
+
+    @model_validator(mode="after")
+    def _confirm(self) -> "CredentialsIn":
+        if self.password is not None and self.password_confirm is not None and self.password != self.password_confirm:
+            raise ValueError("Пароли не совпадают")
+        return self
 
 
 class AccountStatusIn(StrictModel):

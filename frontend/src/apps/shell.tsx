@@ -44,21 +44,24 @@ function WrongApp({ app }: { app: AppConfig }) {
 export function ShellOutlet({ app }: { app: AppConfig }) {
   const { can, me } = useAuth();
   const { pathname } = useLocation();
-  if (me?.account_status === "suspended") {
-    // Приостановлен: в разделе своей роли доступны только профиль и техподдержка.
+  const unverified = me?.profile_verified === false;
+  if (me && (me.account_status === "suspended" || unverified)) {
+    // Приостановлен или профиль ещё не подтверждён: в разделе своей роли — только профиль и техподдержка.
     if (suspendedApp(me.roles).key !== app.key) return <WrongApp app={app} />;
     const allowed = pathname.startsWith("/support") || pathname.startsWith("/profile");
-    return <Layout app={app}>{allowed ? <Outlet /> : <SuspendedNotice />}</Layout>;
+    return <Layout app={app}>{allowed ? <Outlet /> : <SuspendedNotice unverified={unverified && me.account_status !== "suspended"} />}</Layout>;
   }
   if (!can(app.requiredPerm)) return <WrongApp app={app} />;
   return <Layout app={app}><Outlet /></Layout>;
 }
 
-function SuspendedNotice() {
+function SuspendedNotice({ unverified = false }: { unverified?: boolean }) {
   return (
     <div className="card stack">
-      <h1>Учётная запись приостановлена</h1>
-      <p>Должностные разделы временно недоступны. Вы можете написать в техподдержку или посмотреть свои обращения.</p>
+      <h1>{unverified ? "Учётная запись не подтверждена" : "Учётная запись приостановлена"}</h1>
+      <p>{unverified
+        ? "Профиль проверяют администратор или рекрутер. После подтверждения откроются рабочие разделы. Пока доступны профиль и техподдержка."
+        : "Должностные разделы временно недоступны. Вы можете написать в техподдержку или посмотреть свои обращения."}</p>
       <div className="row">
         <Link className="btn primary" to="/support/new">Новое обращение</Link>
         <Link className="btn" to="/support">Мои обращения</Link>

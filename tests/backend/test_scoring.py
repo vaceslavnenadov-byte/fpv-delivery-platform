@@ -28,7 +28,7 @@ def _deliver(world, fake_clock, *, late_minutes=0, video=True, receipt=True, rep
 
 
 def _review(world, o, approve=True, video=True):
-    return world.admin.post(f"/api/v1/orders/{o['id']}/review",
+    return world.coordinator.post(f"/api/v1/orders/{o['id']}/review",
                             json={"approve": approve, "comment": "Проверено" if approve else "Груз повреждён",
                                   "video_verified": video})
 
@@ -78,13 +78,13 @@ def test_admin_rejects_delivery(world, fake_clock):
     assert r.json()["status"] == "rejected"
     fin = world.operator.get(f"/api/v1/orders/{o['id']}/score").json()
     assert fin["final_points"] == 0
-    r = world.admin.post(f"/api/v1/orders/{o['id']}/review", json={"approve": False})
+    r = world.coordinator.post(f"/api/v1/orders/{o['id']}/review", json={"approve": False})
     assert r.status_code == 409
 
 
 def test_reject_requires_reason(world, fake_clock):
     o = _deliver(world, fake_clock)
-    r = world.admin.post(f"/api/v1/orders/{o['id']}/review", json={"approve": False, "comment": ""})
+    r = world.coordinator.post(f"/api/v1/orders/{o['id']}/review", json={"approve": False, "comment": ""})
     assert r.status_code == 422
 
 

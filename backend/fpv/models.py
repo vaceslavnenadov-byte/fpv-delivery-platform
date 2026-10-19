@@ -71,6 +71,7 @@ class User(Base):
     profile_notes: Mapped[Optional[str]] = mapped_column(Text)
     org_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("org_units.id"))
     nickname: Mapped[Optional[str]] = mapped_column(Text)
+    profile_verified_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)   # первое подтверждение профиля
     location: Mapped[Optional[str]] = mapped_column(Text)
     last_login_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     last_directory_sync_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
@@ -229,6 +230,22 @@ class Drone(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 
 
+class Consignee(Base):
+    """Грузополучатель из справочника администратора («Типы грузополучателей»)."""
+    __tablename__ = "consignees"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(Text, default="")
+    recommended_cargo: Mapped[Optional[str]] = mapped_column(Text)
+    location: Mapped[str] = mapped_column(Text, default="")
+    priority: Mapped[str] = mapped_column(Text, default="normal")
+    comment: Mapped[str] = mapped_column(Text, default="")
+    deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
 class CargoType(Base):
     """Тип груза из справочника администратора."""
     __tablename__ = "cargo_types"
@@ -336,6 +353,14 @@ class Order(Base):
     map_provider_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("map_providers.id"))   # карта заказчика
     repeat_of: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("orders.id"))      # повторный вылет заказа
     priority: Mapped[bool] = mapped_column(Boolean, default=False)
+    consignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("consignees.id"))
+    consignee: Mapped[Optional[Any]] = mapped_column(JSONB)              # грузополучатель на момент заказа
+    priority_level: Mapped[str] = mapped_column(Text, default="normal")   # low | normal | high | highest
+    coordinator_approved_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
+    customer_comment: Mapped[Optional[str]] = mapped_column(Text)
+    comment_photo_key: Mapped[Optional[str]] = mapped_column(Text)
+    comment_photo_type: Mapped[Optional[str]] = mapped_column(Text)
+    asap: Mapped[bool] = mapped_column(Boolean, default=False)
 
     route: Mapped[Optional["Route"]] = relationship(back_populates="order", uselist=False, lazy="joined")
 
@@ -374,6 +399,7 @@ class Route(Base):
     base_address: Mapped[Optional[str]] = mapped_column(Text)
     return_m: Mapped[Optional[int]] = mapped_column(Integer)    # возврат от получателя на базу
     stops: Mapped[Any] = mapped_column(JSONB, default=list)       # промежуточные точки между Б и В
+    pickup_at_base: Mapped[bool] = mapped_column(Boolean, default=False)   # груз забирается на базе (А)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     order: Mapped[Order] = relationship(back_populates="route")
 

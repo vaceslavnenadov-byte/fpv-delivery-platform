@@ -1,4 +1,4 @@
-"""Справочники администратора: типы грузов и типы (конфигурации) БПЛА.
+"""Справочники администратора: типы грузов, типы (конфигурации) БПЛА и грузополучатели.
 
 * Типы грузов — из них заказчик выбирает «Тип груза»; масса каждого груза не больше максимальной
   для его типа. Удалённый тип, который уже встречался в заказах, скрывается из выбора, но его
@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from .. import clock
 from ..errors import Conflict, NotFound, ValidationFailed
-from ..models import CargoType, DroneModel, Order, OrderCargoItem
+from ..models import CargoType, Consignee, DroneModel, Order, OrderCargoItem
 from . import audit
 from .identity import Principal
 
@@ -161,4 +161,96 @@ def delete_model(db: Session, p: Principal, model_id: uuid.UUID) -> None:
     audit.record(db, p.actor, "catalog.drone_model_deleted", entity_type="drone_model", entity_id=m.id,
                  details={"model": m.model, "manufacturer": m.manufacturer})
     db.delete(m)          # у заведённых дронов параметры остаются (ссылка обнуляется)
+    db.flush()
+
+
+# --- грузополучатели ------------------------------------------------------------------------------
+
+PRIORITIES = {"low": "Низкий приоритет", "normal": "Обычный приоритет", "high": "Высокий приоритет",
+              "highest": "Наивысший приоритет"}
+CONSIGNEE_FIELDS = ("name", "kind", "recommended_cargo", "location", "priority", "comment")
+
+
+def consignees(db: Session) -> List[Consignee]:
+    return list(db.execute(select(Consignee).where(Consignee.deleted_at.is_(None))
+                           .order_by(Consignee.name)).scalars())
+
+
+def get_consignee(db: Session, consignee_id: uuid.UUID) -> Consignee:
+    c = db.get(Consignee, consignee_id)
+    if c is None or c.deleted_at is not None:
+        raise NotFound("Грузополучатель не найден")
+    return c
+
+
+def serialize_consignee(db: Session, c: Consignee) -> Dict[str, Any]:
+    cargo = cargo_by_code(db, c.recommended_cargo) if c.recommended_cargo else None
+    return {"id": str(c.id), **{f: getattr(c, f) for f in CONSIGNEE_FIELDS},
+            "priority_label": PRIORITIES.get(c.priority, c.priority),
+            "recommended_cargo_name": cargo.name if cargo else None,
+            "updated_at": c.updated_at.isoformat() if c.updated_at else None}
+
+
+def snapshot(db: Session, c: Consignee) -> Dict[str, Any]:
+    """Сведения о грузополучателе, сохраняемые в заказе (справочник может измениться позже)."""
+    d = serialize_consignee(db, c)
+    d.pop("updated_at", None)
+    return d
+
+
+def _consignee_values(db: Session, data: Dict[str, Any], current: Optional[Consignee] = None) -> Dict[str, Any]:
+    vals = {f: data.get(f) for f in CONSIGNEE_FIELDS if f in data and data.get(f) is not None}
+    for f in ("name", "kind", "location", "comment"):
+        if f in vals:
+            vals[f] = vals[f].strip()
+    if "recommended_cargo" in data:
+        code = (data.get("recommended_cargo") or "").strip() or None
+        if code is not None:
+            c = cargo_by_code(db, code)
+            if c is None or c.deleted_at is not None:
+                raise ValidationFailed("Рекомендованный груз — выберите из списка «Типы грузов»")
+        vals["recommended_cargo"] = code
+    name = vals.get("name", current.name if current else "")
+    if not name:
+        raise ValidationFailed("Укажите название грузополучателя")
+    other = db.execute(select(Consignee.id).where(func.lower(Consignee.name) == name.lower(),
+                                                  Consignee.deleted_at.is_(None))).scalar_one_or_none()
+    if other is not None and (current is None or other != current.id):
+        raise Conflict(f"Грузополучатель «{name}» уже есть", code="consignee_exists")
+    return vals
+
+
+def create_consignee(db: Session, p: Principal, data: Dict[str, Any]) -> Consignee:
+    p.require("catalog.manage")
+    c = Consignee(**_consignee_values(db, data), created_by=p.user_id, created_at=clock.now(), updated_at=clock.now())
+    db.add(c)
+    db.flush()
+    audit.record(db, p.actor, "catalog.consignee_created", entity_type="consignee", entity_id=c.id,
+                 details=snapshot(db, c))
+    return c
+
+
+def update_consignee(db: Session, p: Principal, consignee_id: uuid.UUID, data: Dict[str, Any]) -> Consignee:
+    p.require("catalog.manage")
+    c = get_consignee(db, consignee_id)
+    before = snapshot(db, c)
+    for k, v in _consignee_values(db, data, c).items():
+        setattr(c, k, v)
+    c.updated_at = clock.now()
+    db.flush()
+    audit.record(db, p.actor, "catalog.consignee_updated", entity_type="consignee", entity_id=c.id,
+                 details={"before": before, "after": snapshot(db, c)})
+    return c
+
+
+def delete_consignee(db: Session, p: Principal, consignee_id: uuid.UUID) -> None:
+    p.require("catalog.manage")
+    c = get_consignee(db, consignee_id)
+    used = db.execute(select(Order.id).where(Order.consignee_id == c.id).limit(1)).first()
+    audit.record(db, p.actor, "catalog.consignee_deleted", entity_type="consignee", entity_id=c.id,
+                 details={"name": c.name, "kept_for_history": bool(used)})
+    if used:
+        c.deleted_at = clock.now()          # в заказах сведения о грузополучателе сохранены
+    else:
+        db.delete(c)
     db.flush()

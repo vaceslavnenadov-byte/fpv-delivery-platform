@@ -42,6 +42,7 @@ class Principal:
     operator_status: Optional[str] = None
     groups: List[str] = field(default_factory=list)
     account_status: str = "active"
+    profile_verified: bool = True
 
     def has(self, permission: str) -> bool:
         return permission in self.permissions
@@ -101,13 +102,18 @@ def build_principal(db: Session, user: User, session_id: Optional[uuid.UUID] = N
         # Приостановленная учётная запись: вход есть, обязанности недоступны — только профиль,
         # уведомления и обращения в техподдержку.
         perms &= SUSPENDED_ALLOWED
+    # Пользователь, добавленный администратором или рекрутером, приступает к обязанностям только
+    # после первого подтверждения профиля (раздел «Проверка профилей»).
+    verified = user.registered_by is None or user.profile_verified_at is not None
+    if not verified:
+        perms &= SUSPENDED_ALLOWED
     groups = list(db.execute(select(DomainGroup.name).join(
         UserDomainGroup, UserDomainGroup.domain_group_id == DomainGroup.id)
         .where(UserDomainGroup.user_id == user.id)).scalars())
     return Principal(user_id=user.id, username=user.domain_username, display_name=user.display_name,
                      roles=roles, permissions=perms, session_id=session_id, ip=ip,
                      profile_completed=user.profile_completed, operator_status=operator_status,
-                     groups=sorted(groups), account_status=user.status)
+                     groups=sorted(groups), account_status=user.status, profile_verified=verified)
 
 
 # ---------------------------------------------------------------------------

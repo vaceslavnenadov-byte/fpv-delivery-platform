@@ -6,6 +6,7 @@ import { LOCAL, SCHEME, fitView, loadProviders, onProvidersChanged, project, rea
 import type { MapLayer, RouteInfo, Telemetry } from "../types";
 
 const BASEMAP_PREF = "fpv.basemap";
+export const POINT_LETTERS = "БВГДЕЖЗИКЛМН";
 
 function readPref(): boolean {
   try {
@@ -87,7 +88,10 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
   // С базой парка: А — база, Б — забор груза (origin), В — получатель (destination); без базы — А→Б.
   const hasBase = !!route.base;
   const pickupLabel = hasBase ? "Б" : "А";
-  const destLabel = hasBase ? "В" : "Б";
+  // Маршрут заказчика по точкам: груз на базе (А), точки Б, В, … по порядку, последняя — получатель.
+  const byPoints = !!route.pickup_at_base;
+  const stopLabel = (i: number) => (byPoints ? POINT_LETTERS[i] ?? String(i + 1) : String(i + 1));
+  const destLabel = byPoints ? stopLabel((route.stops ?? []).length) : hasBase ? "В" : "Б";
   const cps = route.checkpoints.filter((c) => c.kind !== "pickup" && c.kind !== "stop");
   const stops = route.stops ?? [];
   // Линия маршрута: [А →] контрольные точки (в т.ч. Б) → получатель.
@@ -159,15 +163,17 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
             <text x={x(route.base.lon)} y={y(route.base.lat) + 4} className="map-pin">А</text>
           </g>
         )}
-        <g>
-          <circle cx={x(route.origin.lon)} cy={y(route.origin.lat)} r={9} className={hasBase ? "map-pickup" : "map-a"} />
-          <text x={x(route.origin.lon)} y={y(route.origin.lat) + 4} className="map-pin">{pickupLabel}</text>
-        </g>
+        {!byPoints && (
+          <g>
+            <circle cx={x(route.origin.lon)} cy={y(route.origin.lat)} r={9} className={hasBase ? "map-pickup" : "map-a"} />
+            <text x={x(route.origin.lon)} y={y(route.origin.lat) + 4} className="map-pin">{pickupLabel}</text>
+          </g>
+        )}
         {stops.map((st, i) => (
           <g key={`stop-${i}`}>
-            <title>{`${i + 1} — ${st.address}${st.note ? ` (${st.note})` : ""}`}</title>
+            <title>{`${byPoints ? `Точка ${stopLabel(i)}` : i + 1} — ${st.address}${st.note ? ` (${st.note})` : ""}`}</title>
             <circle cx={x(st.lon)} cy={y(st.lat)} r={9} className="map-stop" />
-            <text x={x(st.lon)} y={y(st.lat) + 4} className="map-pin">{i + 1}</text>
+            <text x={x(st.lon)} y={y(st.lat) + 4} className="map-pin">{stopLabel(i)}</text>
           </g>
         ))}
         <g>
@@ -187,7 +193,8 @@ export function RouteMap({ route, track = [], status, height = 280, compact = fa
         )}
       </svg>
       <figcaption>
-        {!compact && hasBase && <>А — база парка, Б — забор груза, {stops.length > 0 && <>1–{stops.length} — промежуточные точки, </>}В — получатель. </>}
+        {!compact && byPoints && <>А — база парка (груз), {stops.length > 0 && <>{stops.map((_, i) => stopLabel(i)).join(", ")} — промежуточные точки, </>}{destLabel} — грузополучатель. </>}
+        {!compact && hasBase && !byPoints && <>А — база парка, Б — забор груза, {stops.length > 0 && <>1–{stops.length} — промежуточные точки, </>}В — получатель. </>}
         {!compact && <>Маршрут {(route.distance_m / 1000).toFixed(2)} км{route.return_m != null && `, возврат на базу ${(route.return_m / 1000).toFixed(2)} км`}, высота до {route.max_altitude_m} м.
         {status && <> Статус: {status}.</>} {track.length === 0 && "Позиция дрона не отображается (нет данных или прав доступа)."}</>}
         {(basemap || providers.length > 0) && (

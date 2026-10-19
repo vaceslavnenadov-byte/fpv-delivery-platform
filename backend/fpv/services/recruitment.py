@@ -42,7 +42,9 @@ def list_users(db: Session, p: Principal, q: Optional[str] = None,
         like = f"%{q.lower()}%"
         stmt = stmt.where(or_(User.domain_username.ilike(like), User.display_name.ilike(like)))
     if profile_status:
-        stmt = stmt.where(User.profile_status == profile_status, User.profile_completed.is_(True))
+        # на проверке: заполненные профили и добавленные администратором/рекрутером учётные записи
+        stmt = stmt.where(User.profile_status == profile_status,
+                          or_(User.profile_completed.is_(True), User.registered_by.is_not(None)))
     users = list(db.execute(stmt.order_by(User.domain_username).limit(500)).scalars())
     ids = [u.id for u in users]
     roles: Dict[uuid.UUID, List[Dict[str, str]]] = {}
@@ -61,6 +63,7 @@ def list_users(db: Session, p: Principal, q: Optional[str] = None,
         "profile_review_notes": u.profile_review_notes, "profile_reviewed_at": serialize.ts(u.profile_reviewed_at),
         "profile_reviewed_by": names.get(u.profile_reviewed_by),
         "registered_by": names.get(u.registered_by),
+        "profile_verified": u.registered_by is None or u.profile_verified_at is not None,
         "operator": {"status": ops[u.id].status, "license_number": ops[u.id].license_number,
                      "notes": ops[u.id].notes} if u.id in ops else None,
         "last_login_at": serialize.ts(u.last_login_at), "created_at": serialize.ts(u.created_at),
@@ -132,7 +135,7 @@ def review_profile(db: Session, p: Principal, user_id: uuid.UUID, approve: bool,
     user = _user(db, user_id)
     if user.id == p.user_id:
         raise Forbidden("Собственный профиль подтверждает другой сотрудник")
-    if not user.profile_completed:
+    if not user.profile_completed and user.registered_by is None:
         raise Conflict("Пользователь ещё не заполнил профиль", code="profile_incomplete")
     notes = (notes or "").strip()
     if not approve and len(notes) < 5:
@@ -142,6 +145,8 @@ def review_profile(db: Session, p: Principal, user_id: uuid.UUID, approve: bool,
     user.profile_reviewed_by = p.user_id
     user.profile_reviewed_at = clock.now()
     user.profile_review_notes = notes or None
+    if approve and user.profile_verified_at is None:
+        user.profile_verified_at = clock.now()        # с этого момента доступны обязанности
     db.flush()
     audit.record(db, p.actor, "user.profile_reviewed", entity_type="user", entity_id=user.id,
                  details={"before": before, "after": user.profile_status, "notes": notes})

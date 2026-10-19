@@ -100,9 +100,11 @@ def test_telemetry_extra_limited(world, extra):
 
 
 def test_order_chat_with_customer(world, fake_clock, tmp_path):
+    draft = world.create_order()
+    assert world.customer.post(f"/api/v1/orders/{draft['id']}/chat", json={"body": "Заранее"}).status_code == 403  # до размещения
+    world.customer.post(f"/api/v1/orders/{draft['id']}/cancel", json={"reason": "тест"})
     o = world.placed_order()
     url = f"/api/v1/orders/{o['id']}/chat"
-    assert world.customer.post(url, json={"body": "Заранее"}).status_code == 403          # до принятия оператором
     world.operator.post(f"/api/v1/orders/{o['id']}/accept", json={})
     assert world.customer.post(url, json={"body": "Груз у охраны"}).status_code == 201
     assert world.operator.post(url, json={"body": "Принято"}).status_code == 201

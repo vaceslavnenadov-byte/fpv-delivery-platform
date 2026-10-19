@@ -80,4 +80,4 @@ def test_user_deletion_keeps_history(world):
     assert r.status_code == 200
     detail = world.admin.get(f"/api/v1/orders/{o['id']}").json()
     assert detail["customer"]["display_name"] == "Удалённый пользователь"
-    assert len(world.admin.get(f"/api/v1/orders/{o['id']}/history").json()["items"]) == 3
+    assert len(world.admin.get(f"/api/v1/orders/{o['id']}/history").json()["items"]) == 4

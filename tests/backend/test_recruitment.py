@@ -21,7 +21,14 @@ def test_recruiter_registers_user_and_grants_role(world, app, api):
     assert {"role": "customer", "source": "manual"} in u["roles"]
     assert u["registered_by"] == rec.user["display_name"]
     newbie = api("newbie")                                   # теперь вход разрешён
-    assert "order.read_own" in newbie.user["permissions"]
+    # но к обязанностям — только после проверки профиля
+    assert "order.read_own" not in newbie.user["permissions"]
+    me = newbie.get("/api/v1/auth/me").json()
+    assert me["profile_verified"] is False and "support.use" in me["permissions"]
+    assert u["id"] in [x["id"] for x in rec.get("/api/v1/recruitment/users?profile_status=pending").json()["items"]]
+    assert rec.post(f"/api/v1/recruitment/users/{u['id']}/profile", json={"approve": True}).status_code == 200
+    me = newbie.get("/api/v1/auth/me").json()
+    assert me["profile_verified"] is True and "order.read_own" in me["permissions"]
     # ещё одна роль и снятие
     assert rec.post(f"/api/v1/recruitment/users/{u['id']}/roles", json={"role": "technician", "grant": True}).status_code == 200
     assert rec.post(f"/api/v1/recruitment/users/{u['id']}/roles", json={"role": "technician", "grant": False}).status_code == 200

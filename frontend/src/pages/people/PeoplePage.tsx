@@ -64,7 +64,7 @@ export function PeoplePage() {
 function NewPerson({ units, roles }: { units: { id: string; parent_id: string | null; name: string; path: string; members: number }[]; roles: RoleRow[] }) {
   const navigate = useNavigate();
   const { can } = useAuth();
-  const [f, setF] = useState({ username: "", password: "", last_name: "", first_name: "", middle_name: "", position_title: "",
+  const [f, setF] = useState({ username: "", password: "", password_confirm: "", last_name: "", first_name: "", middle_name: "", position_title: "",
                                email: "", phone: "", profile_notes: "", org_unit_id: "" });
   const [picked, setPicked] = useState<string[]>(["customer"]);
   const [error, setError] = useState("");
@@ -72,6 +72,10 @@ function NewPerson({ units, roles }: { units: { id: string; parent_id: string | 
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (f.password !== f.password_confirm) {
+      setError("Пароли не совпадают");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -96,6 +100,9 @@ function NewPerson({ units, roles }: { units: { id: string; parent_id: string | 
                              pattern="[a-zA-Z0-9][a-zA-Z0-9._\-]{2,63}" title="латинские буквы, цифры, точка, дефис, подчёркивание" /></label>
           <label>Пароль<input type="password" value={f.password} onChange={set("password")} required minLength={10} autoComplete="new-password"
                               title="не короче 10 символов, буквы и цифры" /></label>
+          <label>Повторите пароль<input type="password" value={f.password_confirm} onChange={set("password_confirm")} required
+                              autoComplete="new-password" aria-invalid={!!f.password_confirm && f.password !== f.password_confirm} />
+            {f.password_confirm && f.password !== f.password_confirm && <span className="small danger-text">Пароли не совпадают</span>}</label>
           <label>Почта<input type="email" value={f.email} onChange={set("email")} maxLength={200} /></label>
           <label>Телефон<input value={f.phone} onChange={set("phone")} placeholder="+7 900 000-00-00" /></label>
           <label className="span2">Группа / подгруппа<GroupSelect units={units} value={f.org_unit_id} onChange={(v) => setF({ ...f, org_unit_id: v })} /></label>

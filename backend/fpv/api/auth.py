@@ -21,7 +21,7 @@ def principal_dict(p: Principal) -> dict:
     return {"id": str(p.user_id), "username": p.username, "display_name": p.display_name,
             "roles": sorted(p.roles), "permissions": sorted(p.permissions), "groups": p.groups,
             "profile_completed": p.profile_completed, "operator_status": p.operator_status,
-            "account_status": p.account_status}
+            "account_status": p.account_status, "profile_verified": p.profile_verified}
 
 
 @router.post("/auth/login")

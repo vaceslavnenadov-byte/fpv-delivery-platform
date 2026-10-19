@@ -77,13 +77,16 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
             "destination": {"lat": r.dest_lat, "lon": r.dest_lon, "address": r.dest_address},
             "base": {"lat": r.base_lat, "lon": r.base_lon, "address": r.base_address}
                     if r.base_lat is not None else None,
-            "return_m": r.return_m, "stops": r.stops or [],
+            "return_m": r.return_m, "stops": r.stops or [], "pickup_at_base": bool(r.pickup_at_base),
             "distance_m": r.distance_m, "max_altitude_m": r.max_altitude_m, "checkpoints": r.checkpoints,
             "approval_status": r.approval_status, "approval_notes": r.approval_notes,
         } if r else None,
         "tech_ready_at": ts(o.tech_ready_at),
         "map_provider_id": str(o.map_provider_id) if o.map_provider_id else None,
         "priority": bool(o.priority),
+        "priority_level": o.priority_level,
+        "consignee": o.consignee, "recipient_name": o.recipient_name,
+        "asap": bool(o.asap), "coordinator_approved_at": ts(o.coordinator_approved_at),
         "repeat_of": _repeat_of(db, o),
     }
     if brief:
@@ -96,7 +99,8 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
                             "weight_g": i.weight_g, "dims_mm": [i.length_mm, i.width_mm, i.height_mm]}
                            for i in items]
     data["validation_result"] = o.validation_result
-    data["recipient_name"] = o.recipient_name
+    data["customer_comment"] = o.customer_comment
+    data["has_comment_photo"] = bool(o.comment_photo_key)
     data["recipient_phone"] = o.recipient_phone
     data["customer"] = user_brief(db, o.customer_id)
     data["operator"] = user_brief(db, o.operator_id)
@@ -105,7 +109,11 @@ def order(db: Session, o: Order, p: Optional[Principal] = None, *, brief: bool =
     d = db.get(Drone, o.drone_id)
     data["drone"] = drone(d) if d else None
     ev = db.execute(select(VideoEvidence).where(VideoEvidence.order_id == o.id)).scalar_one_or_none()
-    data["video"] = video(ev, p) if ev else None
+    if ev:
+        from ..services import video as video_svc
+        data["video"] = video(ev, p, full=p is not None and video_svc.can_read(db, p, o.id))
+    else:
+        data["video"] = None
     from ..services import complaints
     c = complaints.latest_dispute(db, o.id)
     data["dispute"] = complaint(db, c) if c else None
@@ -139,14 +147,14 @@ def complaint(db: Session, c: Any) -> Dict[str, Any]:
             "coordinator": user_brief(db, c.coordinator_id), "coordinator_at": ts(c.coordinator_at)}
 
 
-def video(ev: VideoEvidence, p: Optional[Principal] = None) -> Dict[str, Any]:
+def video(ev: VideoEvidence, p: Optional[Principal] = None, *, full: Optional[bool] = None) -> Dict[str, Any]:
     data = {"id": str(ev.id), "status": ev.status, "missing_reason": ev.missing_reason,
             "completion_event_at": ts(ev.completion_event_at), "clip_start_at": ts(ev.clip_start_at),
             "clip_end_at": ts(ev.clip_end_at), "segment_count": ev.segment_count,
             "review_status": ev.review_status, "reviewed_at": ts(ev.reviewed_at),
             "review_comment": ev.review_comment, "integrity_ok": ev.integrity_ok,
             "integrity_checked_at": ts(ev.integrity_checked_at), "retention_until": ts(ev.retention_until)}
-    if p is not None and p.has("video.read"):
+    if full if full is not None else (p is not None and p.has("video.read")):
         data.update({"sha256": ev.sha256, "size_bytes": ev.size_bytes, "has_preview": bool(ev.preview_object_key),
                      "object_key": ev.object_key})
     return data

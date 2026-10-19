@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { api, errorText } from "../../api";
 import { useAuth } from "../../auth";
 import { Alert, Card, Empty, Pending, Tone } from "../../components/ui";
@@ -18,6 +19,7 @@ interface RecruitUser {
   profile_completed: boolean; profile_status: "pending" | "verified" | "rejected";
   profile_review_notes: string | null; profile_reviewed_at: string | null; profile_reviewed_by: string | null;
   registered_by: string | null;
+  profile_verified?: boolean;
   operator: { status: string; license_number: string; notes: string } | null;
   last_login_at: string | null; created_at: string;
 }
@@ -178,20 +180,32 @@ export function RecruiterProfilesPage() {
   return (
     <div className="stack">
       <h1>Проверка профилей</h1>
-      <p className="muted">Сверьте имя и контакты с документами пользователя. Изменённый профиль снова попадает сюда.</p>
+      <p className="muted">Анкеты новых пользователей (добавленных администратором или рекрутером) и изменённые профили.
+        Новый пользователь приступает к обязанностям только после подтверждения. Откройте профиль, сверьте данные с документами и
+        подтвердите или верните на доработку.</p>
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
       {!list.data ? <Pending /> : list.data.items.length === 0 ? <Card><Empty>Все профили проверены</Empty></Card> : (
-        <div className="stack">
-          {list.data.items.map((u) => (
-            <article key={u.id} className="complaint">
-              <div className="row between">
-                <strong>{u.display_name}</strong>
-                <span className="muted small">{u.username} · {u.roles.map((r) => ROLE_LABELS[r.role] ?? r.role).join(", ") || "без ролей"}</span>
-              </div>
-              <ProfileReview u={u} setMsg={setMsg} onDone={list.reload} />
-            </article>
-          ))}
-        </div>
+        <Card>
+          <div className="table-wrap">
+            <table className="table">
+              <thead><tr><th>Пользователь</th><th>Логин</th><th>Роли</th><th>Анкета</th><th>Добавил</th><th>Создан</th><th>Решение</th></tr></thead>
+              <tbody>{list.data.items.map((u) => (
+                <tr key={u.id}>
+                  <td><Link to={`/people/${u.id}`}><strong>{u.display_name}</strong></Link>
+                    <div><Link className="btn small" to={`/people/${u.id}`}>Открыть профиль</Link></div></td>
+                  <td className="small">{u.username}</td>
+                  <td className="small">{u.roles.map((r) => ROLE_LABELS[r.role] ?? r.role).join(", ") || "без ролей"}</td>
+                  <td>{u.profile_verified === false
+                    ? <span className="verify-flag bad">новая — не подтверждена</span>
+                    : <span className="badge tone-warn">изменён профиль</span>}</td>
+                  <td className="small">{u.registered_by ?? "вход из домена"}</td>
+                  <td className="small">{fmtDate(u.created_at)}</td>
+                  <td><ProfileReview u={u} setMsg={setMsg} onDone={list.reload} compact /></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   );

@@ -7,7 +7,8 @@ import { CUSTOMER_STREAM_STATUSES, CustomerCameraPublisher, CustomerCameraViewer
 import { LiveVideo } from "../components/LiveVideo";
 import { OrderCargoCards } from "../components/OrderCargo";
 import { OrderChat } from "../components/OrderChat";
-import { RepeatBadges, RepeatBanner } from "../components/RepeatBadges";
+import { RepeatBadges, RepeatBanner, priorityClass } from "../components/RepeatBadges";
+import { ConsigneeCard, CustomerComment, routeRows } from "../components/OrderCargo";
 import { RouteMap } from "../components/RouteMap";
 import { ScoreCard } from "../components/ScoreCard";
 import { Timeline } from "../components/Timeline";
@@ -33,7 +34,7 @@ export function openFlightMonitor(orderId: string) {
   w?.focus();
 }
 const CONF_KIND: Record<string, string> = {
-  operator_report: "Отчёт оператора", recipient_receipt: "Подтверждение получения", admin_review: "Решение администратора",
+  operator_report: "Отчёт оператора", recipient_receipt: "Подтверждение получения", admin_review: "Проверка выполнения (координатор)",
 };
 
 export function OrderDetailPage() {
@@ -83,7 +84,7 @@ export function OrderDetailPage() {
     setMsg(null);
     try {
       const r = await api.post<RepeatRequest>(`/api/v1/orders/repeat-requests/${id}/decision`, { approve, comment });
-      setMsg({ tone: "ok", text: approve ? `Повторный вылет согласован — создан приоритетный заказ №${r.new_order?.number}` : "Повторный вылет отклонён" });
+      setMsg({ tone: "ok", text: approve ? `Повторный вылет согласован — создан заказ с высоким приоритетом №${r.new_order?.number}` : "Повторный вылет отклонён" });
       reloadAll();
     } catch (err) {
       setMsg({ tone: "danger", text: errorText(err) });
@@ -114,7 +115,11 @@ export function OrderDetailPage() {
   return (
     <div className="stack">
       <RepeatBanner o={o} />
-      <div className="row between">
+      {o.priority_level === "highest" && !["completed", "rejected", "cancelled", "aborted_technical"].includes(o.status) && (
+        <div className="repeat-banner" role="note"><span className="flag-red">Наивысший приоритет</span>
+          <span>Грузополучатель с наивысшим приоритетом — заказ выполняется в первую очередь</span></div>
+      )}
+      <div className={`row between ${priorityClass(o) ? "order-head-highest" : ""}`}>
         <div>
           <h1>Заказ №{o.number} <Badge kind="order" value={o.status} /> <RepeatBadges o={o} /></h1>
           <div className="muted small">Создан {fmtDate(o.created_at)} · версия {o.version}{o.receipt_overdue && " · получение не подтверждено в срок"}</div>
@@ -153,7 +158,7 @@ export function OrderDetailPage() {
         </Card>
       )}
 
-      {!["draft", "pending_confirmation", "awaiting_operator"].includes(o.status) && can("order.chat") &&
+      {!["draft", "pending_confirmation"].includes(o.status) && can("order.chat") &&
         (isCustomer || o.operator_id === me?.id || o.coordinator_id === me?.id || can("order.read_all")) && (
         <OrderChat order={o} flying={o.status === "in_progress"} />
       )}
@@ -168,25 +173,18 @@ export function OrderDetailPage() {
         </Card>
         <Card title="Сведения о заказе">
           <KV items={[
+            ["Грузополучатель", o.consignee?.name ?? o.recipient_name ?? "—"],
             ["Груз", (o.cargo_items?.length ?? 1) > 1 ? `${o.cargo_items!.length} груза(ов), всего ${o.cargo_weight_g} г — см. «Грузы»`
               : `${cargoName(o)}: ${o.cargo_description}`],
             ["Масса / габариты", `${o.cargo_weight_g} г, ${o.cargo_dims_mm.join("×")} мм`],
-            ...(o.route?.base ? [
-              ["А — база парка", o.route.base.address],
-              ["Б — забор груза", o.route.origin.address],
-              ...((o.route.stops ?? []).map((x, i) => [`${i + 1} — промежуточная точка`, x.note ? `${x.address} — ${x.note}` : x.address]) as [string, string][]),
-              ["В — получатель", o.route.destination.address],
-            ] as [string, string | undefined][] : [
-              ["Точка А", o.route?.origin.address],
-              ["Точка Б", o.route?.destination.address],
-            ] as [string, string | undefined][]),
+            ...routeRows(o),
             ["Расстояние", fmtDistance(o.route?.distance_m)],
             ["Готовность дрона (техник парка)", o.tech_ready_at
               ? <Tone tone="ok">подтверждена {fmtDate(o.tech_ready_at)}</Tone>
               : ["awaiting_operator", "accepted", "awaiting_readiness", "ready"].includes(o.status)
                 ? <Tone tone="warn">ожидает подтверждения техника</Tone> : "—"],
-            ["Временное окно", `${fmtDate(o.window_start)} — ${fmtDate(o.window_end)}`],
-            ["Получатель", `${o.recipient_name ?? "—"}, ${o.recipient_phone ?? ""}`],
+            ["Время доставки", o.asap ? "как можно скорее (не задано)" : `${fmtDate(o.window_start)} — ${fmtDate(o.window_end)}`],
+            ...(o.recipient_phone ? [["Телефон получателя", o.recipient_phone] as [string, string]] : []),
             ["Стоимость", o.quote_amount ? `${o.quote_amount} ₽` : "—"],
             ["Дрон", o.drone ? <>{o.drone.registration_number} <Badge kind="health" value={o.drone.health_status} /> <Badge kind="link" value={o.drone.link_status} /></> : "—"],
             ["Заказчик", o.customer?.display_name],
@@ -198,6 +196,10 @@ export function OrderDetailPage() {
         </Card>
       </div>
 
+      <div className="grid2">
+        <ConsigneeCard o={o} />
+        <CustomerComment o={o} />
+      </div>
       <OrderCargoCards o={o} />
 
       <div className="grid2">
@@ -208,9 +210,9 @@ export function OrderDetailPage() {
               <button className="btn primary" disabled={busy} onClick={() => act("submit", v, "Заказ проверен")}>Отправить на проверку</button>
             )}
             {isCustomer && o.status === "pending_confirmation" && (
-              <button className="btn primary" disabled={busy} onClick={() => act("confirm", v, "Заказ передан операторам")}>Подтвердить условия</button>
+              <button className="btn primary" disabled={busy} onClick={() => act("confirm", v, "Заказ размещён и передан координатору на согласование")}>Разместить заказ</button>
             )}
-            {(isCustomer || can("order.review")) && ["draft", "pending_confirmation", "awaiting_operator", "accepted", "awaiting_readiness", "ready"].includes(o.status) && (
+            {(isCustomer || can("order.assign")) && ["draft", "pending_confirmation", "awaiting_coordinator", "awaiting_operator", "accepted", "awaiting_readiness", "ready"].includes(o.status) && (
               <ReasonAction label="Отменить заказ" busy={busy} onSubmit={(reason) => act("cancel", { ...v, reason }, "Заказ отменён")} />
             )}
             {isCustomer && can("order.confirm_receipt") && o.status === "awaiting_delivery_confirmation" && (
@@ -223,6 +225,20 @@ export function OrderDetailPage() {
             {isCustomer && can("complaint.create") && ["admin_review", "completed"].includes(o.status) && (
               <ReasonAction label="Открыть спор" busy={busy} required minLength={5}
                             onSubmit={(description) => act("dispute", { description }, "Спор передан на рассмотрение", false)} />
+            )}
+
+            {/* --- координатор: согласование нового заказа --- */}
+            {can("order.approve") && o.status === "awaiting_coordinator" && (!o.coordinator_id || o.coordinator_id === me?.id) && (
+              <>
+                <button className="btn ok-fill" disabled={busy}
+                        onClick={() => act("coordinator-decision", { approve: true }, "Заказ согласован и передан операторам; вы закреплены за заказом", false)}>
+                  ✓ Согласовать и принять в работу</button>
+                <ReasonAction label="Отклонить заказ" busy={busy} required danger
+                              onSubmit={(comment) => act("coordinator-decision", { approve: false, comment }, "Заказ отклонён", false)} />
+              </>
+            )}
+            {o.status === "awaiting_operator" && o.drone_waits_for && (
+              <Alert tone="info">На этом дроне раньше вылетает заказ №{o.drone_waits_for}.</Alert>
             )}
 
             {/* --- оператор --- */}
@@ -260,11 +276,11 @@ export function OrderDetailPage() {
                             onSubmit={(description) => act("appeal", { description }, "Апелляция отправлена", false)} />
             )}
 
-            {/* --- администратор --- */}
+            {/* --- администратор и координатор --- */}
             {can("order.assign") && !["completed", "rejected", "cancelled", "aborted_technical"].includes(o.status) && (
               <AssignCoordinator current={o.coordinator_id} onAssign={(cid) => act("coordinator", { coordinator_id: cid }, "Координатор назначен", false)} />
             )}
-            {can("order.review") && o.status === "admin_review" && <ReviewPanel order={o} busy={busy} onDone={reloadAll} setMsg={setMsg} />}
+            {can("order.review") && o.status === "admin_review" && (!o.coordinator_id || o.coordinator_id === me?.id) && <ReviewPanel order={o} busy={busy} onDone={reloadAll} setMsg={setMsg} />}
           </div>
           {!busy && (
             <p className="muted small">Доступные действия определяются вашей ролью и статусом заказа; сервер повторно проверяет права и допустимость каждого перехода.</p>
@@ -326,7 +342,7 @@ export function OrderDetailPage() {
                 ["Проверка", o.video.review_status],
                 ["Хранить до", fmtDate(o.video.retention_until)],
               ]} />
-              {can("video.read") && o.video.status === "stored" && <VideoPlayer id={o.video.id} hasPreview={!!o.video.has_preview} />}
+              {o.video.has_preview !== undefined && o.video.status === "stored" && <VideoPlayer id={o.video.id} hasPreview={!!o.video.has_preview} />}
             </>
           )}
         </Card>
@@ -395,7 +411,7 @@ function RepeatCard({ o, busy, canRequest, canDecide, onRequest, onDecide }: {
       ) : (
         <div className="row wrap">
           <button className="btn primary" disabled={busy} onClick={() => setOpen(true)}>Повторный вылет</button>
-          <span className="muted small">Запрос уйдёт координатору заказа; после согласования будет создан новый приоритетный заказ
+          <span className="muted small">Запрос уйдёт координатору заказа; после согласования будет создан новый заказ с высоким приоритетом
             с тем же маршрутом и грузом. Число запросов не ограничено.</span>
         </div>
       ))}

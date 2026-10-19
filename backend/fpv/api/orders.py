@@ -4,13 +4,13 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import runtime
-from ..errors import NotFound
+from ..errors import NotFound, ValidationFailed
 from ..models import DeliveryConfirmation, Order, OrderNote, Route, TelemetryRecord, User
 from ..services import complaints as complaint_svc
 from ..services import repeats as repeat_svc
@@ -65,12 +65,73 @@ def repeat_pending(p: Principal = Depends(current_principal), db: Session = Depe
 def order_queue(max_distance_m: Optional[int] = Query(None, ge=1), cargo_type: Optional[str] = None,
                 p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     rows = svc.queue(db, p, max_distance_m=max_distance_m, cargo_type=cargo_type)
-    return {"items": [serialize.order(db, o, p, brief=True) for o in rows]}
+    chain = svc.drone_chain(db, rows)
+    return {"items": [dict(serialize.order(db, o, p, brief=True), drone_waits_for=chain.get(o.id)) for o in rows]}
+
+
+@router.get("/approvals")
+def approvals(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    """Новые заказы, ждущие согласования координатором."""
+    return {"items": [serialize.order(db, o, p, brief=True) for o in svc.pending_approval(db, p)]}
+
+
+@router.get("/reviews")
+def reviews(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    """Заказы на проверке выполнения у этого координатора."""
+    return {"items": [serialize.order(db, o, p, brief=True) for o in svc.reviews_for(db, p)]}
+
+
+@router.get("/map")
+def orders_map(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    """Карта заказов: заказы в работе, их маршруты и последние координаты дронов."""
+    from ..services import order_map
+    return order_map.snapshot(db, p)
 
 
 @router.get("/{order_id}")
 def get_order(order_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     return serialize.order(db, svc.visible_order(db, p, order_id), p)
+
+
+@router.post("/{order_id}/coordinator-decision")
+def coordinator_decision(order_id: uuid.UUID, body: schemas.CoordinatorDecisionIn,
+                         p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    order = svc.coordinator_decide(db, p, order_id, body.approve, body.comment)
+    data = serialize.order(db, order, p)
+    db.commit()
+    return data
+
+
+@router.post("/{order_id}/comment-photo")
+async def comment_photo(order_id: uuid.UUID, request: Request, p: Principal = Depends(current_principal),
+                        db: Session = Depends(get_db)):
+    """Фото к комментарию заказчика (тело запроса — файл); при размещении попадёт в переписку."""
+    limit = svc.COMMENT_PHOTO_MAX
+    if int(request.headers.get("content-length") or 0) > limit:
+        raise ValidationFailed("Фото больше 15 МБ", code="attachment_too_large")
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > limit:
+            raise ValidationFailed("Фото больше 15 МБ", code="attachment_too_large")
+    if not data:
+        raise ValidationFailed("Пустой файл")
+    from fastapi.concurrency import run_in_threadpool
+
+    def store():
+        order = svc.set_comment_photo(db, p, order_id, bytes(data))
+        db.commit()
+        return {"ok": True, "type": order.comment_photo_type}
+    return await run_in_threadpool(store)
+
+
+@router.get("/{order_id}/comment-photo")
+def comment_photo_get(order_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    order = svc.visible_order(db, p, order_id)
+    if not order.comment_photo_key:
+        raise NotFound("Фото нет")
+    return StreamingResponse(runtime.store().open(order.comment_photo_key), media_type=order.comment_photo_type,
+                             headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"})
 
 
 @router.get("/{order_id}/history")

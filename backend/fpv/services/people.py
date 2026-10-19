@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from .. import clock
 from ..errors import Conflict, Forbidden, NotFound, ValidationFailed
-from ..models import Operator, OrgUnit, Role, User, UserRole
+from ..models import AuditLog, Operator, OrgUnit, Role, User, UserRole
 from . import audit, notifications, org_units, recruitment
 from .directory import pbkdf2_hash
 from .identity import Principal, revoke_user_sessions
@@ -122,8 +122,50 @@ def card(db: Session, p: Principal, user_id: uuid.UUID) -> Dict[str, Any]:
         "created_at": u.created_at.isoformat() if u.created_at else None,
         "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
         "profile_status": u.profile_status, "profile_completed": u.profile_completed,
+        "profile_verified": u.registered_by is None or u.profile_verified_at is not None,
+        "profile_verified_at": u.profile_verified_at.isoformat() if u.profile_verified_at else None,
+        "profile_review_notes": u.profile_review_notes,
         "operator": {"status": op.status, "license_number": op.license_number} if op else None,
     }
+
+
+HISTORY_LABELS = {
+    "user.provisioned": "Учётная запись создана при первом входе (домен)",
+    "user.created_local": "Создана учётная запись приложения",
+    "user.registered": "Добавлен из домена",
+    "user.profile_updated": "Пользователь изменил свой профиль",
+    "user.profile_edited": "Анкета изменена",
+    "user.profile_reviewed": "Проверка профиля",
+    "user.credentials_changed": "Изменены логин или пароль",
+    "user.role_granted": "Выдана роль",
+    "user.role_revoked": "Снята роль",
+    "user.roles_synced": "Роли обновлены по группам домена",
+    "user.suspended": "Учётная запись приостановлена",
+    "user.banned": "Учётная запись забанена",
+    "user.unbanned": "Учётная запись возобновлена",
+    "operator.applied": "Заявка на допуск оператора",
+    "operator.decision": "Решение по допуску оператора",
+    "operator.suspended": "Допуск оператора приостановлен",
+}
+
+
+def history(db: Session, p: Principal, user_id: uuid.UUID) -> List[Dict[str, Any]]:
+    """История изменения профиля: все действия с учётной записью от момента создания (из журнала аудита)."""
+    if not (p.has("user.recruit") or p.has("user.profile.edit")):
+        p.require("user.recruit")
+    u = _user(db, user_id)
+    rows = db.execute(select(AuditLog).where(AuditLog.entity_type == "user", AuditLog.entity_id == str(u.id),
+                                             or_(AuditLog.action.like("user.%"), AuditLog.action.like("operator.%")))
+                      .order_by(AuditLog.id)).scalars()
+    out = []
+    for r in rows:
+        details = dict(r.details or {})
+        for secret in ("password", "password_hash"):
+            details.pop(secret, None)
+        out.append({"id": r.id, "at": r.occurred_at.isoformat(), "action": r.action,
+                    "label": HISTORY_LABELS.get(r.action, r.action), "actor": r.actor_label,
+                    "outcome": r.outcome, "details": details})
+    return out
 
 
 def report_identity(db: Session, user_id: uuid.UUID) -> Dict[str, Any]:
@@ -159,7 +201,8 @@ def create_local(db: Session, p: Principal, data: Dict[str, Any]) -> User:
              email=(data.get("email") or None), phone=(data.get("phone") or None), status="active",
              directory_enabled=True, auth_source="local", password_hash=hash_password(data["password"]),
              password_changed_at=now, password_changed_by=p.user_id, registered_by=p.user_id,
-             profile_completed=True, profile_status="verified", profile_reviewed_by=p.user_id, profile_reviewed_at=now,
+             # анкету заполнил добавивший; к обязанностям — после проверки профиля
+             profile_completed=True, profile_status="pending",
              org_unit_id=_check_org_unit(db, data.get("org_unit_id")),
              created_at=now, updated_at=now,
              **{f: (data.get(f) or None) for f in ("last_name", "first_name", "middle_name", "position_title", "profile_notes")})

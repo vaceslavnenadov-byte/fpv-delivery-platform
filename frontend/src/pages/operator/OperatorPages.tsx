@@ -1,4 +1,4 @@
-import { RepeatBadges } from "../../components/RepeatBadges";
+import { RepeatBadges, priorityClass } from "../../components/RepeatBadges";
 import { useState } from "react";
 import { Link } from "react-router";
 import { openFlightMonitor } from "../OrderDetail";
@@ -9,6 +9,7 @@ import { loadCargoTypes } from "../../catalogs";
 import { useLive } from "../../realtime";
 import type { Order } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
+import { routeRows } from "../../components/OrderCargo";
 
 export function OperatorQueuePage() {
   const [maxDist, setMaxDist] = useState("");
@@ -60,13 +61,13 @@ export function OperatorQueuePage() {
         {!q.data ? <Pending /> : q.data.items.length === 0 ? <Empty>Нет доступных заказов</Empty> : (
           <div className="cards">
             {q.data.items.map((o) => (
-              <article key={o.id} className="order-card">
+              <article key={o.id} className={`order-card ${priorityClass(o)}`}>
                 <div className="row between"><Link to={`/orders/${o.id}`}><strong>№{o.number}</strong></Link> <RepeatBadges o={o} /><Badge kind="order" value={o.status} /></div>
                 <div>{cargoName(o)}, {o.cargo_weight_g} г — {o.cargo_description}</div>
-                <div className="small">{o.route?.base
-                  ? <>А (база): {o.route.base.address}<br />Б (забор): {o.route.origin.address}<br />В: {o.route.destination.address}</>
-                  : <>А: {o.route?.origin.address}<br />Б: {o.route?.destination.address}</>}</div>
-                <div className="small muted">{fmtDistance(o.route?.distance_m)} · окно {fmtDate(o.window_start)} — {fmtDate(o.window_end)}</div>
+                <div className="small">Грузополучатель: <strong>{o.consignee?.name ?? o.recipient_name ?? "—"}</strong></div>
+                {o.drone_waits_for && <div className="small warn-text">На этом дроне раньше вылетает заказ №{o.drone_waits_for} — принять можно после него</div>}
+                <div className="small">{routeRows(o).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</div>
+                <div className="small muted">{fmtDistance(o.route?.distance_m)} · {o.asap ? "как можно скорее" : `окно ${fmtDate(o.window_start)} — ${fmtDate(o.window_end)}`}</div>
                 <div className="row">
                   <button className="btn primary small" onClick={() => accept(o)}>Принять</button>
                   <button className="btn small" onClick={() => decline(o)}>Отклонить</button>

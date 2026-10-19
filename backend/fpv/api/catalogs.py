@@ -66,3 +66,32 @@ def update_model(model_id: uuid.UUID, body: schemas.DroneModelPatch, p: Principa
 def delete_model(model_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
     catalogs.delete_model(db, p, model_id)
     db.commit()
+
+
+@router.get("/consignees")
+def consignees(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    return {"items": [catalogs.serialize_consignee(db, c) for c in catalogs.consignees(db)],
+            "priorities": catalogs.PRIORITIES}
+
+
+@router.post("/consignees", status_code=201)
+def create_consignee(body: schemas.ConsigneeIn, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    c = catalogs.create_consignee(db, p, body.model_dump())
+    data = catalogs.serialize_consignee(db, c)
+    db.commit()
+    return data
+
+
+@router.patch("/consignees/{consignee_id}")
+def update_consignee(consignee_id: uuid.UUID, body: schemas.ConsigneePatch, p: Principal = Depends(current_principal),
+                     db: Session = Depends(get_db)):
+    c = catalogs.update_consignee(db, p, consignee_id, body.model_dump(exclude_unset=True))
+    data = catalogs.serialize_consignee(db, c)
+    db.commit()
+    return data
+
+
+@router.delete("/consignees/{consignee_id}", status_code=204)
+def delete_consignee(consignee_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    catalogs.delete_consignee(db, p, consignee_id)
+    db.commit()

@@ -8,12 +8,28 @@ import { realtime, useLive, useRealtimeStatus } from "../realtime";
 import { ThemeSwitch } from "../theme";
 import type { Notification } from "../types";
 
+const MENU_PREF = "fpv.menuCollapsed";
+function readCollapsed(): boolean {
+  try {
+    const v = localStorage.getItem(MENU_PREF);
+    return v === null ? window.innerWidth < 720 : v === "1";
+  } catch {
+    return false;
+  }
+}
+function saveCollapsed(v: boolean): void {
+  try { localStorage.setItem(MENU_PREF, v ? "1" : "0"); } catch { /* до перезагрузки */ }
+}
+
 // Каркас клиента: боковое меню только своей роли, шапка, уведомления.
 // Навигация приходит из конфигурации клиента (src/apps/config.ts).
 export function Layout({ app, children }: { app: AppConfig; children: ReactNode }) {
   const { me, logout, can } = useAuth();
   const online = useRealtimeStatus();
   const [panel, setPanel] = useState(false);
+  // Левое меню скрывается кнопкой в левом верхнем углу (выбор запоминается в этом браузере).
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const toggleMenu = () => setCollapsed((c) => { saveCollapsed(!c); return !c; });
   const notes = useLive(() => api.get<{ unread: number; items: Notification[] }>("/api/v1/me/notifications"), [],
     (m) => m.kind === "notification.created");
 
@@ -23,13 +39,17 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
   }, []);
 
   if (!me) return null;
-  const suspended = me.account_status === "suspended";
+  const suspended = me.account_status === "suspended" || me.profile_verified === false;
   // Рекрутёрский раздел администратору не нужен: его страницы — в меню администратора.
   const others = suspended ? [] : accessibleApps(can).filter((a) => a.key !== app.key && !(app.key === "admin" && a.key === "recruiter"));
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
+    <div className={`shell ${collapsed ? "menu-collapsed" : ""}`}>
+      <button type="button" className="menu-toggle" onClick={toggleMenu} aria-expanded={!collapsed} aria-controls="side-menu"
+              title={collapsed ? "Показать меню" : "Скрыть меню"} aria-label={collapsed ? "Показать меню" : "Скрыть меню"}>
+        {collapsed ? "☰" : "⟨"}
+      </button>
+      <aside className="sidebar" id="side-menu" hidden={collapsed}>
         <Link to="/" className="brand"><span className="brand-mark">◆</span> FPV Доставка</Link>
         <nav>
           <div className="nav-section">
@@ -78,6 +98,12 @@ export function Layout({ app, children }: { app: AppConfig; children: ReactNode 
             <button className="btn ghost" onClick={async () => { await logout(); window.location.href = "/"; }}>Выйти</button>
           </div>
         </header>
+        {me.account_status !== "suspended" && me.profile_verified === false && (
+          <div className="alert tone-warn suspended-banner" role="alert">
+            Учётная запись не подтверждена: профиль на проверке у администратора или рекрутера. До подтверждения рабочие
+            разделы недоступны; доступны профиль, уведомления и техподдержка.
+          </div>
+        )}
         {me.account_status === "suspended" && (
           <div className="alert tone-warn suspended-banner" role="alert">
             Учётная запись приостановлена администратором: должностные обязанности временно недоступны. Доступны профиль,

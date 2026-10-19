@@ -52,7 +52,9 @@ export function ProfilePage() {
       )}
       {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
       <div className="grid2">
-        <Card title="Учётная запись">
+        <Card title={<>Учётная запись{" "}{me.profile_verified === false
+          ? <span className="verify-flag bad">Учётная запись не подтверждена</span>
+          : <span className="verify-flag good">Учётная запись подтверждена</span>}</>}>
           <KV items={[
             ["Никнейм", me.profile?.nickname || "—"],
             ["Должность", me.profile?.position_title || "—"],

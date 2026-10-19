@@ -17,6 +17,7 @@ export interface PersonCard {
   roles: { role: string; source: string; granted_by: Brief | null; granted_at: string | null }[];
   password_changed_at: string | null; password_changed_by: Brief | null; registered_by: Brief | null;
   created_at: string | null; last_login_at: string | null; profile_status: string; profile_completed: boolean;
+  profile_verified?: boolean; profile_verified_at?: string | null; profile_review_notes?: string | null;
   operator: { status: string; license_number: string } | null;
 }
 export interface RoleRow { code: string; name: string; description: string }

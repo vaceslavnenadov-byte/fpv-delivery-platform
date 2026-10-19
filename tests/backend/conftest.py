@@ -290,6 +290,7 @@ def world(app, api, directory):
 class World:
     def __init__(self, app, api) -> None:
         self.app = app
+        self._api = api
         self.customer = api("customer")
         self.admin = api("admin")
         self.operator = api("operator")
@@ -365,6 +366,14 @@ class World:
         r = self.customer.post(f"/api/v1/orders/{o['id']}/submit", json={})
         assert r.status_code == 200 and r.json()["status"] == "pending_confirmation", r.text
         r = self.customer.post(f"/api/v1/orders/{o['id']}/confirm", json={})
+        assert r.status_code == 200 and r.json()["status"] == "awaiting_coordinator", r.text
+        return self.coordinator_approve(o["id"])
+
+    def coordinator_approve(self, order_id: str) -> Dict:
+        """Назначенный координатор согласует размещённый заказ — он уходит в очередь операторов."""
+        assigned = self.admin.get(f"/api/v1/orders/{order_id}").json()["coordinator"]
+        who = self.coordinator if not assigned or assigned["username"] == "coordinator" else self._api(assigned["username"])
+        r = who.post(f"/api/v1/orders/{order_id}/coordinator-decision", json={"approve": True})
         assert r.status_code == 200 and r.json()["status"] == "awaiting_operator", r.text
         return r.json()
 

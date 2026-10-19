@@ -1,24 +1,24 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { api, errorText, newIdempotencyKey } from "../../api";
 import { MapPointsEditor } from "../../components/MapPointsEditor";
 import { MapSourcePicker, preferredMapSource } from "../../components/MapSourcePicker";
-import { LOCAL } from "../../tiles";
-import { RouteMap } from "../../components/RouteMap";
-import { Alert, Card, Pending } from "../../components/ui";
-import { loadCargoTypes } from "../../catalogs";
+import { PRIORITY_LABELS } from "../../components/RepeatBadges";
+import { POINT_LETTERS, RouteMap } from "../../components/RouteMap";
+import { Alert, Card, KV, Pending } from "../../components/ui";
+import { loadCargoTypes, loadConsignees, type CargoType, type Consignee } from "../../catalogs";
 import { useLive } from "../../realtime";
-import type { AvailableDrone, Order, Stop } from "../../types";
+import { LOCAL } from "../../tiles";
+import type { AvailableDrone, Order, RouteInfo, Stop } from "../../types";
 
-const PRESETS = [
-  { name: "Склад (ул. Примерная, 1)", lat: 55.75, lon: 37.6 },
-  { name: "Офис (пр. Тестовый, 10)", lat: 55.76, lon: 37.63 },
-  { name: "Поликлиника (ул. Лесная, 5)", lat: 55.78, lon: 37.58 },
-  { name: "Пункт выдачи (ул. Речная, 12)", lat: 55.73, lon: 37.66 },
-];
+// Оформление заказа по шагам: грузополучатель → груз → БПЛА → маршрут → подтверждение.
+// Груз забирается на базе парка дрона (точка А); точки маршрута — «Точка Б», «Точка В», …,
+// последняя — грузополучатель, остальные промежуточные. Время доставки и телефон не нужны.
 
-const MAX_STOPS = 5;
+const STEPS = ["Выбор грузополучателя", "Выбор груза", "Выбор БПЛА", "Выбор маршрута", "Подтверждение заказа"];
+const MAX_POINTS = 6;
 const MAX_CARGO = 10;
+const PHOTO_MAX = 15 * 1024 * 1024;
 
 interface CargoDraft {
   cargo_type: string;
@@ -29,320 +29,356 @@ interface CargoDraft {
   height_mm: number;
 }
 const newCargo = (type = ""): CargoDraft => ({ cargo_type: type, description: "", weight_g: 300, length_mm: 300, width_mm: 220, height_mm: 30 });
-const mapAddress = (lat: number, lon: number) => `Точка на карте (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
-const isAutoAddress = (a: string) => !a.trim() || PRESETS.some((x) => x.name === a) || a.startsWith("Точка на карте");
 
-function localInput(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+export const pointName = (i: number) => `Точка ${POINT_LETTERS[i] ?? i + 1}`;
+const mapAddress = (lat: number, lon: number) => `Точка на карте (${lat.toFixed(5)}, ${lon.toFixed(5)})`;
+const isAutoAddress = (a: string) => !a.trim() || a.startsWith("Точка на карте");
+
+function haversine(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
+  const r = (d: number) => (d * Math.PI) / 180;
+  const h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lon - a.lon) / 2) ** 2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
 }
 
 export function NewOrderPage() {
   const navigate = useNavigate();
-  // Дроны, которые техники открыли для заказов (по паркам); база парка — точка А маршрута.
+  const consignees = useLive(loadConsignees, []);
+  const cargoTypes = useLive(loadCargoTypes, []);
   const drones = useLive(() => api.get<{ items: AvailableDrone[] }>("/api/v1/available-drones"), [],
     (m) => m.kind === "drone.updated");
-  const now = new Date();
-  const [f, setF] = useState({
-    drone_id: "",
-    origin_address: PRESETS[0].name, origin_lat: PRESETS[0].lat, origin_lon: PRESETS[0].lon,
-    dest_address: PRESETS[1].name, dest_lat: PRESETS[1].lat, dest_lon: PRESETS[1].lon,
-    recipient_name: "", recipient_phone: "",
-    window_start: localInput(new Date(now.getTime() + 60 * 60000)),
-    window_end: localInput(new Date(now.getTime() + 120 * 60000)),
-  });
-  const [order, setOrder] = useState<Order | null>(null);
-  // Грузы заказа — один дрон везёт все; тип груза — из справочника администратора.
-  const cargoTypes = useLive(loadCargoTypes, []);
+  const [step, setStep] = useState(0);
+  const [consigneeId, setConsigneeId] = useState("");
   const [cargo, setCargo] = useState<CargoDraft[]>([newCargo()]);
+  const [cargoTouched, setCargoTouched] = useState(false);
+  const [droneId, setDroneId] = useState("");
+  const [points, setPoints] = useState<Stop[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [mapSource, setMapSource] = useState(preferredMapSource);
+  const [comment, setComment] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [error, setError] = useState("");
+  const [checks, setChecks] = useState<{ code: string; ok: boolean; message: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const idemKey = useRef(newIdempotencyKey());
+  useEffect(() => { idemKey.current = newIdempotencyKey(); setChecks(null); },
+    [consigneeId, cargo, droneId, points, mapSource, comment, photo]);
+  useEffect(() => { window.scrollTo?.({ top: 0 }); }, [step]);
+
   const types = cargoTypes.data ?? [];
-  const typeOf = (code: string) => types.find((c) => c.code === code) ?? types[0];
+  const consignee = (consignees.data ?? []).find((c) => c.id === consigneeId);
+  const typeOf = (code: string) => types.find((c) => c.code === code);
+  const drone = (drones.data?.items ?? []).find((d) => d.id === droneId);
+  const base = drone?.fleet.base;
+
+  // Рекомендованный груз грузополучателя подставляется, пока заказчик не менял груз сам.
+  function chooseConsignee(id: string) {
+    setConsigneeId(id);
+    const c = (consignees.data ?? []).find((x) => x.id === id);
+    if (c?.recommended_cargo && !cargoTouched) setCargo((list) => list.map((x, i) => (i === 0 ? { ...x, cargo_type: c.recommended_cargo! } : x)));
+  }
   const editCargo = (i: number, patch: Partial<CargoDraft>) => {
-    idemKey.current = newIdempotencyKey();
+    setCargoTouched(true);
     setCargo((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   };
-  const addCargo = () => { idemKey.current = newIdempotencyKey(); setCargo((list) => [...list, newCargo()]); };
-  const removeCargo = (i: number) => { idemKey.current = newIdempotencyKey(); setCargo((list) => list.filter((_, j) => j !== i)); };
-  const totalWeight = cargo.reduce((n, c) => n + (Number(c.weight_g) || 0), 0);
-  const [activePin, setActivePin] = useState("origin");
-  // Карта, на которой заказчик прокладывает маршрут; онлайн-карта сохраняется в заказе и по
-  // умолчанию показывается оператору и координатору.
-  const [mapSource, setMapSource] = useState(preferredMapSource);
-  // Промежуточные точки между Б и В — по порядку прохождения.
-  const [stops, setStops] = useState<Stop[]>([]);
-  const changeStops = (fn: (s: Stop[]) => Stop[]) => {
-    idemKey.current = newIdempotencyKey();
-    setStops(fn);
+  const effectiveType = (c: CargoDraft) => c.cargo_type || consignee?.recommended_cargo || types[0]?.code || "";
+
+  const addPoint = (p: { lat: number; lon: number }) => {
+    if (points.length >= MAX_POINTS) return;
+    setPoints((list) => [...list, { lat: p.lat, lon: p.lon, address: mapAddress(p.lat, p.lon), note: "" }]);
+    setAdding(false);
   };
-  const addStop = () => changeStops((list) => {
-    // новая точка — посередине последнего участка до В, чтобы сразу была видна на карте
-    const prev = list.length ? list[list.length - 1] : { lat: f.origin_lat, lon: f.origin_lon };
-    const lat = Math.round(((prev.lat + f.dest_lat) / 2) * 1e6) / 1e6;
-    const lon = Math.round(((prev.lon + f.dest_lon) / 2) * 1e6) / 1e6;
-    setActivePin(`stop-${list.length}`);
-    return [...list, { lat, lon, address: mapAddress(lat, lon), note: "" }];
-  });
-  const editStop = (i: number, patch: Partial<Stop>) => changeStops((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-  const moveStop = (i: number, d: number) => changeStops((list) => {
+  const movePoint = (key: string, p: { lat: number; lon: number }) => {
+    const i = Number(key.slice(2));
+    setPoints((list) => list.map((x, j) => (j === i
+      ? { ...x, lat: p.lat, lon: p.lon, address: isAutoAddress(x.address) ? mapAddress(p.lat, p.lon) : x.address } : x)));
+  };
+  const editPoint = (i: number, patch: Partial<Stop>) => setPoints((list) => list.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const swap = (i: number, d: number) => setPoints((list) => {
     const next = [...list];
     [next[i], next[i + d]] = [next[i + d], next[i]];
     return next;
   });
-  const removeStop = (i: number) => {
-    setActivePin("dest");
-    changeStops((list) => list.filter((_, j) => j !== i));
-  };
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  // Ключ идемпотентности живёт, пока форма не изменена: повторная отправка не создаёт дубликат.
-  const idemKey = useRef(newIdempotencyKey());
 
-  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => {
-    idemKey.current = newIdempotencyKey();
-    const numeric = typeof f[k] === "number";
-    setF((s) => ({ ...s, [k]: numeric ? Number(e.target.value) : e.target.value }));
-  };
+  const cargoValid = cargo.length > 0 && cargo.every((c) => {
+    const t = typeOf(effectiveType(c));
+    return t && c.description.trim().length >= 3 && c.weight_g > 0 && c.weight_g <= t.max_weight_g
+      && c.length_mm > 0 && c.width_mm > 0 && c.height_mm > 0;
+  });
+  const valid = [!!consignee, cargoValid, !!drone, points.length >= 1 && points.every((p) => p.address.trim().length >= 3), true];
 
-  // Перетаскивание метки Б/В: координаты берутся с карты; название из списка больше не подходит —
-  // адрес заменяется на «Точка на карте», заказчик может уточнить его в поле «Адрес».
-  const movePin = (key: string, p: { lat: number; lon: number }) => {
-    idemKey.current = newIdempotencyKey();
-    if (key.startsWith("stop-")) {
-      const i = Number(key.slice(5));
-      changeStops((list) => list.map((x, j) => (j === i
-        ? { ...x, lat: p.lat, lon: p.lon, address: isAutoAddress(x.address) ? mapAddress(p.lat, p.lon) : x.address } : x)));
-      return;
-    }
-    const pre = key === "origin" ? "origin" : "dest";
-    setF((s) => {
-      const addr = s[`${pre}_address`];
-      return { ...s, [`${pre}_lat`]: p.lat, [`${pre}_lon`]: p.lon,
-               [`${pre}_address`]: isAutoAddress(addr) ? mapAddress(p.lat, p.lon) : addr };
-    });
-  };
+  function cancelAll() {
+    if (confirm("Отменить оформление заказа? Введённые данные не сохранятся.")) navigate("/");
+  }
 
-  const usable = (drones.data?.items ?? []).filter((d) => !d.busy);
-  const chosen = usable.find((d) => d.id === f.drone_id) ?? usable[0];
-  const base = chosen?.fleet.base;
-  const fleets = Array.from(new Map(usable.map((d) => [d.fleet.id, d.fleet.name])).entries());
-
-  async function create(e: FormEvent) {
-    e.preventDefault();
+  async function place() {
+    if (!drone || !consignee) return;
     setBusy(true);
     setError("");
+    setChecks(null);
+    let draft: Order | null = null;
     try {
-      const body = {
-        drone_id: chosen?.id,
-        cargo_items: cargo.map((c) => ({ ...c, cargo_type: c.cargo_type || typeOf("")?.code })),
-        origin: { lat: f.origin_lat, lon: f.origin_lon, address: f.origin_address },
-        destination: { lat: f.dest_lat, lon: f.dest_lon, address: f.dest_address },
+      if (photo && photo.size > PHOTO_MAX) throw new Error("Фото больше 15 МБ");
+      draft = await api.post<Order>("/api/v1/orders", {
+        drone_id: drone.id, consignee_id: consignee.id,
+        cargo_items: cargo.map((c) => ({ ...c, cargo_type: effectiveType(c), description: c.description.trim() })),
+        points: points.map((p) => ({ lat: p.lat, lon: p.lon, address: p.address.trim(), note: p.note ?? "" })),
         map_provider_id: mapSource && mapSource !== LOCAL ? mapSource : null,
-        stops: stops.map((x) => ({ lat: x.lat, lon: x.lon, address: x.address, note: x.note ?? "" })),
-        recipient_name: f.recipient_name, recipient_phone: f.recipient_phone,
-        window_start: new Date(f.window_start).toISOString(), window_end: new Date(f.window_end).toISOString(),
-      };
-      const draft = await api.post<Order>("/api/v1/orders", body, { idempotencyKey: idemKey.current });
+        customer_comment: comment.trim(),
+      }, { idempotencyKey: idemKey.current });
+      if (photo) await api.upload(`/api/v1/orders/${draft.id}/comment-photo`, photo);
       const checked = await api.post<Order>(`/api/v1/orders/${draft.id}/submit`, { expected_version: draft.version },
         { idempotencyKey: `${idemKey.current}-submit` });
-      setOrder(checked);
-    } catch (err) {
-      setError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmOrder() {
-    if (!order) return;
-    setBusy(true);
-    try {
-      const o = await api.post<Order>(`/api/v1/orders/${order.id}/confirm`, { expected_version: order.version },
+      if (checked.status !== "pending_confirmation") {
+        setChecks(checked.validation_result?.checks ?? []);
+        await api.post(`/api/v1/orders/${draft.id}/cancel`, { reason: "Проверки не пройдены при оформлении" }).catch(() => {});
+        return;
+      }
+      const placed = await api.post<Order>(`/api/v1/orders/${draft.id}/confirm`, { expected_version: checked.version },
         { idempotencyKey: `${idemKey.current}-confirm` });
-      navigate(`/orders/${o.id}`);
+      navigate(`/orders/${placed.id}`);
     } catch (err) {
       setError(errorText(err));
+      if (draft) await api.post(`/api/v1/orders/${draft.id}/cancel`, { reason: "Ошибка при оформлении" }).catch(() => {});
     } finally {
       setBusy(false);
     }
   }
 
-  if (!drones.data) return <Pending />;
+  if (!consignees.data || !cargoTypes.data || !drones.data) return <Pending />;
+  const available = drones.data.items;
+  const fleets = Array.from(new Map(available.map((d) => [d.fleet.id, d.fleet.name])).entries());
+  const preview: RouteInfo | null = base && points.length ? previewRoute(base, points) : null;
 
-  if (order) {
-    const checks = order.validation_result?.checks ?? [];
-    const ok = order.status === "pending_confirmation";
-    return (
-      <div className="stack">
-        <h1>Заказ №{order.number}: проверка условий</h1>
-        <Alert tone={ok ? "ok" : "danger"}>
-          {ok ? "Все проверки пройдены. Подтвердите условия, чтобы передать заказ операторам."
-              : "Заказ не может быть подтверждён: исправьте условия и создайте заказ заново."}
-        </Alert>
-        <div className="grid2">
-          <Card title="Результаты проверки">
-            <ul className="checks">
-              {checks.map((c) => <li key={c.code} className={c.ok ? "ok" : "fail"}>{c.ok ? "✓" : "✕"} {c.message}</li>)}
-            </ul>
-          </Card>
-          <Card title="Условия выполнения">
-            {order.route && <RouteMap route={order.route} height={220} providerId={order.map_provider_id} orderId={order.id} />}
-            <p className="price">{order.quote_amount ? `${order.quote_amount} ₽` : "—"}</p>
-            <p className="muted small">Предварительная стоимость: базовый тариф + расстояние полёта (А→Б→В) + масса груза.</p>
-          </Card>
-        </div>
-        <Alert>{error}</Alert>
-        <div className="row">
-          {ok && <button className="btn primary" disabled={busy} onClick={confirmOrder}>Подтвердить заказ</button>}
-          <button className="btn" onClick={() => navigate(`/orders/${order.id}`)}>Открыть карточку заказа</button>
-          <button className="btn ghost" onClick={() => { setOrder(null); idemKey.current = newIdempotencyKey(); }}>Новый заказ</button>
-        </div>
-      </div>
-    );
-  }
+  const footer = (
+    <div className="wizard-foot">
+      {step < 4 ? <button type="button" className="btn" onClick={cancelAll}>Отменить</button>
+                : <button type="button" className="btn danger" onClick={cancelAll}>Отменить заказ</button>}
+      {step > 0 && <button type="button" className="btn ghost" onClick={() => setStep(step - 1)}>← Назад</button>}
+      <span className="spacer" />
+      {step < 4
+        ? <button type="button" className="btn primary" disabled={!valid[step]} onClick={() => setStep(step + 1)}>Далее →</button>
+        : <button type="button" className="btn ok-fill" disabled={busy} onClick={place}>{busy ? "Размещение…" : "Разместить заказ"}</button>}
+    </div>
+  );
 
   return (
-    <div className="stack">
+    <div className="stack wizard">
       <h1>Новый заказ</h1>
-      {usable.length === 0 && <Alert tone="warn">Сейчас нет свободных дронов: техники парков ещё не открыли дроны для заказов или все заняты.</Alert>}
-      <form className="stack" onSubmit={create}>
-        <div className="grid2">
-          <Card title="Дрон и грузы">
-            <div className="form grid2">
-              <label className="span2">Дрон (из открытых парков)
-                <select value={chosen?.id ?? ""} onChange={set("drone_id")} required>
+      <ol className="wizard-steps" aria-label="Шаги оформления">
+        {STEPS.map((s, i) => (
+          <li key={s} className={i === step ? "current" : i < step ? "done" : ""} aria-current={i === step ? "step" : undefined}>
+            <span className="num">{i + 1}</span><span className="name">{s}</span>
+          </li>
+        ))}
+      </ol>
+
+      {step === 0 && (
+        <Card title={STEPS[0]}>
+          {consignees.data.length === 0 ? <Alert tone="warn">Список грузополучателей пуст — обратитесь к администратору.</Alert> : (
+            <div className="form">
+              <label>Грузополучатель
+                <select value={consigneeId} onChange={(e) => chooseConsignee(e.target.value)} aria-label="Грузополучатель">
+                  <option value="" disabled>— выберите грузополучателя —</option>
+                  {consignees.data.map((c) => <option key={c.id} value={c.id}>{c.name}{c.kind ? ` (${c.kind})` : ""}</option>)}
+                </select>
+              </label>
+              {consignee && <ConsigneeInfo c={consignee} />}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {step === 1 && (
+        <Card title={STEPS[1]}>
+          <div className="stack">
+            {cargo.map((c, i) => {
+              const t = typeOf(effectiveType(c));
+              return (
+                <div key={i} className="cargo-item form grid2">
+                  <div className="span2 row between">
+                    <strong>Груз {i + 1}</strong>
+                    {cargo.length > 1 && <button type="button" className="btn small ghost" onClick={() => setCargo((l) => l.filter((_, j) => j !== i))}
+                      aria-label={`Удалить груз ${i + 1}`}>✕ Удалить</button>}
+                  </div>
+                  <label>Тип груза
+                    <select value={effectiveType(c)} onChange={(e) => editCargo(i, { cargo_type: e.target.value })} aria-label={`Тип груза ${i + 1}`}>
+                      {types.map((x: CargoType) => (
+                        <option key={x.code} value={x.code}>{x.name}{x.code === consignee?.recommended_cargo ? " — рекомендован" : ""}</option>))}
+                    </select>
+                  </label>
+                  <label>Масса, г{t && <span className="small muted"> (не более {t.max_weight_g})</span>}
+                    <input type="number" min={1} max={t?.max_weight_g} value={c.weight_g}
+                           onChange={(e) => editCargo(i, { weight_g: Number(e.target.value) })} aria-label={`Масса груза ${i + 1}`} /></label>
+                  <label className="span2">Описание груза<textarea value={c.description} minLength={3}
+                    onChange={(e) => editCargo(i, { description: e.target.value })} aria-label={`Описание груза ${i + 1}`} /></label>
+                  <div className="row span2 dims">
+                    <label>Д, мм<input type="number" min={1} value={c.length_mm} onChange={(e) => editCargo(i, { length_mm: Number(e.target.value) })} /></label>
+                    <label>Ш, мм<input type="number" min={1} value={c.width_mm} onChange={(e) => editCargo(i, { width_mm: Number(e.target.value) })} /></label>
+                    <label>В, мм<input type="number" min={1} value={c.height_mm} onChange={(e) => editCargo(i, { height_mm: Number(e.target.value) })} /></label>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="row between wrap">
+              <button type="button" className="btn small" onClick={() => setCargo((l) => [...l, newCargo()])} disabled={cargo.length >= MAX_CARGO}>
+                + Добавить груз</button>
+              <span className="small muted">Грузов: {cargo.length}, общая масса {cargo.reduce((n, c) => n + (Number(c.weight_g) || 0), 0)} г</span>
+            </div>
+            {!cargoValid && <p className="small muted">Заполните описание (не короче 3 символов) и массу каждого груза.</p>}
+          </div>
+        </Card>
+      )}
+
+      {step === 2 && (
+        <Card title={STEPS[2]}>
+          {available.length === 0 ? <Alert tone="warn">Сейчас нет дронов, открытых для заказов.</Alert> : (
+            <div className="form">
+              <label>БПЛА (из открытых парков)
+                <select value={droneId} onChange={(e) => { setDroneId(e.target.value); setPoints([]); }} aria-label="БПЛА">
+                  <option value="" disabled>— выберите БПЛА —</option>
                   {fleets.map(([id, name]) => (
                     <optgroup key={id} label={`Парк «${name}»`}>
-                      {usable.filter((d) => d.fleet.id === id).map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.registration_number} — {d.manufacturer} {d.model}, до {d.max_payload_g} г, дальность {(d.max_range_m / 1000).toFixed(0)} км
-                          {d.link_status === "online" ? "" : " (сейчас не на связи)"}
-                        </option>
+                      {available.filter((d) => d.fleet.id === id).map((d) => (
+                        <option key={d.id} value={d.id}>{d.registration_number} — {d.manufacturer} {d.model}{d.busy ? " (занят — заказ встанет в очередь)" : ""}</option>
                       ))}
                     </optgroup>
                   ))}
                 </select>
               </label>
+              {drone && <DroneInfo d={drone} />}
             </div>
-            <div className="stack">
-              {cargo.map((c, i) => {
-                const t = typeOf(c.cargo_type);
-                return (
-                  <div key={i} className="cargo-item form grid2">
-                    <div className="span2 row between">
-                      <strong>Груз {i + 1}</strong>
-                      {cargo.length > 1 && <button type="button" className="btn small ghost" onClick={() => removeCargo(i)}
-                        aria-label={`Удалить груз ${i + 1}`}>✕ Удалить</button>}
-                    </div>
-                    <label>Тип груза
-                      <select value={t?.code ?? ""} onChange={(e) => editCargo(i, { cargo_type: e.target.value })} required
-                              aria-label={`Тип груза ${i + 1}`}>
-                        {types.map((x) => <option key={x.code} value={x.code}>{x.name}{x.category ? ` (${x.category})` : ""}</option>)}
-                      </select>
-                    </label>
-                    <label>Масса, г{t && <span className="small muted"> (не более {t.max_weight_g})</span>}
-                      <input type="number" min={1} max={t?.max_weight_g} value={c.weight_g}
-                             onChange={(e) => editCargo(i, { weight_g: Number(e.target.value) })} aria-label={`Масса груза ${i + 1}`} /></label>
-                    <label className="span2">Описание груза<textarea value={c.description} required minLength={3}
-                      onChange={(e) => editCargo(i, { description: e.target.value })} aria-label={`Описание груза ${i + 1}`} /></label>
-                    <div className="row span2">
-                      <label>Д, мм<input type="number" min={1} value={c.length_mm} onChange={(e) => editCargo(i, { length_mm: Number(e.target.value) })} /></label>
-                      <label>Ш, мм<input type="number" min={1} value={c.width_mm} onChange={(e) => editCargo(i, { width_mm: Number(e.target.value) })} /></label>
-                      <label>В, мм<input type="number" min={1} value={c.height_mm} onChange={(e) => editCargo(i, { height_mm: Number(e.target.value) })} /></label>
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="row between">
-                <button type="button" className="btn small" onClick={addCargo} disabled={cargo.length >= MAX_CARGO}>+ Добавить груз</button>
-                <span className="small muted">Грузов: {cargo.length}, общая масса {totalWeight} г — все грузы везёт один дрон.</span>
-              </div>
-            </div>
-          </Card>
-          <Card title="Маршрут">
-            <MapSourcePicker value={mapSource} onChange={setMapSource} />
-            <MapPointsEditor active={activePin} source={mapSource} onSourceChange={setMapSource} showSourceSelect={false}
-              zoneIds={chosen?.fleet.zone_id ? [chosen.fleet.zone_id] : null} onActiveChange={setActivePin} onChange={movePin} height={340}
-              emptyHint="Карт района нет — выберите точки из списка или укажите координаты (карту загружает администратор)."
+          )}
+        </Card>
+      )}
+
+      {step === 3 && drone && (
+        <Card title={STEPS[3]}>
+          <div className="stack">
+            <MapPointsEditor source={mapSource} onSourceChange={setMapSource} showSourceSelect={false} height={380}
+              zoneIds={drone.fleet.zone_id ? [drone.fleet.zone_id] : null} fitKey={drone.id}
+              onChange={movePoint} clickToPlace={false} adding={adding} onMapClick={adding ? addPoint : undefined}
+              emptyHint="Карт района нет — выберите онлайн-карту внизу страницы или укажите координаты точек вручную."
               pins={[
-                ...(base ? [{ key: "base", label: "А", title: "А — база парка", point: base, className: "map-base-pin", locked: true }] : []),
-                { key: "origin", label: "Б", title: "Б — где забрать груз", point: { lat: f.origin_lat, lon: f.origin_lon }, className: "map-pickup" },
-                ...stops.map((x, i) => ({ key: `stop-${i}`, label: String(i + 1), title: `${i + 1} — промежуточная точка`,
-                                          point: { lat: x.lat, lon: x.lon }, className: "map-stop" })),
-                { key: "dest", label: "В", title: "В — получатель", point: { lat: f.dest_lat, lon: f.dest_lon }, className: "map-b" },
+                ...(base ? [{ key: "base", label: "А", title: "А — база парка (груз)", point: base, className: "map-base-pin", locked: true }] : []),
+                ...points.map((p, i) => ({ key: `p-${i}`, label: POINT_LETTERS[i] ?? String(i + 1), title: pointName(i),
+                  point: { lat: p.lat, lon: p.lon }, className: i === points.length - 1 ? "map-b" : "map-stop" })),
               ]} />
-            <div className="form grid2">
-              <div className="span2 muted small">
-                <b>А — база парка:</b> {base ? `${base.address} (${base.lat.toFixed(4)}, ${base.lon.toFixed(4)})` : "—"}.
-                Дрон вылетает с базы, забирает груз в точке Б, проходит промежуточные точки (если есть) и доставляет получателю в точку В.
-                Базу парка меняет техник, поэтому метка А закреплена.
-              </div>
-              <label className="span2">Точка Б — где забрать груз
-                <select onChange={(e) => { const p = PRESETS[Number(e.target.value)]; idemKey.current = newIdempotencyKey();
-                  setF((s) => ({ ...s, origin_address: p.name, origin_lat: p.lat, origin_lon: p.lon })); }}
-                  value={PRESETS.findIndex((p) => p.name === f.origin_address)}>
-                  {PRESETS.map((p, i) => <option key={p.name} value={i}>{p.name}</option>)}
-                  <option value={-1}>Другая точка (координаты ниже)</option>
-                </select>
-              </label>
-              <label>Широта Б<input type="number" step="0.0001" value={f.origin_lat} onChange={set("origin_lat")} /></label>
-              <label>Долгота Б<input type="number" step="0.0001" value={f.origin_lon} onChange={set("origin_lon")} /></label>
-              <label className="span2">Адрес Б<input value={f.origin_address} onChange={set("origin_address")} /></label>
-              <div className="span2 stops">
-                <div className="row between">
-                  <strong>Промежуточные точки</strong>
-                  <button type="button" className="btn small" onClick={addStop} disabled={stops.length >= MAX_STOPS}>
-                    + Добавить точку
-                  </button>
-                </div>
-                {stops.length === 0 ? (
-                  <p className="muted small">Нужно заехать по пути от Б к В? Добавьте до {MAX_STOPS} точек — они пройдутся по порядку.</p>
-                ) : stops.map((x, i) => (
-                  <div key={i} className="stop-row">
-                    <span className="pin-dot map-stop" aria-hidden>{i + 1}</span>
-                    <input value={x.address} onChange={(e) => editStop(i, { address: e.target.value })} required minLength={3}
-                           aria-label={`Адрес точки ${i + 1}`} placeholder="Адрес" />
-                    <input value={x.note ?? ""} onChange={(e) => editStop(i, { note: e.target.value })} maxLength={200}
-                           aria-label={`Комментарий к точке ${i + 1}`} placeholder="Что сделать (необязательно)" />
-                    <input type="number" step="0.0001" value={x.lat} onChange={(e) => editStop(i, { lat: Number(e.target.value) })}
-                           aria-label={`Широта точки ${i + 1}`} />
-                    <input type="number" step="0.0001" value={x.lon} onChange={(e) => editStop(i, { lon: Number(e.target.value) })}
-                           aria-label={`Долгота точки ${i + 1}`} />
-                    <span className="row">
-                      <button type="button" className="btn small ghost" disabled={i === 0} onClick={() => moveStop(i, -1)}
-                              aria-label={`Точку ${i + 1} раньше`} title="Раньше">↑</button>
-                      <button type="button" className="btn small ghost" disabled={i === stops.length - 1} onClick={() => moveStop(i, 1)}
-                              aria-label={`Точку ${i + 1} позже`} title="Позже">↓</button>
-                      <button type="button" className="btn small ghost" onClick={() => removeStop(i)}
-                              aria-label={`Удалить точку ${i + 1}`} title="Удалить">✕</button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <label className="span2">Точка В — куда доставить (получатель)
-                <select onChange={(e) => { const p = PRESETS[Number(e.target.value)]; idemKey.current = newIdempotencyKey();
-                  setF((s) => ({ ...s, dest_address: p.name, dest_lat: p.lat, dest_lon: p.lon })); }}
-                  value={PRESETS.findIndex((p) => p.name === f.dest_address)}>
-                  {PRESETS.map((p, i) => <option key={p.name} value={i}>{p.name}</option>)}
-                  <option value={-1}>Другая точка (координаты ниже)</option>
-                </select>
-              </label>
-              <label>Широта В<input type="number" step="0.0001" value={f.dest_lat} onChange={set("dest_lat")} /></label>
-              <label>Долгота В<input type="number" step="0.0001" value={f.dest_lon} onChange={set("dest_lon")} /></label>
-              <label className="span2">Адрес В<input value={f.dest_address} onChange={set("dest_address")} /></label>
+            <div className="row wrap">
+              <button type="button" className={`btn ${adding ? "primary" : ""}`} onClick={() => setAdding(!adding)}
+                      disabled={points.length >= MAX_POINTS} aria-pressed={adding}>
+                {adding ? "Щёлкните по карте…" : "+ Добавить точку"}</button>
+              <span className="small muted">{points.length === 0
+                ? "Нажмите «Добавить точку» и щёлкните по карте. Последняя точка — грузополучатель, остальные — промежуточные."
+                : `Точек: ${points.length} из ${MAX_POINTS}. Метки можно перетаскивать.`}</span>
             </div>
-          </Card>
-        </div>
-        <Card title="Получатель и временное окно">
-          <div className="form grid4">
-            <label>Получатель<input value={f.recipient_name} onChange={set("recipient_name")} required minLength={2} /></label>
-            <label>Телефон получателя<input value={f.recipient_phone} onChange={set("recipient_phone")} required placeholder="+7 900 000-00-00" /></label>
-            <label>Окно: с<input type="datetime-local" value={f.window_start} onChange={set("window_start")} required /></label>
-            <label>Окно: до<input type="datetime-local" value={f.window_end} onChange={set("window_end")} required /></label>
+            <div className="points-list">
+              <div className="point-row base"><span className="pin-dot map-base-pin">А</span>
+                <span>База парка «{drone.fleet.name}»: {base?.address ?? "—"} — отсюда дрон вылетает с грузом</span></div>
+              {points.map((p, i) => (
+                <div key={i} className="point-row">
+                  <span className={`pin-dot ${i === points.length - 1 ? "map-b" : "map-stop"}`} aria-hidden>{POINT_LETTERS[i]}</span>
+                  <div className="point-fields">
+                    <strong>{pointName(i)}{i === points.length - 1 ? " — грузополучатель" : " — промежуточная"}</strong>
+                    <input value={p.address} onChange={(e) => editPoint(i, { address: e.target.value })} aria-label={`Адрес: ${pointName(i)}`} placeholder="Адрес" />
+                    <input value={p.note ?? ""} onChange={(e) => editPoint(i, { note: e.target.value })} maxLength={200}
+                           aria-label={`Комментарий: ${pointName(i)}`} placeholder="Что сделать (необязательно)" />
+                    <div className="row">
+                      <input type="number" step="0.0001" value={p.lat} onChange={(e) => editPoint(i, { lat: Number(e.target.value) })} aria-label={`Широта: ${pointName(i)}`} />
+                      <input type="number" step="0.0001" value={p.lon} onChange={(e) => editPoint(i, { lon: Number(e.target.value) })} aria-label={`Долгота: ${pointName(i)}`} />
+                    </div>
+                  </div>
+                  <span className="row">
+                    <button type="button" className="btn small ghost" disabled={i === 0} onClick={() => swap(i, -1)} aria-label={`${pointName(i)} раньше`}>↑</button>
+                    <button type="button" className="btn small ghost" disabled={i === points.length - 1} onClick={() => swap(i, 1)} aria-label={`${pointName(i)} позже`}>↓</button>
+                    <button type="button" className="btn small ghost" onClick={() => setPoints((l) => l.filter((_, j) => j !== i))} aria-label={`Удалить: ${pointName(i)}`}>✕</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <MapSourcePicker value={mapSource} onChange={setMapSource} />
           </div>
         </Card>
-        <Alert>{error}</Alert>
-        <div><button className="btn primary" disabled={busy || usable.length === 0}>{busy ? "Проверка…" : "Проверить и рассчитать стоимость"}</button></div>
-      </form>
+      )}
+
+      {step === 4 && drone && consignee && (
+        <div className="stack">
+          {preview && <div className="card wide-map"><RouteMap route={preview} height={420} providerId={mapSource && mapSource !== LOCAL ? mapSource : null} /></div>}
+          <div className="grid2">
+            <Card title="Маршрут">
+              <KV items={[
+                ["А — база парка", base?.address ?? "—"],
+                ...points.map((p, i) => [`${pointName(i)}${i === points.length - 1 ? " (грузополучатель)" : ""}`,
+                  p.note ? `${p.address} — ${p.note}` : p.address] as [string, ReactNode]),
+                ["Расстояние (оценка)", preview ? `${(preview.distance_m / 1000).toFixed(2)} км` : "—"],
+              ]} />
+            </Card>
+            <Card title="Грузополучатель"><ConsigneeInfo c={consignee} /></Card>
+            <Card title="Груз">
+              <KV items={cargo.map((c, i) => [`Груз ${i + 1}`,
+                `${typeOf(effectiveType(c))?.name ?? "—"}: ${c.description}, ${c.weight_g} г, ${c.length_mm}×${c.width_mm}×${c.height_mm} мм`] as [string, ReactNode])} />
+            </Card>
+            <Card title="БПЛА"><DroneInfo d={drone} /></Card>
+          </div>
+          <Card title="Комментарий к заказу (необязательно)">
+            <div className="form">
+              <label>Комментарий<textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={2000}
+                placeholder="Появится в переписке по заказу после размещения" /></label>
+              <label>Фото (PNG, JPEG или WebP, до 15 МБ)
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} /></label>
+              {photo && <span className="small">Приложено: {photo.name} <button type="button" className="btn small ghost" onClick={() => setPhoto(null)}>✕</button></span>}
+            </div>
+          </Card>
+          {checks && (
+            <Alert tone="danger">Заказ не прошёл проверки — исправьте данные на предыдущих шагах:
+              <ul className="checks">{checks.filter((c) => !c.ok).map((c) => <li key={c.code} className="fail">✕ {c.message}</li>)}</ul></Alert>
+          )}
+          <p className="small muted">После размещения заказ согласует координатор, затем его примет оператор. Время доставки не задаётся —
+            заказ выполняется как можно скорее в порядке приоритета.</p>
+        </div>
+      )}
+
+      <Alert>{error}</Alert>
+      {footer}
     </div>
+  );
+}
+
+/** Маршрут для предпросмотра (до создания заказа): груз на базе, точки по порядку. */
+function previewRoute(base: { lat: number; lon: number; address?: string }, points: Stop[]): RouteInfo {
+  const chain = [base, ...points];
+  const dist = chain.slice(1).reduce((n, p, i) => n + haversine(chain[i], p), 0);
+  const last = points[points.length - 1];
+  return {
+    base, origin: base, destination: last, stops: points.slice(0, -1), pickup_at_base: true,
+    distance_m: Math.round(dist), return_m: Math.round(haversine(last, base)), max_altitude_m: 120,
+    checkpoints: [], approval_status: "draft", approval_notes: [],
+  };
+}
+
+export function ConsigneeInfo({ c }: { c: Pick<Consignee, "name" | "kind" | "location" | "priority" | "priority_label" | "comment" | "recommended_cargo_name"> }) {
+  return (
+    <KV items={[
+      ["Название", c.name],
+      ["Тип", c.kind || "—"],
+      ["Местоположение", c.location || "—"],
+      ["Рекомендованный груз", c.recommended_cargo_name ?? "—"],
+      ["Приоритет", c.priority_label ?? PRIORITY_LABELS[c.priority]],
+      ["Комментарий", c.comment || "—"],
+    ]} />
+  );
+}
+
+function DroneInfo({ d }: { d: AvailableDrone }) {
+  return (
+    <KV items={[
+      ["Модель", `${d.manufacturer} ${d.model}`],
+      ["Учётный номер", d.registration_number],
+      ["Парк и база (А)", `«${d.fleet.name}» — ${d.fleet.base.address ?? ""}`],
+      ["Грузоподъёмность", `${d.max_payload_g} г`],
+      ["Дальность", `${(d.max_range_m / 1000).toFixed(1)} км`],
+      ["Тип связи / конструкция / двигатель", [d.link_type, d.construction, d.engine_type].map((x) => x || "—").join(" / ")],
+      ["Связь сейчас", d.link_status === "online" ? "на связи" : "не на связи"],
+      ["Очередь", d.busy ? "дрон выполняет другой заказ — ваш встанет в очередь" : "свободен"],
+    ]} />
   );
 }

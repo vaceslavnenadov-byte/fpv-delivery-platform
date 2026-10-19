@@ -11,7 +11,11 @@ stateDiagram-v2
   [*] --> draft: заказчик создал
   draft --> pending_confirmation: проверки пройдены, рассчитана стоимость
   draft --> cancelled
-  pending_confirmation --> awaiting_operator: заказчик подтвердил условия
+  pending_confirmation --> awaiting_coordinator: заказчик разместил заказ
+  pending_confirmation --> awaiting_operator: повторный вылет (уже согласован)
+  awaiting_coordinator --> awaiting_operator: координатор согласовал
+  awaiting_coordinator --> rejected: координатор отклонил
+  awaiting_coordinator --> cancelled
   pending_confirmation --> cancelled
   awaiting_operator --> accepted: оператор принял
   awaiting_operator --> cancelled
@@ -118,3 +122,17 @@ stateDiagram-v2
 Апелляция и спор после оценки
 приводят к корректировке с обязательной причиной и записью в аудит; итог по заказу ограничен 0–100.
 Правила редактируются администратором и версионируются (`scoring_rules`), сумма максимумов = 100.
+
+## Согласование координатором, приоритеты, проверка выполнения (0.1.0-32)
+
+* Размещённый заказ получает статус `awaiting_coordinator`; координатор назначается по нагрузке
+  (`services/coordination.py`) и согласует (`POST /api/v1/orders/{id}/coordinator-decision`) —
+  только после этого заказ видят операторы и техник парка. Согласовавший закрепляется за заказом,
+  время согласования (`coordinator_approved_at`) задаёт порядок вылетов одного дрона: принять можно
+  только заказ, который на этом дроне поступил на вылет раньше остальных (иначе 409 `drone_queue`).
+* Приоритет заказа (`orders.priority_level`) — из справочника грузополучателей; повторный вылет —
+  не ниже `high`. Порядок во всех списках: наивысший → повторный → высокий → обычный → низкий,
+  завершённые — после.
+* Статус `admin_review` теперь означает проверку выполнения **координатором заказа** (разрешение
+  `order.review` у координатора; видео — `video.read_assigned` для своих заказов).
+* Без заданного окна доставки (`asap`) окно — «как можно скорее» (сутки с момента создания).

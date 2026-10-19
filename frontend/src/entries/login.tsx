@@ -17,6 +17,7 @@ function Landing() {
   // Возврат туда, откуда пришёл пользователь (только внутри доступного ему клиента).
   const home = !me ? null
     : me.account_status === "suspended" ? `${suspendedApp(me.roles).base}/support`
+    : me.profile_verified === false ? `${suspendedApp(me.roles).base}/profile`
     : safeNext(new URLSearchParams(window.location.search).get("next"), can) ?? roleHome(can);
 
   useEffect(() => {

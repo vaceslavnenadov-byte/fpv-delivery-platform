@@ -69,6 +69,11 @@ def person(user_id: uuid.UUID, p: Principal = Depends(current_principal), db: Se
     return people.card(db, p, user_id)
 
 
+@router.get("/api/v1/people/{user_id}/history")
+def person_history(user_id: uuid.UUID, p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
+    return {"items": people.history(db, p, user_id)}
+
+
 @router.patch("/api/v1/people/{user_id}/profile")
 def person_profile(user_id: uuid.UUID, body: schemas.PersonProfileIn, p: Principal = Depends(current_principal),
                    db: Session = Depends(get_db)):

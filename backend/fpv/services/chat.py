@@ -26,7 +26,7 @@ from .identity import Principal
 from .storage import StorageError, sha256_file
 
 
-CUSTOMER_CHAT_STATUSES = ("accepted", "awaiting_readiness", "ready", "in_progress",
+CUSTOMER_CHAT_STATUSES = ("awaiting_coordinator", "awaiting_operator", "accepted", "awaiting_readiness", "ready", "in_progress",
                           "awaiting_delivery_confirmation", "disputed")
 
 
@@ -57,7 +57,7 @@ def post(db: Session, p: Principal, order_id: uuid.UUID, body: str, *, attach_fr
     order = order_svc.visible_order(db, p, order_id)
     if is_customer(p, order):
         if order.status not in CUSTOMER_CHAT_STATUSES:
-            raise Forbidden("Связь по заказу доступна после того, как оператор примет заказ")
+            raise Forbidden("Связь по заказу доступна после размещения заказа")
         if attach_frame:
             raise Forbidden("Кадр с камеры прикладывает исполнитель заказа")
     elif not _assigned(p, order):

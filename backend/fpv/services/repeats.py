@@ -95,7 +95,10 @@ def _clone(db: Session, settings: Settings, p: orders.Principal, src: Order) -> 
                 cargo_length_mm=src.cargo_length_mm, cargo_width_mm=src.cargo_width_mm,
                 cargo_height_mm=src.cargo_height_mm, recipient_name=src.recipient_name,
                 recipient_phone=src.recipient_phone, window_start=start, window_end=start + duration,
-                map_provider_id=src.map_provider_id, repeat_of=src.id, priority=True,
+                map_provider_id=src.map_provider_id, repeat_of=src.id, priority=False,
+                # повторный вылет — не ниже «высокого» приоритета (наивысший сохраняется)
+                priority_level="highest" if src.priority_level == "highest" else "high",
+                consignee_id=src.consignee_id, consignee=src.consignee, asap=src.asap,
                 created_at=now, updated_at=now)
     db.add(new)
     db.flush()
@@ -105,7 +108,8 @@ def _clone(db: Session, settings: Settings, p: orders.Principal, src: Order) -> 
     db.add(Route(order_id=new.id, origin_lat=r.origin_lat, origin_lon=r.origin_lon, origin_address=r.origin_address,
                  dest_lat=r.dest_lat, dest_lon=r.dest_lon, dest_address=r.dest_address, distance_m=r.distance_m,
                  max_altitude_m=r.max_altitude_m, checkpoints=r.checkpoints, stops=r.stops or [],
-                 base_lat=r.base_lat, base_lon=r.base_lon, base_address=r.base_address, return_m=r.return_m))
+                 base_lat=r.base_lat, base_lon=r.base_lon, base_address=r.base_address, return_m=r.return_m,
+                 pickup_at_base=r.pickup_at_base))
     db.add(OrderStatusHistory(order_id=new.id, from_status=None, to_status="draft", actor_id=p.user_id,
                               actor_kind="user", reason=f"Повторный вылет заказа №{src.number}", created_at=now))
     db.flush()
@@ -143,8 +147,9 @@ def decide(db: Session, settings: Settings, p: orders.Principal, request_id: int
             db.add(Assignment(order_id=new.id, user_id=coordinator, role="coordinator", created_by=p.user_id,
                               created_at=clock.now()))
         orders.transition(db, new, "pending_confirmation", p.actor, reason="Повторный вылет: проверки пройдены")
+        new.coordinator_approved_at = clock.now()
         orders.transition(db, new, "awaiting_operator", p.actor,
-                          reason=f"Повторный вылет заказа №{src.number} согласован — приоритетный")
+                          reason=f"Повторный вылет заказа №{src.number} согласован — высокий приоритет")
         r.new_order_id = new.id
     r.status = "approved" if approve else "rejected"
     r.decided_by, r.decided_at, r.decision_comment = p.user_id, clock.now(), comment or None
@@ -159,7 +164,7 @@ def decide(db: Session, settings: Settings, p: orders.Principal, request_id: int
         from . import fleets
         tech = fleets.fleet_technician(db, drones.get_drone(db, src.drone_id))
         notifications.create(db, [t for t in [tech, src.operator_id] if t], "order.repeat",
-                             f"Приоритетный повторный заказ №{new_number}",
+                             f"Повторный вылет: заказ №{new_number} (высокий приоритет)",
                              f"Повтор заказа №{src.number}", order_id=r.new_order_id, severity="warning")
     else:
         notifications.create(db, [src.customer_id], "order.repeat",

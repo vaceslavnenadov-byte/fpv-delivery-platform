@@ -35,7 +35,8 @@ interface Frame {
  *  Подложка — загруженная карта района или онлайн-карта (её можно двигать и масштабировать).
  *  Маршрут между метками рисуется пунктиром в порядке массива pins. */
 export function MapPointsEditor({ pins, onChange, active, onActiveChange, height = 360, emptyHint, source, onSourceChange,
-                                 showSourceSelect = true, area, showServiceArea = true, route = true, fitKey, zoneIds, excludeZoneId }: {
+                                 showSourceSelect = true, area, showServiceArea = true, route = true, fitKey, zoneIds, excludeZoneId,
+                                 onMapClick, clickToPlace = true, adding = false }: {
   pins: MapPin[];
   onChange: (key: string, p: Point) => void;
   active?: string;
@@ -51,6 +52,9 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
   excludeZoneId?: string;                          // не показывать эту зону (её редактируют)
   route?: boolean;                                 // линия между метками (маршрут)
   fitKey?: string | number;                        // при изменении — показать все метки заново
+  onMapClick?: (p: Point) => void;                 // щелчок по карте (например, «Добавить точку»)
+  clickToPlace?: boolean;                          // false — щелчок не переставляет выбранную метку
+  adding?: boolean;                                // режим добавления точки (курсор-перекрестие)
 }) {
   const [layers, setLayers] = useState<MapLayer[]>([]);
   const [providers, setProviders] = useState<MapProviderInfo[]>([]);
@@ -230,8 +234,13 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
       moved.current = false;
       return;
     }
-    const target = pins.find((p) => p.key === active && !p.locked) ?? pins.find((p) => !p.locked);
     const [vx, vy] = viewBoxPoint(e.clientX, e.clientY);
+    if (onMapClick) {
+      onMapClick(f.at(vx, vy));
+      return;
+    }
+    if (!clickToPlace) return;
+    const target = pins.find((p) => p.key === active && !p.locked) ?? pins.find((p) => !p.locked);
     if (target) onChange(target.key, f.at(vx, vy));
   }
   function nudge(e: KeyboardEvent<SVGGElement>, pin: MapPin) {
@@ -261,7 +270,7 @@ export function MapPointsEditor({ pins, onChange, active, onActiveChange, height
       )}
       <div className="map-frame">
         <svg ref={svg} viewBox={`0 0 ${W} ${f.H}`} role="application"
-             className={`with-base ${dragging ? "dragging" : ""} ${provider ? "pannable" : ""}`}
+             className={`with-base ${dragging ? "dragging" : ""} ${provider ? "pannable" : ""} ${adding ? "adding" : ""}`}
              aria-label="Карта: перетащите метки или щёлкните, чтобы поставить выбранную точку"
              onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onClick={place}>
           {f.background}

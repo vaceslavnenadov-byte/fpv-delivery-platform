@@ -6,7 +6,7 @@ import { ORDER_STATUS, ROLE_LABELS, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
 import { invalidateMaps } from "../../maps";
 import { MapProvidersCard } from "./MapProviders";
-import type { Complaint, Drone, Fleet, MapLayer, Order, Video } from "../../types";
+import type { Complaint, Drone, Fleet, MapLayer, Order } from "../../types";
 import { OrderTable } from "../../components/OrderTable";
 import { DroneService } from "../../components/DroneService";
 
@@ -69,31 +69,6 @@ export function AdminOverviewPage() {
           <KV items={Object.entries(d.video_by_status).map(([k, v]) => [`Видео: ${k}`, v])} />
         </Card>
       </div>
-    </div>
-  );
-}
-
-// --- Проверка выполнения ----------------------------------------------------
-
-export function AdminReviewsPage() {
-  const q = useLive(() => api.get<{ items: Order[] }>("/api/v1/orders?scope=all&status=admin_review"), [], (m) => m.kind.startsWith("order.") || m.kind === "video.stored");
-  const videos = useLive(() => api.get<{ items: Video[] }>("/api/v1/admin/videos?review_status=pending"), [], (m) => m.kind === "video.stored");
-  return (
-    <div className="stack">
-      <h1>Проверка выполнения</h1>
-      <Card title="Заказы на проверке администратора">{q.data ? <OrderTable orders={q.data.items} /> : <Pending />}</Card>
-      <Card title="Видеоподтверждения, ожидающие проверки">
-        {!videos.data ? <Pending /> : videos.data.items.length === 0 ? <Empty>Нет</Empty> : (
-          <table className="table"><thead><tr><th>Заказ</th><th>Статус</th><th>Событие завершения</th><th>Сегменты</th><th>Целостность</th><th>SHA-256</th></tr></thead>
-            <tbody>{videos.data.items.map((v) => (
-              <tr key={v.id}><td><Link to={`/orders/${v.order_id}`}>открыть</Link></td>
-                <td><Tone tone={v.status === "stored" ? "ok" : v.status === "missing" ? "danger" : "warn"}>{v.status}</Tone>{v.missing_reason && <div className="small">{v.missing_reason}</div>}</td>
-                <td className="small">{fmtDate(v.completion_event_at)}</td><td className="num">{v.segment_count}</td>
-                <td>{v.integrity_ok == null ? "—" : v.integrity_ok ? "OK" : "НАРУШЕНА"}</td>
-                <td className="mono small">{v.sha256?.slice(0, 16) ?? "—"}…</td></tr>
-            ))}</tbody></table>
-        )}
-      </Card>
     </div>
   );
 }

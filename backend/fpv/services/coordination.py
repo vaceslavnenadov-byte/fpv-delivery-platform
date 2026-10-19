@@ -1,7 +1,8 @@
 """Автоматическое назначение координаторов с распределением нагрузки.
 
-Когда оператор принимает заказ, система назначает ему координатора — того, у кого меньше всего
-сопровождаемых заказов (при равенстве — случайного из них). Предел — ``coordinator_max_orders``
+Когда заказчик размещает заказ, система назначает координатора, который его согласует и затем
+сопровождает, — того, у кого меньше всего заказов в работе и на согласовании (при равенстве —
+случайного из них). Предел — ``coordinator_max_orders``
 (9: столько трансляций помещается на видеостене координатора). Фоновая задача:
 
 * назначает координаторов заказам, которым их не хватило (все были заняты);
@@ -26,8 +27,8 @@ from ..config import Settings
 from ..models import Assignment, Order
 from . import audit, events, notifications
 
-ACTIVE = ("accepted", "awaiting_readiness", "ready", "in_progress")
-PREFLIGHT = ("accepted", "awaiting_readiness", "ready")
+ACTIVE = ("awaiting_coordinator", "awaiting_operator", "accepted", "awaiting_readiness", "ready", "in_progress")
+PREFLIGHT = ("awaiting_coordinator", "awaiting_operator", "accepted", "awaiting_readiness", "ready")
 MAX_MOVES_PER_RUN = 20
 
 _rng = random.SystemRandom()
@@ -68,7 +69,8 @@ def _set(db: Session, order: Order, coordinator_id: uuid.UUID, reason: str) -> N
     events.publish(db, "order.coordinator_assigned", {"order_id": str(order.id)},
                    users=[coordinator_id, previous, order.operator_id, order.customer_id], roles=["admin"])
     notifications.create(db, [coordinator_id], "order.assigned",
-                         f"Вам назначен заказ №{order.number} для координации", reason, order_id=order.id)
+                         f"Заказ №{order.number} ждёт вашего согласования" if order.status == "awaiting_coordinator"
+                         else f"Вам назначен заказ №{order.number} для координации", reason, order_id=order.id)
     if previous and previous != coordinator_id:
         notifications.create(db, [previous], "order.assigned",
                              f"Заказ №{order.number} передан другому координатору", reason, order_id=order.id)
@@ -91,7 +93,8 @@ def sweep(db: Session, settings: Settings) -> Dict[str, int]:
     if not coordinators:
         return stats
     cap = settings.coordinator_max_orders
-    orders = list(db.execute(select(Order).where(Order.status.in_(ACTIVE)).order_by(Order.accepted_at)
+    orders = list(db.execute(select(Order).where(Order.status.in_(ACTIVE))
+                             .order_by(Order.accepted_at.asc().nulls_last(), Order.submitted_at)
                              .with_for_update(of=Order, skip_locked=True)).unique().scalars())
     load = {c: 0 for c in coordinators}
     for o in orders:

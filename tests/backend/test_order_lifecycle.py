@@ -68,7 +68,7 @@ def test_full_lifecycle_with_video_and_scoring(world, fake_clock):
     content = w.admin.get(f"/api/v1/videos/{ev_id}/content?variant=original")
     assert content.status_code == 200 and content.content.startswith(b"TS000015")
 
-    r = w.admin.post(f"/api/v1/orders/{o['id']}/review",
+    r = w.coordinator.post(f"/api/v1/orders/{o['id']}/review",
                      json={"approve": True, "comment": "Подтверждено", "video_verified": True})
     assert r.status_code == 200 and r.json()["status"] == "completed", r.text
 
@@ -79,5 +79,5 @@ def test_full_lifecycle_with_video_and_scoring(world, fake_clock):
     assert me["total_points"] == 100 and me["completed_orders"] == 1
 
     history = [h["to"] for h in w.customer.get(f"/api/v1/orders/{o['id']}/history").json()["items"]]
-    assert history == ["draft", "pending_confirmation", "awaiting_operator", "accepted", "awaiting_readiness",
+    assert history == ["draft", "pending_confirmation", "awaiting_coordinator", "awaiting_operator", "accepted", "awaiting_readiness",
                        "ready", "in_progress", "awaiting_delivery_confirmation", "admin_review", "completed"]

@@ -74,6 +74,7 @@ def available_drones(p: Principal = Depends(current_principal), db: Session = De
         "id": str(d.id), "registration_number": d.registration_number, "model": d.model,
         "manufacturer": d.manufacturer, "max_payload_g": d.max_payload_g, "max_range_m": d.max_range_m,
         "link_status": d.link_status, "battery_pct": d.battery_pct, "busy": busy,
+        "link_type": d.link_type, "construction": d.construction, "engine_type": d.engine_type,
         "fleet": {"id": str(f.id), "name": f.name, "zone_id": str(f.zone_id) if f.zone_id else None,
                   "base": {"lat": f.base_lat, "lon": f.base_lon, "address": f.base_address}},
     } for d, f, busy in fleets.available_drones(db, p)]}

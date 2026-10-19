@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { api, errorText } from "../../api";
 import { DroneConnection } from "../../components/DroneConnection";
-import { OrderCargoCards } from "../../components/OrderCargo";
+import { ConsigneeCard, CustomerComment, OrderCargoCards, routeRows } from "../../components/OrderCargo";
 import { OrderTable } from "../../components/OrderTable";
 import { PointPicker } from "../../components/PointPicker";
 import { RouteMap } from "../../components/RouteMap";
@@ -333,11 +333,9 @@ export function TechOrderPage() {
             ["Дрон", o.drone ? `${o.drone.registration_number} — ${o.drone.model}` : "—"],
             ["Груз", (o.cargo_items?.length ?? 1) > 1 ? `${o.cargo_items!.length} груза(ов), всего ${o.cargo_weight_g} г`
               : `${cargoName(o)}, ${o.cargo_weight_g} г`],
-            ["А — база", o.route?.base?.address ?? "—"],
-            ["Б — забор груза", o.route?.origin.address],
-            ...((o.route?.stops ?? []).map((x, i) => [`${i + 1} — промежуточная точка`, x.note ? `${x.address} — ${x.note}` : x.address]) as [string, string][]),
-            ["В — получатель", o.route?.destination.address],
-            ["Окно доставки", `${fmtDate(o.window_start)} — ${fmtDate(o.window_end)}`],
+            ["Грузополучатель", o.consignee?.name ?? o.recipient_name ?? "—"],
+            ...routeRows(o),
+            ["Время доставки", o.asap ? "как можно скорее" : `${fmtDate(o.window_start)} — ${fmtDate(o.window_end)}`],
             ["Оператор", o.operator?.display_name ?? "не назначен"],
             ["Готовность (техник)", o.tech_ready_at
               ? <Tone tone="ok">подтверждена {fmtDate(o.tech_ready_at)}{o.tech_ready_by ? ` · ${o.tech_ready_by.display_name}` : ""}</Tone>
@@ -360,6 +358,7 @@ export function TechOrderPage() {
             заряд и дальность (А→Б→В и возврат на базу), видео проверено за последние 12 ч.</p>
         </Card>
       </div>
+      <div className="grid2"><ConsigneeCard o={o} /><CustomerComment o={o} /></div>
       <OrderCargoCards o={o} />
       {o.drone && <><h2>Подключение дрона</h2><DroneConnection droneId={o.drone.id} /></>}
     </div>

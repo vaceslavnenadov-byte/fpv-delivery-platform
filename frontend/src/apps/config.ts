@@ -43,7 +43,9 @@ export const APPS: Record<string, AppConfig> = {
     hasMonitor: true,
     nav: [
       { to: "/", label: "Видеостена" },
+      { to: "/map", label: "Карта заказов" },
       { to: "/orders", label: "Назначенные заказы" },
+      { to: "/reviews", label: "Проверка выполнения" },
     ],
   },
   technician: {
@@ -75,7 +77,7 @@ export const APPS: Record<string, AppConfig> = {
     hasMonitor: true,
     nav: [
       { to: "/", label: "Обзор" },
-      { to: "/reviews", label: "Проверка выполнения" },
+      { to: "/map", label: "Карта заказов" },
       { to: "/orders", label: "Все заказы" },
       { to: "/drones", label: "Дроны" },
       { to: "/complaints", label: "Жалобы и споры" },
@@ -88,6 +90,7 @@ export const APPS: Record<string, AppConfig> = {
       { to: "/scoring", label: "Правила баллов" },
       { to: "/cargo-types", label: "Типы грузов" },
       { to: "/drone-models", label: "Типы БПЛА" },
+      { to: "/consignees", label: "Типы грузополучателей" },
       { to: "/maps", label: "Карты" },
       { to: "/service-zones", label: "Зоны обслуживания" },
       { to: "/audit", label: "Журнал аудита" },

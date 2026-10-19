@@ -11,6 +11,7 @@ def test_repeat_flow(world, fake_clock, api):
     plain = world.create_order()                      # обычный заказ для сравнения порядка в очереди
     world.customer.post(f"/api/v1/orders/{plain['id']}/submit", json={})
     world.customer.post(f"/api/v1/orders/{plain['id']}/confirm", json={})
+    world.coordinator_approve(plain["id"])
     # запрос — только заказчик
     assert world.operator.post(f"/api/v1/orders/{o['id']}/repeat", json={}).status_code == 403
     r = world.customer.post(f"/api/v1/orders/{o['id']}/repeat", json={"comment": "Нужно доставить ещё один комплект"})
@@ -28,12 +29,12 @@ def test_repeat_flow(world, fake_clock, api):
     assert d.status_code == 200, d.text
     new_id = d.json()["new_order"]["id"]
     new = world.customer.get(f"/api/v1/orders/{new_id}").json()
-    assert new["status"] == "awaiting_operator" and new["priority"] is True
+    assert new["status"] == "awaiting_operator" and new["priority_level"] == "high" and new["repeat_of"]
     assert new["repeat_of"]["number"] == o["number"] and new["coordinator_id"] == world.coordinator.user["id"]
     assert new["route"]["destination"] == o["route"]["destination"]
     # в очереди операторов и у техника — первым
     queue = world.operator.get("/api/v1/orders/queue").json()["items"]
-    assert queue[0]["id"] == new_id and queue[0]["priority"] is True and len(queue) >= 2
+    assert queue[0]["id"] == new_id and queue[0]["priority_level"] == "high" and len(queue) >= 2
     fleet = world.technician.get("/api/v1/fleet-orders").json()["items"]
     assert fleet[0]["id"] == new_id
     # повторно решить нельзя; исходный заказ показывает историю запросов

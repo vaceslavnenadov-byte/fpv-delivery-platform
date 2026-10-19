@@ -62,6 +62,11 @@ export function PersonCardPage() {
           {c.status === "banned" && " При входе пользователь видит «Ваш аккаунт забанен. Обратитесь в техподдержку»."}
         </Alert>
       )}
+      {can("user.recruit") && (
+        <VerifyCard c={c} self={self} busy={busy}
+                    onReview={(approve, notes) => run(() => api.post(`/api/v1/recruitment/users/${c.id}/profile`, { approve, notes }),
+                      approve ? "Профиль подтверждён" : "Профиль возвращён на доработку")} />
+      )}
       <div className="grid2">
         <ProfileCard c={c} canEdit={can("user.profile.edit")} canGroup={can("user.recruit") || can("user.profile.edit")}
                      units={units.data?.items ?? []} busy={busy}
@@ -99,6 +104,7 @@ export function PersonCardPage() {
                        canCredentials={can("user.credentials")} canStatus={can("user.status")} run={run} />
         </div>
       </div>
+      <ProfileHistory id={c.id} version={`${c.profile_status}|${c.status}|${c.roles.length}|${c.password_changed_at}`} />
     </div>
   );
 }
@@ -154,6 +160,8 @@ function AccountCard({ c, busy, self, canCredentials, canStatus, run }: {
 }) {
   const [login, setLogin] = useState(c.username);
   const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const mismatch = !!password && password !== password2;
   const [reason, setReason] = useState("");
   const status = (s: string, ok: string) => run(() => api.post(`/api/v1/people/${c.id}/status`, { status: s, reason }), ok)
     .then((done) => done && setReason(""));
@@ -169,12 +177,15 @@ function AccountCard({ c, busy, self, canCredentials, canStatus, run }: {
       {canCredentials && c.auth_source === "local" && (
         <form className="form grid2" onSubmit={(e) => { e.preventDefault();
           void run(() => api.post(`/api/v1/people/${c.id}/credentials`, {
-            ...(login !== c.username ? { username: login } : {}), ...(password ? { password } : {}) }),
-            "Данные для входа изменены, сессии пользователя завершены").then((ok) => ok && setPassword("")); }}>
+            ...(login !== c.username ? { username: login } : {}), ...(password ? { password, password_confirm: password2 } : {}) }),
+            "Данные для входа изменены, сессии пользователя завершены").then((ok) => { if (ok) { setPassword(""); setPassword2(""); } }); }}>
           <label>Новый логин<input value={login} onChange={(e) => setLogin(e.target.value)} minLength={3} maxLength={64} /></label>
           <label>Новый пароль<input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                                     minLength={10} autoComplete="new-password" placeholder="не менять" /></label>
-          <div className="span2"><button className="btn" disabled={busy || (login === c.username && !password)}>Сменить логин/пароль</button></div>
+          {password && <label className="span2">Повторите новый пароль<input type="password" value={password2}
+            onChange={(e) => setPassword2(e.target.value)} autoComplete="new-password" required aria-invalid={mismatch} />
+            {password2 && mismatch && <span className="small danger-text">Пароли не совпадают</span>}</label>}
+          <div className="span2"><button className="btn" disabled={busy || (login === c.username && !password) || mismatch}>Сменить логин/пароль</button></div>
         </form>
       )}
       {c.auth_source === "domain" && canCredentials && <p className="muted small">Пароль доменной учётной записи меняется в домене.</p>}
@@ -192,6 +203,66 @@ function AccountCard({ c, busy, self, canCredentials, canStatus, run }: {
               onClick={() => void status("active", c.status === "banned" ? "Учётная запись разбанена" : "Действие учётной записи возобновлено")}>
               {c.status === "banned" ? "Разбанить" : "Возобновить"}</button>}
           </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Подтверждение профиля: новый пользователь приступает к обязанностям только после него. */
+function VerifyCard({ c, self, busy, onReview }: {
+  c: PersonCard; self: boolean; busy: boolean; onReview: (approve: boolean, notes: string) => Promise<boolean>;
+}) {
+  const [notes, setNotes] = useState("");
+  const verified = c.profile_verified !== false;
+  return (
+    <Card title={<>Проверка профиля{" "}{verified
+      ? <span className="verify-flag good">Учётная запись подтверждена</span>
+      : <span className="verify-flag bad">Учётная запись не подтверждена</span>}</>}>
+      <p className="small">Статус анкеты: <Tone tone={PROFILE_TONE[c.profile_status] ?? "muted"}>{PROFILE_LABEL[c.profile_status] ?? c.profile_status}</Tone>
+        {c.profile_review_notes && <> — {c.profile_review_notes}</>}
+        {!verified && " Пока профиль не подтверждён, рабочие разделы пользователю недоступны."}</p>
+      {!self && c.profile_status !== "verified" && (
+        <div className="row wrap">
+          <button className="btn ok-fill" disabled={busy} onClick={() => void onReview(true, "")}>✓ Подтвердить профиль</button>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Что исправить (для возврата)"
+                 aria-label="Что исправить в профиле" maxLength={500} />
+          <button className="btn" disabled={busy || notes.trim().length < 5}
+                  onClick={() => void onReview(false, notes).then((ok) => ok && setNotes(""))}>Вернуть на доработку</button>
+        </div>
+      )}
+      {self && <p className="muted small">Собственный профиль подтверждает другой сотрудник.</p>}
+    </Card>
+  );
+}
+
+interface HistoryRow { id: number; at: string; action: string; label: string; actor: string; outcome: string; details: Record<string, unknown> }
+
+const HIDDEN_KEYS = new Set(["before", "after"]);
+function describe(d: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(d)) {
+    if (v == null || v === "" || HIDDEN_KEYS.has(k)) continue;
+    parts.push(`${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`);
+  }
+  if (d.before !== undefined || d.after !== undefined) parts.push(`было: ${JSON.stringify(d.before)} → стало: ${JSON.stringify(d.after)}`);
+  return parts.join("; ");
+}
+
+/** История изменения профиля — все действия с учётной записью от создания (журнал аудита). */
+function ProfileHistory({ id, version }: { id: string; version: string }) {
+  const h = useLive(() => api.get<{ items: HistoryRow[] }>(`/api/v1/people/${id}/history`), [id, version]);
+  return (
+    <Card title="История изменения профиля">
+      {h.error ? <Alert>{errorText(h.error)}</Alert> : !h.data ? <Pending /> : h.data.items.length === 0 ? <p className="muted">Записей нет</p> : (
+        <div className="table-wrap">
+          <table className="table compact">
+            <thead><tr><th>Когда</th><th>Действие</th><th>Кто</th><th>Подробности</th></tr></thead>
+            <tbody>{[...h.data.items].reverse().map((r) => (
+              <tr key={r.id}><td className="small">{fmtDate(r.at)}</td><td>{r.label}</td><td className="small">{r.actor}</td>
+                <td className="small history-details">{describe(r.details)}</td></tr>
+            ))}</tbody>
+          </table>
         </div>
       )}
     </Card>

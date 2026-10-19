@@ -47,7 +47,13 @@ def test_recruiter_creates_local_account_and_login(world, app, api):
     me = Api(app, "i.petrov")
     assert me.login(password="wrong-password-1").status_code == 401
     r = me.login(password=PASSWORD)
-    assert r.status_code == 200 and "order.read_own" in r.json()["user"]["permissions"]
+    assert r.status_code == 200 and "order.read_own" not in r.json()["user"]["permissions"]   # профиль не проверен
+    assert card["profile_status"] == "pending" and card["profile_verified"] is False
+    assert rec.post(f"/api/v1/recruitment/users/{card['id']}/profile", json={"approve": True}).status_code == 200
+    assert "order.read_own" in me.get("/api/v1/auth/me").json()["permissions"]
+    hist = [h["action"] for h in rec.get(f"/api/v1/people/{card['id']}/history").json()["items"]]
+    assert hist[0] == "user.created_local" and "user.profile_reviewed" in hist
+    assert world.customer.get(f"/api/v1/people/{card['id']}/history").status_code == 403
     # рекрутер не меняет анкету и пароль, администратор — меняет с записью кто и когда
     assert rec.patch(f"/api/v1/people/{card['id']}/profile", json={"position_title": "X"}).status_code == 403
     assert rec.patch(f"/api/v1/people/{card['id']}/profile", json={"org_unit_id": None}).status_code == 200

@@ -24,7 +24,8 @@ STATUS_LABELS = {
     "ready": "Готов к выполнению",
     "in_progress": "Выполняется",
     "awaiting_delivery_confirmation": "Ожидает подтверждения доставки",
-    "admin_review": "На проверке администратора",
+    "admin_review": "На проверке координатора",
+    "awaiting_coordinator": "На согласовании координатора",
     "completed": "Выполнен",
     "rejected": "Отклонён",
     "cancelled": "Отменён",
@@ -81,7 +82,7 @@ def on_order_status_changed(db: Session, payload: Dict[str, Any], event_id: uuid
     if to_status == "awaiting_operator":
         create(db, approved_operators(db), "order.queue", f"Новый заказ №{order.number} в очереди",
                order_id=order.id, dedup_key=key)
-    if to_status in ("admin_review", "disputed", "aborted_technical"):
+    if to_status in ("disputed", "aborted_technical"):
         create(db, users_with_role(db, "admin"), "order.attention", title, body, order_id=order.id,
                severity=severity, dedup_key=key)
     if to_status == "aborted_technical":

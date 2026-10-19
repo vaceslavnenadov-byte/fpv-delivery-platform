@@ -36,7 +36,7 @@ CHECK_KEEP_S = 30
 CHECK_VALID_H = 12                # проверка видео действительна для подтверждения готовности
 TELEMETRY_FRESH_S = 30
 PREP_STATUSES = ("awaiting_operator", "accepted", "awaiting_readiness", "ready")
-FLEET_ORDER_STATUSES = ("pending_confirmation", "awaiting_operator", "accepted", "awaiting_readiness", "ready",
+FLEET_ORDER_STATUSES = ("awaiting_operator", "accepted", "awaiting_readiness", "ready",
                         "in_progress", "awaiting_delivery_confirmation")
 
 

@@ -25,3 +25,18 @@ export interface DroneModel {
 
 export const loadCargoTypes = () => api.get<{ items: CargoType[] }>("/api/v1/catalog/cargo-types").then((r) => r.items);
 export const loadDroneModels = () => api.get<{ items: DroneModel[] }>("/api/v1/catalog/drone-models").then((r) => r.items);
+
+export interface Consignee {
+  id: string;
+  name: string;
+  kind: string;
+  recommended_cargo: string | null;
+  recommended_cargo_name: string | null;
+  location: string;
+  priority: "low" | "normal" | "high" | "highest";
+  priority_label: string;
+  comment: string;
+  updated_at?: string | null;
+}
+
+export const loadConsignees = () => api.get<{ items: Consignee[] }>("/api/v1/catalog/consignees").then((r) => r.items);

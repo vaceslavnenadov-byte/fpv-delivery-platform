@@ -73,7 +73,7 @@ def test_missing_video_is_recorded_not_faked(world):
     assert row == (None, None)
     # Видео отсутствует → баллы за видео не начисляются, но заказ можно проверить.
     world.customer.post(f"/api/v1/orders/{o['id']}/receipt", json={"received": True})
-    r = world.admin.post(f"/api/v1/orders/{o['id']}/review",
+    r = world.coordinator.post(f"/api/v1/orders/{o['id']}/review",
                          json={"approve": True, "comment": "Видео нет, подтверждено по акту", "video_verified": None})
     assert r.status_code == 200
     score = world.admin.get(f"/api/v1/orders/{o['id']}/score").json()
@@ -96,7 +96,7 @@ def test_cannot_approve_missing_video(world):
     o = world.started_order()
     world.operator.post(f"/api/v1/orders/{o['id']}/complete")
     world.customer.post(f"/api/v1/orders/{o['id']}/receipt", json={"received": True})
-    r = world.admin.post(f"/api/v1/orders/{o['id']}/review",
+    r = world.coordinator.post(f"/api/v1/orders/{o['id']}/review",
                          json={"approve": True, "comment": "ok", "video_verified": True})
     assert r.status_code == 409 and r.json()["error"]["code"] == "video_unavailable"
 

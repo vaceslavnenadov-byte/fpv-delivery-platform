@@ -44,6 +44,7 @@ def test_drone_mission_carries_stops(world):
     assert o["route"]["base"]["lat"] == BASE["lat"]
     world.customer.post(f"/api/v1/orders/{o['id']}/submit", json={})
     world.customer.post(f"/api/v1/orders/{o['id']}/confirm", json={})
+    world.coordinator_approve(o["id"])
     world.operator.post(f"/api/v1/orders/{o['id']}/accept", json={})
     world.tech_confirm(o["id"])
     world.operator.post(f"/api/v1/orders/{o['id']}/readiness-check")

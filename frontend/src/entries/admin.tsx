@@ -5,23 +5,24 @@ import { ShellOutlet } from "../apps/shell";
 import { Alert } from "../components/ui";
 import { OrderDetailPage } from "../pages/OrderDetail";
 import { ZonesPage } from "../pages/admin/ZonesPage";
-import { CargoTypesPage, DroneModelsPage } from "../pages/admin/CatalogPages";
+import { CargoTypesPage, ConsigneesPage, DroneModelsPage } from "../pages/admin/CatalogPages";
+import { OrdersMapPage } from "../pages/OrdersMap";
 import { RecruiterOperatorsPage, RecruiterProfilesPage } from "../pages/recruiter/RecruiterPages";
 import { OrgUnitsPage } from "../pages/people/OrgUnitsPage";
 import { PeoplePage } from "../pages/people/PeoplePage";
 import { PersonCardPage } from "../pages/people/PersonCardPage";
 import { ProfilePage } from "../pages/Profile";
 import { AdminAuditPage, AdminComplaintsPage, AdminDronesPage, AdminMapsPage, AdminMonitoringPage,
-  AdminOrdersPage, AdminOverviewPage, AdminReviewsPage, AdminScoringPage, AdminUsersPage } from "../pages/admin/AdminPages";
+  AdminOrdersPage, AdminOverviewPage, AdminScoringPage, AdminUsersPage } from "../pages/admin/AdminPages";
 import { supportRoutes } from "../pages/support/routes";
 import { mountApp } from "./common";
 
 mountApp(APPS.admin, (
   <Routes>
     <Route path="/orders/:orderId/monitor" element={<MonitorShell />} />
+    <Route path="/map/window" element={<OrdersMapPage standalone />} />
     <Route element={<ShellOutlet app={APPS.admin} />}>
       <Route path="/" element={<AdminOverviewPage />} />
-      <Route path="/reviews" element={<AdminReviewsPage />} />
       <Route path="/orders" element={<AdminOrdersPage />} />
       <Route path="/drones" element={<AdminDronesPage />} />
       <Route path="/complaints" element={<AdminComplaintsPage />} />
@@ -36,6 +37,8 @@ mountApp(APPS.admin, (
       <Route path="/operators" element={<RecruiterOperatorsPage />} />
       <Route path="/cargo-types" element={<CargoTypesPage />} />
       <Route path="/drone-models" element={<DroneModelsPage />} />
+      <Route path="/consignees" element={<ConsigneesPage />} />
+      <Route path="/map" element={<OrdersMapPage />} />
       <Route path="/audit" element={<AdminAuditPage />} />
       <Route path="/monitoring" element={<AdminMonitoringPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />

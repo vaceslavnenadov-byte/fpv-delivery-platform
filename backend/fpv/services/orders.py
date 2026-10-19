@@ -30,8 +30,12 @@ FINAL = ("completed", "rejected", "cancelled", "aborted_technical")
 TRANSITIONS = {
     ("draft", "pending_confirmation"),            # заказчик отправил, проверки пройдены
     ("draft", "cancelled"),
-    ("pending_confirmation", "awaiting_operator"),  # заказчик подтвердил условия
+    ("pending_confirmation", "awaiting_coordinator"),  # заказчик разместил заказ — согласует координатор
+    ("pending_confirmation", "awaiting_operator"),  # повторный вылет, уже согласованный координатором
     ("pending_confirmation", "cancelled"),
+    ("awaiting_coordinator", "awaiting_operator"),  # координатор согласовал
+    ("awaiting_coordinator", "rejected"),           # координатор отклонил
+    ("awaiting_coordinator", "cancelled"),
     ("awaiting_operator", "accepted"),            # оператор принял
     ("awaiting_operator", "cancelled"),
     ("awaiting_operator", "rejected"),            # администратор отклонил заказ
@@ -60,7 +64,10 @@ TRANSITIONS = {
     ("disputed", "rejected"),
 }
 
-CUSTOMER_CANCELLABLE = ("draft", "pending_confirmation", "awaiting_operator", "accepted",
+ASAP_WINDOW_H = 24                 # заказ без времени доставки: окно «как можно скорее» на сутки
+POINT_LETTERS = "БВГДЕЖЗИКЛМН"
+
+CUSTOMER_CANCELLABLE = ("draft", "pending_confirmation", "awaiting_coordinator", "awaiting_operator", "accepted",
                         "awaiting_readiness", "ready")
 
 
@@ -78,9 +85,16 @@ def get_order(db: Session, order_id: uuid.UUID, *, for_update: bool = False) -> 
     return order
 
 
-# Приоритетные (повторные) заказы в работе — первыми во всех списках.
-PRIORITY_FIRST = case((and_(Order.priority.is_(True), Order.status.in_(
-    ("awaiting_operator", "accepted", "awaiting_readiness", "ready", "in_progress"))), 0), else_=1)
+# Порядок во всех списках заказов (незавершённые заказы): наивысший приоритет грузополучателя,
+# повторный вылет, высокий, обычный, низкий; завершённые — после.
+PRIORITY_LEVELS = ("low", "normal", "high", "highest")
+PRIORITY_FIRST = case(
+    (Order.status.in_(FINAL), 9),
+    (Order.priority_level == "highest", 0),
+    (Order.repeat_of.is_not(None), 1),
+    (Order.priority_level == "high", 2),
+    (Order.priority_level == "normal", 3),
+    else_=4)
 
 
 def can_view(db: Session, p: Principal, order: Order) -> bool:
@@ -92,6 +106,8 @@ def can_view(db: Session, p: Principal, order: Order) -> bool:
         return True
     if p.has("order.queue.read") and order.status == "awaiting_operator":
         return True
+    if p.has("order.approve") and order.status == "awaiting_coordinator" and order.coordinator_id is None:
+        return True           # ждёт согласования, свободных координаторов не было — может взять любой
     if p.has("order.read_fleet"):
         from . import fleets
         return fleets.is_fleet_technician_of(db, p, order)
@@ -213,8 +229,11 @@ def validate_order(db: Session, settings: Settings, order: Order, drone: Drone) 
     now = clock.now()
     window_ok = order.window_start > now and \
         (order.window_end - order.window_start) >= dt.timedelta(minutes=settings.min_window_minutes)
-    check("time_window", window_ok,
-          f"Временное окно в будущем и не короче {settings.min_window_minutes} мин")
+    if order.asap:
+        check("time_window", True, "Время доставки не задано — доставка как можно скорее")
+    else:
+        check("time_window", window_ok,
+              f"Временное окно в будущем и не короче {settings.min_window_minutes} мин")
     ok_drone, reasons = drones.readiness(db, settings, drone,
                                          distance_m=route_range_m(r), require_online=False)
     check("drone", ok_drone, "Дрон допущен к эксплуатации" if ok_drone else "; ".join(reasons))
@@ -237,9 +256,20 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
     legacy_ok = drone is not None and fleet is None and drone.owner_id == p.user_id
     if drone is None or not (fleet_ok or legacy_ok):
         raise ValidationFailed("Выберите дрон из открытых для заказов парков", code="drone_invalid")
-    o, d = data["origin"], data["destination"]
-    stops = [{"lat": round(x["lat"], 6), "lon": round(x["lon"], 6), "address": x["address"].strip(),
-              "note": (x.get("note") or "").strip()} for x in (data.get("stops") or [])]
+    def point(x: Dict[str, Any]) -> Dict[str, Any]:
+        return {"lat": round(x["lat"], 6), "lon": round(x["lon"], 6), "address": x["address"].strip(),
+                "note": (x.get("note") or "").strip()}
+    pickup_at_base = bool(data.get("points"))
+    if pickup_at_base:
+        # Груз забирается на базе парка (А); точки Б, В, … — по порядку, последняя — грузополучатель.
+        if fleet is None:
+            raise ValidationFailed("Маршрут по точкам доступен только для дрона из парка", code="drone_invalid")
+        pts = [point(x) for x in data["points"]]
+        o = {"lat": fleet.base_lat, "lon": fleet.base_lon, "address": fleet.base_address or "База парка"}
+        stops, d = pts[:-1], pts[-1]
+    else:
+        o, d = data["origin"], data["destination"]
+        stops = [point(x) for x in (data.get("stops") or [])]
     chain = [(o["lat"], o["lon"]), *[(x["lat"], x["lon"]) for x in stops], (d["lat"], d["lon"])]
     leg_bc = sum(geo.haversine_m(a[0], a[1], b[0], b[1]) for a, b in zip(chain, chain[1:]))
     if fleet is not None:
@@ -257,16 +287,31 @@ def create_draft(db: Session, settings: Settings, p: Principal, data: Dict[str, 
         except NotFound as exc:
             raise ValidationFailed("Выбранная карта недоступна — выберите другую", code="map_provider_invalid") from exc
     items = normalize_cargo(db, data)
+    consignee, priority_level, recipient = None, "normal", data.get("recipient_name")
+    if data.get("consignee_id"):
+        from . import catalogs
+        try:
+            c = catalogs.get_consignee(db, data["consignee_id"])
+        except NotFound as exc:
+            raise ValidationFailed("Выберите грузополучателя из списка", code="consignee_invalid") from exc
+        consignee, priority_level, recipient = catalogs.snapshot(db, c), c.priority, recipient or c.name
+    asap = data.get("window_start") is None
+    now = clock.now()
+    window_start = now if asap else data["window_start"]
+    window_end = now + dt.timedelta(hours=ASAP_WINDOW_H) if asap else data["window_end"]
     order = Order(customer_id=p.user_id, drone_id=drone.id, status="draft", map_provider_id=provider_id,
-                  **cargo_summary(items), recipient_name=data["recipient_name"], recipient_phone=data["recipient_phone"],
-                  window_start=data["window_start"], window_end=data["window_end"],
-                  created_at=clock.now(), updated_at=clock.now())
+                  **cargo_summary(items), recipient_name=recipient, recipient_phone=data.get("recipient_phone"),
+                  window_start=window_start, window_end=window_end, asap=asap,
+                  consignee_id=data.get("consignee_id"), consignee=consignee, priority_level=priority_level,
+                  customer_comment=(data.get("customer_comment") or "").strip() or None,
+                  created_at=now, updated_at=now)
     db.add(order)
     db.flush()
     save_cargo_items(db, order, items)
     db.add(Route(order_id=order.id, origin_lat=o["lat"], origin_lon=o["lon"], origin_address=o["address"],
                  dest_lat=d["lat"], dest_lon=d["lon"], dest_address=d["address"], distance_m=distance,
-                 checkpoints=build_checkpoints(base, o, d, stops), stops=stops,
+                 checkpoints=build_checkpoints(None if pickup_at_base else base, o, d, stops, letters=pickup_at_base),
+                 stops=stops, pickup_at_base=pickup_at_base,
                  base_lat=base["lat"] if base else None, base_lon=base["lon"] if base else None,
                  base_address=base["address"] if base else None, return_m=return_m))
     db.add(OrderStatusHistory(order_id=order.id, from_status=None, to_status="draft", actor_id=p.user_id,
@@ -330,8 +375,13 @@ def cargo_items(db: Session, order: Order) -> List[OrderCargoItem]:
                            height_mm=order.cargo_height_mm)]
 
 
+def point_name(i: int) -> str:
+    """Название точки маршрута заказчика: 0 → «Точка Б», 1 → «Точка В», …"""
+    return "Точка " + POINT_LETTERS[i] if i < len(POINT_LETTERS) else f"Точка {i + 1}"
+
+
 def build_checkpoints(base: Optional[Dict[str, Any]], o: Dict[str, Any], d: Dict[str, Any],
-                      stops: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+                      stops: Optional[List[Dict[str, Any]]] = None, *, letters: bool = False) -> List[Dict[str, Any]]:
     """Контрольные точки: [подлёт А→Б, Б — забор груза (kind=pickup)], затем Б→В через промежуточные
     точки заказчика (kind=stop). Справочные точки маршрута для отображения и учёта прохождения,
     не команды дрону."""
@@ -356,7 +406,7 @@ def build_checkpoints(base: Optional[Dict[str, Any]], o: Dict[str, Any], d: Dict
         cps.append(pt(f"КТ-{n}", lat, lon))
         if i < len(stops):
             s = stops[i]
-            cps.append(pt(f"{i + 1} — {s['address']}", s["lat"], s["lon"], "stop"))
+            cps.append(pt(f"{point_name(i) if letters else i + 1} — {s['address']}", s["lat"], s["lon"], "stop"))
     return cps
 
 
@@ -403,8 +453,126 @@ def confirm(db: Session, settings: Settings, p: Principal, order_id: uuid.UUID,
     ok, reasons = drones.readiness(db, settings, drone, require_online=False)
     if not ok:
         raise ValidationFailed("Дрон больше не допущен к выполнению: " + "; ".join(reasons), code="drone_not_ready")
-    transition(db, order, "awaiting_operator", p.actor, reason="Заказчик подтвердил условия")
+    transition(db, order, "awaiting_coordinator", p.actor, reason="Заказ размещён, ждёт согласования координатором")
+    _post_customer_comment(db, order)
+    # Согласующий координатор — с наименьшей нагрузкой (services/coordination.py).
+    from . import coordination
+    from .. import runtime
+    coordination.auto_assign(db, runtime.settings(), order)
     return order
+
+
+def _post_customer_comment(db: Session, order: Order) -> None:
+    """Комментарий заказчика (и фото) при размещении заказа попадает в переписку по заказу."""
+    if not (order.customer_comment or order.comment_photo_key):
+        return
+    from .. import runtime
+    note = OrderNote(order_id=order.id, author_id=order.customer_id, kind="chat", severity="info",
+                     body=order.customer_comment or "Фото к заказу", created_at=clock.now(),
+                     attachment_key=order.comment_photo_key, attachment_type=order.comment_photo_type,
+                     attachment_sha256=runtime.store().sha256(order.comment_photo_key) if order.comment_photo_key else None)
+    db.add(note)
+    db.flush()
+
+
+COMMENT_PHOTO_MAX = 15 * 1024 * 1024
+
+
+def set_comment_photo(db: Session, p: Principal, order_id: uuid.UUID, data: bytes) -> Order:
+    """Фото к комментарию заказчика (до размещения заказа)."""
+    from . import support
+    from .. import runtime
+    order = visible_order(db, p, order_id, for_update=True)
+    if order.customer_id != p.user_id:
+        raise Forbidden("Фото к заказу прикладывает заказчик")
+    if order.status not in ("draft", "pending_confirmation"):
+        raise Conflict("Фото можно приложить до размещения заказа", code="invalid_transition")
+    kind = support.sniff_media(data[:64])
+    if not kind.startswith("image/"):
+        raise ValidationFailed("Приложите фото (PNG, JPEG или WebP)", code="attachment_type")
+    if len(data) > COMMENT_PHOTO_MAX:
+        raise ValidationFailed("Фото больше 15 МБ", code="attachment_too_large")
+    ext = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}.get(kind, "img")
+    key = f"chat/{order.id}/comment-{uuid.uuid4().hex[:12]}.{ext}"
+    import os
+    import tempfile
+    from pathlib import Path
+    fd, tmp = tempfile.mkstemp(prefix="fpv-order-photo-")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        runtime.store().put_file(key, Path(tmp), kind)
+    finally:
+        os.unlink(tmp)
+    order.comment_photo_key, order.comment_photo_type = key, kind
+    order.updated_at = clock.now()
+    audit.record(db, p.actor, "order.comment_photo", entity_type="order", entity_id=order.id,
+                 details={"size": len(data), "type": kind})
+    return order
+
+
+def coordinator_decide(db: Session, p: Principal, order_id: uuid.UUID, approve: bool, comment: str = "") -> Order:
+    """Координатор согласует новый заказ (и закрепляется за ним) или отклоняет его с причиной."""
+    p.require("order.approve")
+    order = visible_order(db, p, order_id, for_update=True)
+    if order.status != "awaiting_coordinator":
+        raise Conflict("Заказ не ждёт согласования координатором", code="invalid_transition")
+    if order.coordinator_id not in (None, p.user_id) and not p.has("order.assign"):
+        raise Forbidden("Заказ согласует назначенный ему координатор")
+    comment = (comment or "").strip()
+    if approve:
+        if order.coordinator_id != p.user_id and "coordinator" in p.roles:
+            for a in db.execute(select(Assignment).where(Assignment.order_id == order.id, Assignment.status == "active",
+                                                          Assignment.role == "coordinator")).scalars():
+                a.status, a.reason, a.ended_at = "released", "Заказ согласовал другой координатор", clock.now()
+            db.flush()
+            db.add(Assignment(order_id=order.id, user_id=p.user_id, role="coordinator", created_by=p.user_id,
+                              created_at=clock.now()))
+            order.coordinator_id = p.user_id
+        order.coordinator_approved_at = clock.now()
+        transition(db, order, "awaiting_operator", p.actor, reason=comment or "Заказ согласован координатором")
+    else:
+        if len(comment) < 3:
+            raise ValidationFailed("Укажите причину отказа (не менее 3 символов)")
+        order.closed_reason = comment
+        _end_assignments(db, order, "released", comment)
+        transition(db, order, "rejected", p.actor, reason=f"Координатор отклонил заказ: {comment}")
+    audit.record(db, p.actor, "order.coordinator_approved" if approve else "order.coordinator_rejected",
+                 entity_type="order", entity_id=order.id, details={"comment": comment})
+    return order
+
+
+def pending_approval(db: Session, p: Principal) -> List[Order]:
+    """Заказы, ждущие согласования этим координатором (и без координатора); администратору — все."""
+    p.require("order.approve" if not p.has("order.read_all") else "order.read_all")
+    stmt = select(Order).where(Order.status == "awaiting_coordinator")
+    if not p.has("order.read_all"):
+        stmt = stmt.where(or_(Order.coordinator_id == p.user_id, Order.coordinator_id.is_(None)))
+    return list(db.execute(stmt.order_by(PRIORITY_FIRST, Order.submitted_at)).unique().scalars())
+
+
+def drone_chain(db: Session, orders: List[Order]) -> Dict[uuid.UUID, Optional[int]]:
+    """Для заказов в очереди: номер заказа, который должен вылететь на этом дроне раньше (или None).
+    Порядок вылета одного дрона — по времени поступления на вылет (согласования координатором)."""
+    drones_ids = {o.drone_id for o in orders}
+    if not drones_ids:
+        return {}
+    busy = dict(db.execute(select(Order.drone_id, Order.number).where(
+        Order.drone_id.in_(drones_ids), Order.status.in_(ACTIVE_EXECUTION))).all())
+    waiting = db.execute(select(Order.drone_id, Order.id, Order.number).where(
+        Order.drone_id.in_(drones_ids), Order.status == "awaiting_operator")
+        .order_by(Order.coordinator_approved_at.asc().nulls_last(), Order.submitted_at, Order.number)).all()
+    first: Dict[uuid.UUID, Tuple[uuid.UUID, int]] = {}
+    for drone_id, oid, number in waiting:
+        first.setdefault(drone_id, (oid, number))
+    out: Dict[uuid.UUID, Optional[int]] = {}
+    for o in orders:
+        if o.drone_id in busy:
+            out[o.id] = busy[o.drone_id]
+        else:
+            head = first.get(o.drone_id)
+            out[o.id] = head[1] if head and head[0] != o.id else None
+    return out
 
 
 def cancel(db: Session, p: Principal, order_id: uuid.UUID, reason: str,
@@ -412,7 +580,7 @@ def cancel(db: Session, p: Principal, order_id: uuid.UUID, reason: str,
     order = visible_order(db, p, order_id, for_update=True)
     _check_version(order, expected_version)
     is_owner = order.customer_id == p.user_id and p.has("order.cancel_own")
-    is_admin = p.has("order.review")
+    is_admin = p.has("order.assign")
     if not (is_owner or is_admin):
         raise Forbidden("Недостаточно прав для отмены заказа")
     if order.status not in CUSTOMER_CANCELLABLE:
@@ -536,6 +704,10 @@ def accept(db: Session, p: Principal, order_id: uuid.UUID, expected_version: Opt
                                              Order.status.in_(ACTIVE_EXECUTION))).first()
     if busy:
         raise Conflict("У оператора уже есть активное задание", code="operator_busy")
+    before = drone_chain(db, [order]).get(order.id)
+    if before is not None:
+        raise Conflict(f"Сначала на этом дроне вылетает заказ №{before} (поступил на вылет раньше)",
+                       code="drone_queue")
     order.operator_id = p.user_id
     order.accepted_at = clock.now()
     db.add(Assignment(order_id=order.id, user_id=p.user_id, role="operator", created_by=p.user_id,
@@ -758,13 +930,15 @@ def add_note(db: Session, p: Principal, order_id: uuid.UUID, kind: str, body: st
 
 def admin_review(db: Session, settings: Settings, p: Principal, order_id: uuid.UUID, *, approve: bool,
                  comment: str, video_verified: Optional[bool], expected_version: Optional[int] = None) -> Order:
-    """Проверка администратором: принятие/отклонение отчёта, проверка видео и окончательное начисление баллов."""
+    """Проверка и оценка выполнения координатором заказа: принятие/отклонение отчёта, проверка видео
+    и окончательное начисление баллов. (Статус по-прежнему называется admin_review.)"""
     from . import scoring, video
     p.require("order.review")
     order = get_order(db, order_id, for_update=True)
+    _require_reviewer(p, order)
     _check_version(order, expected_version)
     if order.status != "admin_review":
-        raise Conflict("Заказ не находится на проверке администратора", code="invalid_transition")
+        raise Conflict("Заказ не находится на проверке выполнения", code="invalid_transition")
     if not approve and not comment:
         raise ValidationFailed("Укажите причину отклонения")
     if video_verified is not None:
@@ -775,12 +949,26 @@ def admin_review(db: Session, settings: Settings, p: Principal, order_id: uuid.U
     db.flush()
     if approve:
         order.completed_at = clock.now()
-        transition(db, order, "completed", p.actor, reason=comment or "Выполнение подтверждено администратором")
+        transition(db, order, "completed", p.actor, reason=comment or "Выполнение подтверждено координатором")
     else:
         order.closed_reason = comment
         transition(db, order, "rejected", p.actor, reason=comment)
     scoring.finalize(db, p, order)
     return order
+
+
+def _require_reviewer(p: Principal, order: Order) -> None:
+    """Проверяет выполнение координатор этого заказа (заказ без координатора — любой координатор)."""
+    if order.coordinator_id is not None and order.coordinator_id != p.user_id:
+        raise Forbidden("Выполнение проверяет координатор этого заказа")
+
+
+def reviews_for(db: Session, p: Principal) -> List[Order]:
+    """Заказы на проверке выполнения у этого координатора."""
+    p.require("order.review")
+    return list(db.execute(select(Order).where(
+        Order.status == "admin_review", or_(Order.coordinator_id == p.user_id, Order.coordinator_id.is_(None)))
+        .order_by(PRIORITY_FIRST, Order.delivered_at)).unique().scalars())
 
 
 def history(db: Session, order_id: uuid.UUID) -> List[OrderStatusHistory]:
