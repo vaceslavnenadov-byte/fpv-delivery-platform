@@ -56,6 +56,7 @@ export const APPS: Record<string, AppConfig> = {
     nav: [
       { to: "/", label: "Очередь заказов", section: "Заказы" },
       { to: "/mine", label: "Мои задания", section: "Заказы" },
+      { to: "/qualification", label: "Квалификация", section: "Допуск" },
       { to: "/scores", label: "Баллы и рейтинг", section: "Результаты" },
     ],
   },
@@ -91,6 +92,7 @@ export const APPS: Record<string, AppConfig> = {
       { to: "/org-units", label: "Группы пользователей", section: "Пользователи" },
       { to: "/profiles", label: "Проверка профилей", section: "Проверки" },
       { to: "/operators", label: "Допуск операторов", section: "Проверки" },
+      { to: "/qualification", label: "Подтверждение квалификации", section: "Проверки" },
     ],
   },
   admin: {
@@ -109,6 +111,7 @@ export const APPS: Record<string, AppConfig> = {
       { to: "/org-units", label: "Группы пользователей", section: "Пользователи и доступ" },
       { to: "/profiles", label: "Проверка профилей", section: "Пользователи и доступ" },
       { to: "/operators", label: "Допуск операторов", section: "Пользователи и доступ" },
+      { to: "/qualification", label: "Подтверждение квалификации", section: "Пользователи и доступ" },
       { to: "/users", label: "Домен, операторы, устройства", section: "Пользователи и доступ" },
       { to: "/cargo-types", label: "Типы грузов", section: "Справочники" },
       { to: "/consignees", label: "Типы грузополучателей", section: "Справочники" },

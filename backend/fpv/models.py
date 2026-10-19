@@ -7,7 +7,7 @@ import uuid
 from decimal import Decimal
 from typing import Any, List, Optional
 
-from sqlalchemy import (BigInteger, Boolean, Float, ForeignKey, Integer, LargeBinary, Numeric,
+from sqlalchemy import (BigInteger, Boolean, Date, Float, ForeignKey, Integer, LargeBinary, Numeric,
                         SmallInteger, String, Text)
 from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -242,6 +242,28 @@ class Consignee(Base):
     comment: Mapped[str] = mapped_column(Text, default="")
     deleted_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+    updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
+
+
+class OperatorLicense(Base):
+    """Лицензия оператора на тип БПЛА (квалификация)."""
+    __tablename__ = "operator_licenses"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    drone_model_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("drone_models.id"))
+    model: Mapped[Any] = mapped_column(JSONB)
+    license_number: Mapped[str] = mapped_column(Text)
+    issued_on: Mapped[dt.date] = mapped_column(Date)
+    issued_by: Mapped[str] = mapped_column(Text)
+    scan_key: Mapped[str] = mapped_column(Text)
+    scan_type: Mapped[str] = mapped_column(Text)
+    scan_name: Mapped[str] = mapped_column(Text, default="")
+    scan_sha256: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, default="pending")
+    review_comment: Mapped[Optional[str]] = mapped_column(Text)
+    reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[Optional[dt.datetime]] = mapped_column(TS)
     created_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
     updated_at: Mapped[dt.datetime] = mapped_column(TS, server_default="now()")
 

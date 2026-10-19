@@ -87,6 +87,8 @@ export const api = {
   patch: <T>(url: string, body?: unknown) => request<T>("PATCH", url, body ?? {}),
   upload: <T>(url: string, file: Blob, headers?: Record<string, string>) =>
     request<T>("POST", url, file, { headers, retries: 0 }),
+  uploadPut: <T>(url: string, file: Blob, headers?: Record<string, string>) =>
+    request<T>("PUT", url, file, { headers, retries: 0 }),
   del: <T>(url: string) => request<T>("DELETE", url),
 };
 

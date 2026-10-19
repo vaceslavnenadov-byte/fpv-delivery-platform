@@ -244,6 +244,11 @@ class OrderIn(StrictModel):
         return self
 
 
+class LicenseDecisionIn(StrictModel):
+    status: Literal["approved", "fix", "rejected"]
+    comment: str = Field(default="", max_length=1000)
+
+
 class CoordinatorDecisionIn(StrictModel):
     approve: bool
     comment: str = Field(default="", max_length=1000)

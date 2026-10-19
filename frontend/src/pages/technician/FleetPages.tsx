@@ -7,8 +7,8 @@ import { ConsigneeCard, CustomerComment, OrderCargoCards, routeRows } from "../.
 import { OrderTable } from "../../components/OrderTable";
 import { PointPicker } from "../../components/PointPicker";
 import { RouteMap } from "../../components/RouteMap";
-import { Alert, Badge, Card, Empty, KV, Pending, Tone } from "../../components/ui";
-import { cargoName, fmtDate } from "../../labels";
+import { Alert, Badge, Card, Empty, KV, Pending, Tone, useSort } from "../../components/ui";
+import { DRONE_STATUS, HEALTH_STATUS, LINK_STATUS, cargoName, fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
 import { loadDroneModels } from "../../catalogs";
 import type { Zone } from "../../serviceArea";
@@ -142,6 +142,12 @@ function FleetDrones({ fleet, onChanged }: { fleet: Fleet; onChanged: () => void
   }
 
   const items = data.data?.items ?? [];
+  // Сортировка по столбцам (щелчок по заголовку): по подписям, а не по внутренним кодам.
+  const rows = items.map((d) => ({ ...d, model_name: `${d.manufacturer} ${d.model}`,
+    reg_label: DRONE_STATUS[d.status]?.label ?? d.status, health_label: HEALTH_STATUS[d.health_status]?.label ?? d.health_status,
+    link_label: LINK_STATUS[d.link_status]?.label ?? d.link_status, video_at: d.video_checked_at ?? "",
+    open_label: d.published ? "открыт" : "закрыт" }));
+  const { sorted, th } = useSort(rows, "registration_number");
   return (
     <>
       <Card title={`Парк «${fleet.name}»`} actions={<span className="small muted">База (А): {fleet.base.address}</span>}>
@@ -149,9 +155,9 @@ function FleetDrones({ fleet, onChanged }: { fleet: Fleet; onChanged: () => void
         {!data.data ? <Pending /> : items.length === 0 ? <Empty>В парке нет дронов</Empty> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Учётный номер</th><th>Модель</th><th>Регистрация</th><th>Техсостояние</th><th>Связь</th>
-                <th>Видео</th><th>Для заказов</th><th></th></tr></thead>
-              <tbody>{items.map((d) => (
+              <thead><tr>{th("registration_number", "Учётный номер")}{th("model_name", "Модель")}{th("reg_label", "Регистрация")}
+                {th("health_label", "Техсостояние")}{th("link_label", "Связь")}{th("video_at", "Видео")}{th("open_label", "Для заказов")}<th></th></tr></thead>
+              <tbody>{sorted.map((d) => (
                 <tr key={d.id} className={selected === d.id ? "selected" : ""}>
                   <td><button className="link" onClick={() => setSelected(d.id)}>{d.registration_number}</button></td>
                   <td>{d.manufacturer} {d.model}<div className="small muted">до {d.max_payload_g} г · {(d.max_range_m / 1000).toFixed(0)} км</div></td>
@@ -160,7 +166,7 @@ function FleetDrones({ fleet, onChanged }: { fleet: Fleet; onChanged: () => void
                   <td><Badge kind="link" value={d.link_status} /></td>
                   <td className="small">{d.video_checked_at ? `проверено ${fmtDate(d.video_checked_at)}` : "не проверено"}</td>
                   <td>{d.published ? <Tone tone="ok">открыт</Tone> : <Tone tone="muted">закрыт</Tone>}</td>
-                  <td className="row">
+                  <td><div className="row">
                     <button className="btn small" onClick={() => setSelected(d.id)}>Подключение</button>
                     {d.status === "active" && (
                       <button className="btn small" onClick={() => act(async () => {
@@ -172,7 +178,7 @@ function FleetDrones({ fleet, onChanged }: { fleet: Fleet; onChanged: () => void
                     <button className="btn small" onClick={() => act(() => api.post(`/api/v1/drones/${d.id}/publish`, { published: !d.published }))}>
                       {d.published ? "Закрыть" : "Открыть для заказов"}
                     </button>
-                  </td>
+                  </div></td>
                 </tr>
               ))}</tbody>
             </table>

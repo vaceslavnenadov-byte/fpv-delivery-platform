@@ -238,11 +238,11 @@ export function RecruiterOperatorsPage() {
                 <td><Tone tone={o.status === "approved" ? "ok" : o.status === "pending" ? "warn" : "danger"}>{OP_LABEL[o.status] ?? o.status}</Tone></td>
                 <td><input value={notes[o.user_id] ?? ""} onChange={(e) => setNotes({ ...notes, [o.user_id]: e.target.value })}
                            placeholder="Комментарий к решению" aria-label={`Комментарий к заявке ${o.display_name}`} /></td>
-                <td className="row wrap">
+                <td><div className="row wrap">
                   {o.status !== "approved" && <button className="btn small primary" onClick={() => void decide(o, true)}>Допустить</button>}
                   {o.status === "pending" && <button className="btn small" onClick={() => void decide(o, false)}>Отклонить</button>}
                   {o.status === "approved" && <button className="btn small danger" onClick={() => void suspend(o)}>Приостановить</button>}
-                </td>
+                </div></td>
               </tr>
             ))}</tbody>
           </table></div>

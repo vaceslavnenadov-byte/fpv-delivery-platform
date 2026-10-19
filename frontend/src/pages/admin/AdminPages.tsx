@@ -63,7 +63,7 @@ export function AdminOverviewPage() {
         </Card>
         <Card title="Лучшие операторы">
           {d.top_operators.length === 0 ? <Empty>Нет данных</Empty> : (
-            <table className="table compact"><thead><tr><th>Оператор</th><th>Баллы</th><th>Выполнено</th></tr></thead>
+            <table className="table compact"><thead><tr><th>Оператор</th><th className="num">Баллы</th><th className="num">Выполнено</th></tr></thead>
               <tbody>{d.top_operators.map((o) => <tr key={o.name}><td>{o.name}</td><td className="num">{o.points}</td><td className="num">{o.completed}</td></tr>)}</tbody></table>
           )}
           <KV items={Object.entries(d.video_by_status).map(([k, v]) => [`Видео: ${k}`, v])} />
@@ -129,11 +129,11 @@ export function AdminDronesPage() {
                 <td><Badge kind="drone" value={d.status} />{d.blocked_reason && <div className="small">{d.blocked_reason}</div>}</td>
                 <td><Badge kind="health" value={d.health_status} /></td>
                 <td><Badge kind="link" value={d.link_status} /></td>
-                <td className="row">
+                <td><div className="row">
                   {d.status === "pending_approval" && <button className="btn small primary" onClick={() => decide(d, "approve")}>Подтвердить</button>}
                   {d.status === "active" && <button className="btn small danger" onClick={() => decide(d, "block")}>Заблокировать</button>}
                   {d.status === "blocked" && <button className="btn small" onClick={() => decide(d, "unblock")}>Разблокировать</button>}
-                </td>
+                </div></td>
               </tr>
             ))}</tbody></table>
         )}
@@ -251,7 +251,7 @@ export function AdminUsersPage() {
                 <td>{u.directory_enabled ? <Tone tone="ok">активна</Tone> : <Tone tone="danger">заблокирована</Tone>}</td>
                 <td><Tone tone={u.status === "active" ? "ok" : "danger"}>{u.status}</Tone></td>
                 <td className="small">{fmtDate(u.last_login_at)}</td>
-                <td className="row wrap">
+                <td><div className="row wrap">
                   {u.status === "active" ? <button className="btn small danger" onClick={() => setStatus(u, "disabled")}>Отключить</button>
                     : u.status === "disabled" && <button className="btn small" onClick={() => setStatus(u, "active")}>Включить</button>}
                   <select defaultValue="" onChange={(e) => { const [r, a] = e.target.value.split(":"); if (r) void grant(u, r, a === "1"); e.target.value = ""; }}>
@@ -259,7 +259,7 @@ export function AdminUsersPage() {
                     {Object.keys(ROLE_LABELS).map((r) => <option key={`${r}1`} value={`${r}:1`}>+ {ROLE_LABELS[r]}</option>)}
                     {Object.keys(ROLE_LABELS).map((r) => <option key={`${r}0`} value={`${r}:0`}>− {ROLE_LABELS[r]}</option>)}
                   </select>
-                </td>
+                </div></td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -272,11 +272,11 @@ export function AdminUsersPage() {
             <table className="table compact"><tbody>{ops.data.items.map((o) => (
               <tr key={o.user_id}><td>{o.display_name}<div className="muted small">№ {o.license_number}</div></td>
                 <td><Tone tone={o.status === "approved" ? "ok" : o.status === "pending" ? "warn" : "danger"}>{o.status}</Tone></td>
-                <td className="row">
+                <td><div className="row">
                   {o.status !== "approved" && <button className="btn small primary" onClick={() => run(setMsg, () => api.post(`/api/v1/admin/operators/${o.user_id}/decision`, { approve: true }), "Оператор допущен", () => { ops.reload(); users.reload(); })}>Допустить</button>}
                   {o.status === "pending" && <button className="btn small" onClick={() => run(setMsg, () => api.post(`/api/v1/admin/operators/${o.user_id}/decision`, { approve: false }), "Заявка отклонена", ops.reload)}>Отклонить</button>}
                   {o.status === "approved" && <button className="btn small danger" onClick={() => run(setMsg, () => api.post(`/api/v1/admin/operators/${o.user_id}/suspend`, { approve: false, notes: "Приостановлен" }), "Допуск приостановлен", ops.reload)}>Приостановить</button>}
-                </td></tr>
+                </div></td></tr>
             ))}</tbody></table>
           )}
         </Card>
@@ -306,7 +306,7 @@ export function AdminUsersPage() {
                   <span key={p.id} className="chip">{p.role ? ROLE_LABELS[p.role] : p.domain_group} ({p.access_level})
                     <button className="link" aria-label="Удалить" onClick={() => run(setMsg, () => api.del(`/api/v1/admin/device-policies/${p.id}`), "Правило удалено", devices.reload)}>×</button></span>
                 ))}</td>
-                <td className="row">
+                <td><div className="row">
                   <select value={pol[d.id] ?? ""} onChange={(e) => setPol({ ...pol, [d.id]: e.target.value })}>
                     <option value="">роль / группа…</option>
                     {Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={`role:${k}`}>Роль: {v}</option>)}
@@ -316,7 +316,7 @@ export function AdminUsersPage() {
                     const [t, v] = (pol[d.id] ?? "").split(":");
                     void run(setMsg, () => api.post(`/api/v1/admin/devices/${d.id}/policies`, t === "role" ? { role: v } : { domain_group: v }), "Правило добавлено", devices.reload);
                   }}>Добавить</button>
-                </td></tr>
+                </div></td></tr>
             ))}</tbody></table>
         )}
         <form className="form row" onSubmit={(e: FormEvent) => { e.preventDefault(); void run(setMsg, () => api.post("/api/v1/admin/devices", { ...dev, hostname: dev.hostname || null }), "Устройство зарегистрировано", devices.reload); }}>
@@ -332,7 +332,7 @@ export function AdminUsersPage() {
       {roles.data && (
         <Card title="Таблица прав (роль → разрешения)">
           <div className="table-wrap"><table className="table compact matrix">
-            <thead><tr><th>Разрешение</th>{roles.data.roles.map((r) => <th key={r.code}>{r.name}</th>)}</tr></thead>
+            <thead><tr><th>Разрешение</th>{roles.data.roles.map((r) => <th key={r.code} className="center">{r.name}</th>)}</tr></thead>
             <tbody>{roles.data.permissions.map((p) => (
               <tr key={p.code}><td><span className="mono small">{p.code}</span><div className="muted small">{p.description}</div></td>
                 {roles.data!.roles.map((r) => <td key={r.code} className="center">{r.permissions.includes(p.code) ? "●" : ""}</td>)}</tr>
@@ -405,7 +405,7 @@ export function AdminAuditPage() {
       </>}>
         {!list.data ? <Pending /> : (
           <div className="table-wrap"><table className="table compact">
-            <thead><tr><th>#</th><th>Время</th><th>Кто</th><th>Действие</th><th>Объект</th><th>Итог</th><th>Детали</th></tr></thead>
+            <thead><tr><th className="num">#</th><th>Время</th><th>Кто</th><th>Действие</th><th>Объект</th><th>Итог</th><th>Детали</th></tr></thead>
             <tbody>{list.data.items.map((a) => (
               <tr key={a.id}><td className="num">{a.id}</td><td className="small">{fmtDate(a.occurred_at)}</td>
                 <td className="small">{a.actor}<div className="muted">{a.actor_ip}</div></td><td className="mono small">{a.action}</td>
@@ -596,7 +596,7 @@ export function AdminMapsPage() {
                     : <span className="small">{m.bounds.north} / {m.bounds.south} / {m.bounds.west} / {m.bounds.east}</span>}</td>
                   <td className="small">{m.width_px && m.height_px ? `${m.width_px}×${m.height_px} px, ` : ""}{m.size_bytes < 1024 * 1024 ? `${Math.ceil(m.size_bytes / 1024)} КБ` : `${(m.size_bytes / 1024 / 1024).toFixed(1)} МБ`}</td>
                   <td><Tone tone={m.active ? "ok" : "warn"}>{m.active ? "используется" : "отключена"}</Tone></td>
-                  <td className="row">
+                  <td><div className="row">
                     {editing === m.id ? (
                       <>
                         <button className="btn small primary" onClick={() => saveEdit(m)}>Сохранить</button>
@@ -611,7 +611,7 @@ export function AdminMapsPage() {
                           run(setMsg, () => api.del(`/api/v1/admin/maps/${m.id}`), "Карта удалена", changed)}>Удалить</button>
                       </>
                     )}
-                  </td>
+                  </div></td>
                 </tr>
               ))}
             </tbody>

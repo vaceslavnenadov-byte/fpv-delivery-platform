@@ -125,7 +125,7 @@ export function OperatorScoresPage() {
       <Card title="Начисления">
         {s.data.transactions.length === 0 ? <Empty>Начислений пока нет</Empty> : (
           <table className="table">
-            <thead><tr><th>Дата</th><th>Заказ</th><th>Тип</th><th>Баллы</th><th>Основание</th></tr></thead>
+            <thead><tr><th>Дата</th><th>Заказ</th><th>Тип</th><th className="num">Баллы</th><th>Основание</th></tr></thead>
             <tbody>{s.data.transactions.map((t) => (
               <tr key={t.id}><td className="small">{fmtDate(t.created_at)}</td><td><Link to={`/orders/${t.order_id}`}>открыть</Link></td>
                 <td>{t.kind === "final" ? "Окончательное" : "Корректировка"}</td><td className="num">{t.points}</td><td className="small">{t.reason}</td></tr>

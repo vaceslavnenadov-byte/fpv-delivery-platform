@@ -7,6 +7,7 @@ import { OrderDetailPage } from "../pages/OrderDetail";
 import { ProfilePage } from "../pages/Profile";
 import { OperatorMinePage, OperatorQueuePage, OperatorScoresPage } from "../pages/operator/OperatorPages";
 import { supportRoutes } from "../pages/support/routes";
+import { QualificationPage } from "../pages/licenses/QualificationPage";
 import { mountApp } from "./common";
 
 mountApp(APPS.operator, (
@@ -17,6 +18,7 @@ mountApp(APPS.operator, (
       <Route path="/mine" element={<OperatorMinePage />} />
       <Route path="/scores" element={<OperatorScoresPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />
+      <Route path="/qualification" element={<QualificationPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       {supportRoutes()}
       <Route path="*" element={<Alert tone="warn">Страница не найдена</Alert>} />

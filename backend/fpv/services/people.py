@@ -145,6 +145,9 @@ HISTORY_LABELS = {
     "user.unbanned": "Учётная запись возобновлена",
     "operator.applied": "Заявка на допуск оператора",
     "operator.decision": "Решение по допуску оператора",
+    "operator.license_submitted": "Заявка на квалификацию (лицензия)",
+    "operator.license_resubmitted": "Исправленная заявка на квалификацию",
+    "operator.license_decided": "Решение по квалификации",
     "operator.suspended": "Допуск оператора приостановлен",
 }
 

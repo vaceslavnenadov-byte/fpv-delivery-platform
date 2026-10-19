@@ -15,6 +15,7 @@ import { ProfilePage } from "../pages/Profile";
 import { AdminAuditPage, AdminComplaintsPage, AdminDronesPage, AdminMapsPage, AdminMonitoringPage,
   AdminOrdersPage, AdminOverviewPage, AdminScoringPage, AdminUsersPage } from "../pages/admin/AdminPages";
 import { supportRoutes } from "../pages/support/routes";
+import { QualificationReviewPage } from "../pages/licenses/QualificationReviewPage";
 import { mountApp } from "./common";
 
 mountApp(APPS.admin, (
@@ -42,6 +43,7 @@ mountApp(APPS.admin, (
       <Route path="/audit" element={<AdminAuditPage />} />
       <Route path="/monitoring" element={<AdminMonitoringPage />} />
       <Route path="/orders/:id" element={<OrderDetailPage />} />
+      <Route path="/qualification" element={<QualificationReviewPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       {supportRoutes(true)}
       <Route path="*" element={<Alert tone="warn">Страница не найдена</Alert>} />

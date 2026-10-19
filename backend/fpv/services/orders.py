@@ -105,7 +105,10 @@ def can_view(db: Session, p: Principal, order: Order) -> bool:
     if p.has("order.read_assigned") and p.user_id in (order.operator_id, order.coordinator_id):
         return True
     if p.has("order.queue.read") and order.status == "awaiting_operator":
-        return True
+        from . import licenses
+        drone = db.get(Drone, order.drone_id)
+        if drone is None or drone.drone_model_id is None or drone.drone_model_id in licenses.approved_models(db, p.user_id):
+            return True
     if p.has("order.approve") and order.status == "awaiting_coordinator" and order.coordinator_id is None:
         return True           # ждёт согласования, свободных координаторов не было — может взять любой
     if p.has("order.read_fleet"):
@@ -646,8 +649,10 @@ def queue(db: Session, p: Principal, *, max_distance_m: Optional[int] = None,
     p.require("order.queue.read")
     declined = select(Assignment.order_id).where(Assignment.user_id == p.user_id, Assignment.role == "operator",
                                                  Assignment.status == "declined")
+    from . import licenses
     stmt = select(Order).join(Route, Route.order_id == Order.id).where(
-        Order.status == "awaiting_operator", Order.id.notin_(declined))
+        Order.status == "awaiting_operator", Order.id.notin_(declined),
+        licenses.admitted_condition(db, p.user_id))      # только типы БПЛА, к которым оператор допущен
     if max_distance_m:
         stmt = stmt.where(Route.distance_m <= max_distance_m)
     if cargo_type:
@@ -704,6 +709,8 @@ def accept(db: Session, p: Principal, order_id: uuid.UUID, expected_version: Opt
                                              Order.status.in_(ACTIVE_EXECUTION))).first()
     if busy:
         raise Conflict("У оператора уже есть активное задание", code="operator_busy")
+    from . import licenses
+    licenses.check_admitted(db, p.user_id, drones.get_drone(db, order.drone_id))
     before = drone_chain(db, [order]).get(order.id)
     if before is not None:
         raise Conflict(f"Сначала на этом дроне вылетает заказ №{before} (поступил на вылет раньше)",

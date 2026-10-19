@@ -42,7 +42,7 @@ def delete_cargo(cargo_id: uuid.UUID, p: Principal = Depends(current_principal),
 
 @router.get("/drone-models")
 def drone_models(p: Principal = Depends(current_principal), db: Session = Depends(get_db)):
-    if not (p.has("fleet.manage") or p.has("catalog.manage") or p.has("drone.read_all")):
+    if not (p.has("fleet.manage") or p.has("catalog.manage") or p.has("drone.read_all") or p.has("operator.license")):
         p.require("fleet.manage")
     return {"items": [catalogs.serialize_model(m) for m in catalogs.drone_models(db)]}
 

@@ -10,7 +10,7 @@ export function OrderTable({ orders, showCustomer = false }: { orders: Order[]; 
     <div className="table-wrap">
       <table className="table">
         <thead>
-          <tr><th>№</th><th>Статус</th><th>Груз</th><th>Грузополучатель</th><th>Маршрут</th><th>Время доставки</th><th>Стоимость</th>{showCustomer && <th>Создан</th>}</tr>
+          <tr><th>№</th><th>Статус</th><th>Груз</th><th>Грузополучатель</th><th>Маршрут</th><th>Время доставки</th><th className="num">Стоимость</th>{showCustomer && <th>Создан</th>}</tr>
         </thead>
         <tbody>
           {orders.map((o) => (

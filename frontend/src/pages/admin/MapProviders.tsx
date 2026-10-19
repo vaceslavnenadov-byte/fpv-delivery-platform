@@ -99,7 +99,7 @@ export function MapProvidersCard() {
               <td><input type="number" min={0} max={10000} defaultValue={r.sort_order} style={{ width: 80 }} aria-label={`Порядок ${r.name}`}
                          onBlur={(e) => Number(e.target.value) !== r.sort_order &&
                            void run(() => api.patch(`/api/v1/admin/map-providers/${r.id}`, { sort_order: Number(e.target.value) }), "Порядок изменён")} /></td>
-              <td className="row wrap">
+              <td><div className="row wrap">
                 <button className="btn small" disabled={busy} onClick={() => void test(r)}>Проверить</button>
                 <button className="btn small" disabled={busy}
                         onClick={() => void run(() => api.patch(`/api/v1/admin/map-providers/${r.id}`, { active: !r.active }),
@@ -107,7 +107,7 @@ export function MapProvidersCard() {
                 <button className="btn small danger" disabled={busy}
                         onClick={() => confirm(`Удалить «${r.name}»? В заказах с этой картой будет показана карта по умолчанию.`) &&
                           void run(() => api.del(`/api/v1/admin/map-providers/${r.id}`), "Карта удалена")}>Удалить</button>
-              </td>
+              </div></td>
             </tr>
           ))}</tbody>
         </table></div>

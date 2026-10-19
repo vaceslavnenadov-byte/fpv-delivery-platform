@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { api, errorText } from "../../api";
-import { Alert, Card, Empty, Pending, useSort } from "../../components/ui";
+import { Alert, Card, Empty, Modal, Pending, useSort } from "../../components/ui";
+import { DroneService } from "../../components/DroneService";
 import { fmtDate } from "../../labels";
 import { useLive } from "../../realtime";
 import { archiveReasonText, downloadReport, droneStatusLabel, reportFileName, reportOrder, ruDate,
@@ -14,6 +15,7 @@ export function DroneArchivePage() {
     (m) => m.kind === "drone.updated");
   const rows = (list.data?.items ?? []).map((d) => ({ ...d, model_name: `${d.manufacturer} ${d.model}`, reason: archiveReasonText(d) }));
   const { sorted, th } = useSort(rows, "archived_at");
+  const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="stack">
       <h1>Архив БПЛА</h1>
@@ -23,12 +25,13 @@ export function DroneArchivePage() {
         {list.error ? <Alert>{errorText(list.error)}</Alert> : !list.data ? <Pending /> : rows.length === 0 ? <Empty>Архив пуст</Empty> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr>{th("model_name", "Модель")}{th("serial_number", "Серийный номер")}{th("registration_number", "Учётный номер")}
+              <thead><tr>{th("registration_number", "Учётный номер")}{th("model_name", "Модель")}{th("serial_number", "Серийный номер")}
                 {th("archived_at", "Дата")}{th("reason", "Причина")}<th /></tr></thead>
               <tbody>{sorted.map((d) => (
                 <tr key={d.id}>
+                  <td><button className="link" onClick={() => setOpen(d.id)} title="Открыть карточку БПЛА">{d.registration_number}</button></td>
                   <td>{d.model_name}<div className="small muted">парк «{d.fleet_name}»</div></td>
-                  <td>{d.serial_number}</td><td>{d.registration_number}</td>
+                  <td>{d.serial_number}</td>
                   <td className="small">{fmtDate(d.archived_at)}</td><td>{d.reason}</td>
                   <td><Link className="btn small" to={`/service?drone=${d.id}`}>Открыть в «Обслуживании»</Link></td>
                 </tr>
@@ -37,6 +40,12 @@ export function DroneArchivePage() {
           </div>
         )}
       </Card>
+      {open && (
+        <Modal wide title="Карточка БПЛА" onClose={() => { setOpen(null); list.reload(); }}
+               footer={<button type="button" className="btn" onClick={() => { setOpen(null); list.reload(); }}>Закрыть</button>}>
+          <DroneService id={open} />
+        </Modal>
+      )}
     </div>
   );
 }
