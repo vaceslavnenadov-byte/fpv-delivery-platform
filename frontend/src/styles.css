@@ -435,7 +435,9 @@ label.check { flex-direction: row; align-items: center; }
   border: 2px solid #1d2a3d; color: #e6edf7; }
 .wall-tile.alert { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35); }
 .wall-tile.empty { display: flex; align-items: center; justify-content: center; color: #6b7a90; border-style: dashed; }
-.wall-tile .live-hud-ctl { right: 8px; bottom: 8px; gap: 4px; }
+/* в узкой плитке панель переносится, а не уходит за левый край */
+.wall-tile .live-hud-ctl { left: 8px; right: 8px; bottom: 8px; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.wall-tile .live-badge { white-space: nowrap; }
 .wall-tile .live-hud-ctl select, .wall-tile .live-hud-ctl .btn { font-size: 0.72rem; padding: 2px 6px; }
 .wall-tile .live-hud-idle { font-size: 0.85rem; }
 .wall-info { position: absolute; left: 0; right: 0; top: 0; z-index: 2; padding: 6px 8px;
@@ -443,7 +445,9 @@ label.check { flex-direction: row; align-items: center; }
 .wall-head { display: flex; align-items: center; gap: 8px; }
 .wall-head .btn { margin-left: auto; }
 .wall-num { color: #fff; font-weight: 700; font-size: 1rem; }
-.wall-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; color: #c9d3e0; font-variant-numeric: tabular-nums; }
+/* подложка — чтобы телеметрия читалась и на светлом видео */
+.wall-stats { display: inline-flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; padding: 2px 8px; border-radius: 4px;
+  background: rgba(5, 8, 13, 0.72); color: #e6edf7; font-variant-numeric: tabular-nums; }
 .wall-alert { margin-top: 4px; color: #fff; background: rgba(239, 68, 68, 0.85); border-radius: 4px; padding: 2px 6px; display: inline-block; }
 
 /* --- Тёмная тема ------------------------------------------------------------------------
