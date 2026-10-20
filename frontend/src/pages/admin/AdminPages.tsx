@@ -432,7 +432,27 @@ interface Monitoring {
 }
 
 function bytes(n: unknown): string {
-  return typeof n === "number" ? `${(n / 1024 ** 3).toFixed(1)} ГБ` : String(n);
+  if (typeof n !== "number") return String(n);
+  const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  let v = n, i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1; }
+  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+// Подписи и значения деталей служб — по-русски, без внутренних ключей.
+const DETAIL_LABELS: Record<string, string> = {
+  version: "версия", size_bytes: "размер базы", provider: "источник", backend: "хранение", bucket: "бакет",
+  free_bytes: "свободно", total_bytes: "всего", done: "доставлено", pending: "в очереди", processing: "обрабатывается",
+  dead: "не доставлено", error: "ошибка",
+};
+const DETAIL_VALUES: Record<string, string> = {
+  static: "файл пользователей (без домена)", ldap: "домен (LDAP)", filesystem: "файловая система", s3: "S3-хранилище",
+};
+
+function detailText(k: string, v: unknown): string {
+  const label = DETAIL_LABELS[k] ?? k;
+  const value = k.endsWith("bytes") ? bytes(v) : k === "version" ? String(v).split(" ")[0] : DETAIL_VALUES[String(v)] ?? String(v);
+  return `${label}: ${value}`;
 }
 
 export function AdminMonitoringPage() {
@@ -446,7 +466,7 @@ export function AdminMonitoringPage() {
         {m.data.services.map((s) => (
           <article key={s.name} className={`svc ${s.ok ? "ok" : "fail"}`}>
             <div className="row between"><strong>{s.name}</strong><Tone tone={s.ok ? "ok" : "danger"}>{s.ok ? "работает" : "сбой"}</Tone></div>
-            <div className="small muted">{Object.entries(s.details).map(([k, v]) => `${k}: ${k.endsWith("bytes") ? bytes(v) : String(v)}`).join(" · ")}</div>
+            <div className="small muted">{Object.entries(s.details).map(([k, v]) => detailText(k, v)).join(" · ")}</div>
           </article>
         ))}
       </div>
