@@ -149,7 +149,7 @@ label.check { flex-direction: row; align-items: center; }
 .table tbody tr:hover td { background: var(--row-hover); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .center { text-align: center; color: var(--accent); }
-.details { max-width: 380px; word-break: break-all; }
+.details { max-width: 380px; overflow-wrap: anywhere; }
 .matrix td:first-child { min-width: 240px; }
 
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
