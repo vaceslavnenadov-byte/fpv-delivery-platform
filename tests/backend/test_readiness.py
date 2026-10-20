@@ -180,3 +180,12 @@ def test_technician_cover_by_zone_and_return(world, api):
     assert world.admin.get(f"/api/v1/orders/{o['id']}").json()["duty_technician"] is None
     with dbmod.new_session() as s:
         assert tech_cover.sweep(s) == {"covered": 0, "returned": 0, "moved": 0}
+
+
+def test_audit_labels_in_russian(world):
+    _set(world.operator, "operator", False)
+    r = world.admin.get("/api/v1/admin/audit?action=work.").json()
+    row = r["items"][0]
+    assert row["action_label"] == "Изменена готовность к работе"
+    assert row["entity_label"] == "Пользователь" and row["outcome_label"] == "Успешно"
+    assert {"prefix": "order.", "label": "Заказы"} in r["sections"]

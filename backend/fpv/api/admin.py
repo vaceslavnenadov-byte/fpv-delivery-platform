@@ -13,7 +13,7 @@ from ..errors import NotFound
 from ..models import (AuditLog, Complaint, Device, DeviceAccessPolicy, DomainGroup, Operator, Permission,
                       PermissionMatrix, Role, User, UserDomainGroup, UserRole, VideoEvidence)
 from ..services import admin as svc
-from ..services import audit, complaints, identity, scoring, video
+from ..services import audit, audit_labels, complaints, identity, scoring, video
 from ..services.identity import Principal
 from . import schemas, serialize
 from .deps import current_principal, get_db, require
@@ -205,8 +205,12 @@ def audit_log(action: Optional[str] = None, entity_id: Optional[str] = None, act
     rows = db.execute(stmt.order_by(AuditLog.id.desc()).limit(limit)).scalars()
     return {"items": [{"id": r.id, "occurred_at": serialize.ts(r.occurred_at), "actor": r.actor_label,
                        "actor_ip": str(r.actor_ip) if r.actor_ip else None, "action": r.action,
-                       "entity_type": r.entity_type, "entity_id": r.entity_id, "outcome": r.outcome,
-                       "details": r.details, "hash": r.hash} for r in rows]}
+                       "action_label": audit_labels.action_label(r.action),
+                       "entity_type": r.entity_type, "entity_label": audit_labels.entity_label(r.entity_type),
+                       "entity_id": r.entity_id, "outcome": r.outcome,
+                       "outcome_label": audit_labels.outcome_label(r.outcome),
+                       "details": r.details, "hash": r.hash} for r in rows],
+            "sections": [{"prefix": k, "label": v} for k, v in audit_labels.SECTIONS.items()]}
 
 
 @router.post("/audit/verify")

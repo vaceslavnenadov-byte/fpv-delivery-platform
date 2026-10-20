@@ -384,13 +384,19 @@ export function AdminScoringPage() {
 
 // --- Журнал аудита -----------------------------------------------------------
 
-interface AuditRow { id: number; occurred_at: string; actor: string; actor_ip: string | null; action: string; entity_type: string;
-  entity_id: string; outcome: string; details: Record<string, unknown>; hash: string }
+interface AuditRow { id: number; occurred_at: string; actor: string; actor_ip: string | null; action: string; action_label: string;
+  entity_type: string; entity_label: string; entity_id: string; outcome: string; outcome_label: string;
+  details: Record<string, unknown>; hash: string }
+
+// Детали записи — «ключ: значение» вместо сырого JSON.
+function auditDetails(d: Record<string, unknown> | null): string {
+  return Object.entries(d ?? {}).map(([k, v]) => `${k}: ${v !== null && typeof v === "object" ? JSON.stringify(v) : String(v)}`).join(" · ");
+}
 
 export function AdminAuditPage() {
   const [action, setAction] = useState("");
   const [actor, setActor] = useState("");
-  const list = useLive(() => api.get<{ items: AuditRow[] }>(`/api/v1/admin/audit?limit=200${action ? `&action=${encodeURIComponent(action)}` : ""}${actor ? `&actor=${encodeURIComponent(actor)}` : ""}`), [action, actor]);
+  const list = useLive(() => api.get<{ items: AuditRow[]; sections: { prefix: string; label: string }[] }>(`/api/v1/admin/audit?limit=200${action ? `&action=${encodeURIComponent(action)}` : ""}${actor ? `&actor=${encodeURIComponent(actor)}` : ""}`), [action, actor]);
   const [verify, setVerify] = useState<{ ok: boolean; checked: number; broken_at: number | null } | null>(null);
   return (
     <div className="stack">
@@ -400,7 +406,10 @@ export function AdminAuditPage() {
         {verify && <Alert tone={verify.ok ? "ok" : "danger"}>{verify.ok ? `Цепочка цела: проверено ${verify.checked} записей` : `Нарушение целостности на записи #${verify.broken_at}`}</Alert>}
       </Card>
       <Card title="События" actions={<>
-        <input placeholder="Действие (префикс), напр. auth." value={action} onChange={(e) => setAction(e.target.value)} />
+        <select aria-label="Раздел" value={action} onChange={(e) => setAction(e.target.value)}>
+          <option value="">Все разделы</option>
+          {(list.data?.sections ?? []).map((x) => <option key={x.prefix} value={x.prefix}>{x.label}</option>)}
+        </select>
         <input placeholder="Пользователь" value={actor} onChange={(e) => setActor(e.target.value)} />
       </>}>
         {!list.data ? <Pending /> : (
@@ -408,10 +417,10 @@ export function AdminAuditPage() {
             <thead><tr><th className="num">#</th><th>Время</th><th>Кто</th><th>Действие</th><th>Объект</th><th>Итог</th><th>Детали</th></tr></thead>
             <tbody>{list.data.items.map((a) => (
               <tr key={a.id}><td className="num">{a.id}</td><td className="small">{fmtDate(a.occurred_at)}</td>
-                <td className="small">{a.actor}<div className="muted">{a.actor_ip}</div></td><td className="mono small">{a.action}</td>
-                <td className="small">{a.entity_type} {a.entity_id.slice(0, 8)}</td>
-                <td><Tone tone={a.outcome === "success" ? "ok" : a.outcome === "denied" ? "warn" : "danger"}>{a.outcome}</Tone></td>
-                <td className="mono small details">{JSON.stringify(a.details)}</td></tr>
+                <td className="small">{a.actor}<div className="muted">{a.actor_ip}</div></td><td className="small">{a.action_label}<div className="mono muted">{a.action}</div></td>
+                <td className="small">{a.entity_type ? <>{a.entity_label}<div className="mono muted">{a.entity_id.slice(0, 8)}</div></> : "—"}</td>
+                <td><Tone tone={a.outcome === "success" ? "ok" : a.outcome === "denied" ? "warn" : "danger"}>{a.outcome_label}</Tone></td>
+                <td className="small details">{auditDetails(a.details)}</td></tr>
             ))}</tbody>
           </table></div>
         )}
