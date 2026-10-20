@@ -142,7 +142,9 @@ def _repeat_of(db: Session, o: Order) -> Optional[Dict[str, Any]]:
 
 
 def complaint(db: Session, c: Any) -> Dict[str, Any]:
-    return {"id": c.id, "order_id": str(c.order_id), "kind": c.kind, "status": c.status,
+    order = db.get(Order, c.order_id)
+    return {"id": c.id, "order_id": str(c.order_id), "order_number": order.number if order else None,
+            "kind": c.kind, "status": c.status,
             "description": c.description, "resolution": c.resolution, "points_adjustment": c.points_adjustment,
             "author": user_brief(db, c.author_id), "created_at": ts(c.created_at),
             "resolved_at": ts(c.resolved_at), "resolved_by": user_brief(db, c.resolved_by),

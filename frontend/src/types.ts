@@ -352,6 +352,7 @@ export interface DroneConnection {
 export interface Complaint {
   id: number;
   order_id: string;
+  order_number: number | null;
   kind: "dispute" | "score_appeal";
   status: "open" | "upheld" | "dismissed";
   description: string;

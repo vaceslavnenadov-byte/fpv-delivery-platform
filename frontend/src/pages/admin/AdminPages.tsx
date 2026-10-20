@@ -178,24 +178,33 @@ function ComplaintItem({ c, onDone, setMsg }: { c: Complaint; onDone: () => void
     <article className={`complaint ${c.status === "open" && c.coordinator_verdict === "upheld" ? "escalated" : ""}`}>
       <div className="row between">
         <strong>{c.kind === "dispute" ? "Спор по доставке" : "Апелляция оценки"} #{c.id}</strong>
-        <span className="muted small">{c.author?.display_name} · {fmtDate(c.created_at)} · <Link to={`/orders/${c.order_id}`}>заказ</Link></span>
+        <span className="muted small">{c.kind === "dispute" ? "заявитель" : "оператор"}: {c.author?.display_name} · {fmtDate(c.created_at)} · <Link to={`/orders/${c.order_id}`}>заказ{c.order_number != null ? ` №${c.order_number}` : ""}</Link></span>
       </div>
       <p>{c.description}</p>
       {c.coordinator_verdict && (
         <p className="small">
           <Tone tone={c.coordinator_verdict === "upheld" ? "warn" : "muted"}>
-            Координатор {c.coordinator_verdict === "upheld" ? "удовлетворил претензию — нужно ваше решение" : "отклонил претензию"}
+            Координатор {c.coordinator_verdict === "upheld"
+              ? (c.status === "open" ? "удовлетворил претензию — нужно ваше решение" : "удовлетворил претензию")
+              : "отклонил претензию"}
           </Tone>{" "}{c.coordinator_comment} <span className="muted">({c.coordinator?.display_name}, {fmtDate(c.coordinator_at)})</span>
         </p>
       )}
       {c.status === "open" ? (
         <div className="form row">
           <input className="grow" placeholder="Решение и обоснование (обязательно)" value={resolution} onChange={(e) => setResolution(e.target.value)} />
-          <input type="number" placeholder="± баллы" value={points} onChange={(e) => setPoints(e.target.value)} style={{ width: 100 }} />
+          <input type="number" placeholder="± баллы" value={points} onChange={(e) => setPoints(e.target.value)} style={{ width: 100 }}
+                 title={c.kind === "dispute" ? "Пусто — штраф оператору по правилам баллов" : "Корректировка оценки при удовлетворении апелляции"} />
           <button className="btn primary" disabled={resolution.length < 5} onClick={() => resolve(true)}>Удовлетворить</button>
           <button className="btn" disabled={resolution.length < 5} onClick={() => resolve(false)}>Отклонить</button>
         </div>
-      ) : <p className="small"><Tone tone={c.status === "upheld" ? "ok" : "muted"}>{c.status}</Tone> {c.resolution} {c.points_adjustment != null && `(${c.points_adjustment} б.)`}</p>}
+      ) : (
+        <p className="small">
+          <Tone tone={c.status === "upheld" ? "ok" : "muted"}>{c.status === "upheld" ? "Удовлетворена" : "Отклонена"}</Tone>{" "}
+          {c.resolution}{c.points_adjustment != null && ` · баллы: ${c.points_adjustment > 0 ? "+" : ""}${c.points_adjustment}`}
+          {c.resolved_by && <span className="muted"> ({c.resolved_by.display_name}, {fmtDate(c.resolved_at)})</span>}
+        </p>
+      )}
     </article>
   );
 }

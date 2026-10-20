@@ -36,6 +36,7 @@ def test_coordinator_upholds_and_escalates_to_admin(world, fake_clock):
     assert d["coordinator_verdict"] == "upheld" and d["coordinator"]["username"] == "coordinator"
     items = world.admin.get("/api/v1/admin/complaints?status=open").json()["items"]
     assert items[0]["id"] == cid and items[0]["coordinator_verdict"] == "upheld"
+    assert items[0]["order_number"] == world.admin.get(f"/api/v1/orders/{o['id']}").json()["number"]
     # администратор принимает окончательное решение
     r = world.admin.post(f"/api/v1/admin/complaints/{cid}/resolve",
                          json={"upheld": True, "resolution": "Согласен с координатором"})
