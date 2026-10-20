@@ -159,6 +159,14 @@ def test_review_by_coordinator_and_order_map(world, fake_clock):
     item = next(x for x in m if x["id"] == o2["id"])
     assert item["operated"] and item["position"]["lat"] and item["operator"]["name"] and item["customer"]["name"]
     assert item["coordinator"]["name"] and item["drone"]["model"] == "Курьер-1" and item["cargo"][0]["name"]
+    assert item["offered_operator"] is None                      # принят — предложения больше нет
+    second, _ = world.make_drone(world.technician, "SN-MAP2", "RU-MAP2")
+    waiting = world.create_order(drone_id=second)              # ждёт оператора — видно, кому предложен
+    world.customer.post(f"/api/v1/orders/{waiting['id']}/submit", json={})
+    world.customer.post(f"/api/v1/orders/{waiting['id']}/confirm", json={})
+    world.coordinator_approve(waiting["id"])
+    w = next(x for x in world.admin.get("/api/v1/orders/map").json()["items"] if x["id"] == waiting["id"])
+    assert w["operator"] is None and w["offered_operator"]["name"]
     assert world.admin.get("/api/v1/orders/map").status_code == 200
     assert world.operator.get("/api/v1/orders/map").status_code == 403
     assert world.customer.get("/api/v1/orders/map").status_code == 403

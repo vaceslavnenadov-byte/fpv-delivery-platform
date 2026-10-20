@@ -23,6 +23,7 @@ interface MapOrder {
   priority_level: "low" | "normal" | "high" | "highest";
   repeat: boolean;
   operator: Person | null;
+  offered_operator?: Person | null;
   customer: Person | null;
   coordinator: Person | null;
   drone: { id: string; model: string; manufacturer: string; registration_number: string } | null;
@@ -316,7 +317,9 @@ function OrdersMapView({ items, selected, popup, focus, onPick, onClosePopup, on
              style={{ left: Math.min(Math.max(8, popupAt[0] + 14), W - 300), top: Math.min(Math.max(8, popupAt[1] - 20), H - 260) }}>
           <div className="row between"><strong>Заказ №{p.number}</strong><Badge kind="order" value={p.status} /></div>
           <dl className="kv compact">
-            <div><dt>Оператор</dt><dd>{p.operator?.name ?? "не назначен"}</dd></div>
+            <div><dt>Оператор</dt><dd>{p.operator?.name
+              ?? (p.offered_operator ? `предложен: ${p.offered_operator.name}, ждёт подтверждения`
+                : p.status === "awaiting_operator" ? "ждёт оператора с нужной квалификацией на смене" : "не назначен")}</dd></div>
             <div><dt>Заказчик</dt><dd>{p.customer?.name ?? "—"}</dd></div>
             <div><dt>Координатор</dt><dd>{p.coordinator?.name ?? "не назначен"}</dd></div>
             <div><dt>Модель БПЛА</dt><dd>{p.drone ? `${p.drone.manufacturer} ${p.drone.model} (${p.drone.registration_number})` : "—"}</dd></div>

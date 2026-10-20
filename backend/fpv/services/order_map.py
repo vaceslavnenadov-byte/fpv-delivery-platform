@@ -71,6 +71,8 @@ def snapshot(db: Session, p: Principal) -> Dict[str, Any]:
             "id": str(o.id), "number": o.number, "status": o.status, "status_label": STATUS_LABELS.get(o.status),
             "priority_level": o.priority_level, "repeat": o.repeat_of is not None,
             "operator": person(db, o.operator_id), "customer": person(db, o.customer_id),
+            # заказ ждёт оператора — кому система его предложила (ждёт подтверждения)
+            "offered_operator": person(db, o.offered_operator_id) if o.status == "awaiting_operator" else None,
             "coordinator": person(db, o.coordinator_id),
             "drone": {"id": str(d.id), "model": d.model, "manufacturer": d.manufacturer,
                       "registration_number": d.registration_number} if d else None,
